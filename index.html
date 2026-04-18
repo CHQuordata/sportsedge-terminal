@@ -236,9 +236,17 @@ async function refreshAll(){
 
   // ── ESPN: MMA/UFC + Tennis rankings (parallel) ──
   const [mmaData,atpRnk,wtaRnk]=await Promise.all([espnFetch('mma','ufc'),espnFetch('tennis','atp','rankings'),espnFetch('tennis','wta','rankings')]);
-  const tennisRankMap=new Map();
-  [atpRnk,wtaRnk].forEach(d=>d?.rankings?.[0]?.ranks?.forEach(r=>{if(r.athlete?.id)tennisRankMap.set(String(r.athlete.id),r.current)}));
-  allG.filter(g=>g.cat==='tennis').forEach(g=>{if(g.aw.id)g.aw.rank=tennisRankMap.get(String(g.aw.id))||null;if(g.hm.id)g.hm.rank=tennisRankMap.get(String(g.hm.id))||null});
+  const tennisRankMap=new Map(),tennisNameMap=new Map();
+  [atpRnk,wtaRnk].forEach(d=>d?.rankings?.[0]?.ranks?.forEach(r=>{
+    if(r.athlete?.id)tennisRankMap.set(String(r.athlete.id),r.current);
+    if(r.athlete?.displayName)tennisNameMap.set(r.athlete.displayName.toLowerCase(),r.current);
+    if(r.athlete?.lastName)tennisNameMap.set(r.athlete.lastName.toLowerCase(),r.current);
+  }));
+  allG.filter(g=>g.cat==='tennis').forEach(g=>{
+    const nr=nm=>tennisNameMap.get(nm.toLowerCase())||tennisNameMap.get(nm.toLowerCase().split(' ').pop())||null;
+    g.aw.rank=tennisRankMap.get(String(g.aw.id))||nr(g.aw.nm)||null;
+    g.hm.rank=tennisRankMap.get(String(g.hm.id))||nr(g.hm.nm)||null;
+  });
   // ── ESPN: MMA/UFC ──
   if(mmaData?.events){
     mmaData.events.forEach(ev=>{
