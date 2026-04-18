@@ -404,11 +404,16 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
 // ══════════════════════════════════════════════════
 // ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
+function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;const w=parseInt(m[1]),l=parseInt(m[2]);return w+l>0?w/(w+l):null}
 function genPicks(g,af,hf){
-  if(!g.odds&&!g.eOdds&&!af.length&&!hf.length)return[];
+  const awRecPct=parseRec(g.aw.rec),hmRecPct=parseRec(g.hm.rec);
+  const hasRecord=awRecPct!==null||hmRecPct!==null;
+  if(!g.odds&&!g.eOdds&&!af.length&&!hf.length&&!hasRecord)return[];
   const picks=[];
   const awW=af.filter(f=>f.r==='W').length, hmW=hf.filter(f=>f.r==='W').length;
-  const awPct=af.length>=3?awW/af.length:.5, hmPct=hf.length>=3?hmW/hf.length:.5;
+  const awFormPct=af.length>=3?awW/af.length:null, hmFormPct=hf.length>=3?hmW/hf.length:null;
+  const awPct=awFormPct!==null?awFormPct:awRecPct!==null?awRecPct:.5;
+  const hmPct=hmFormPct!==null?hmFormPct:hmRecPct!==null?hmRecPct:.5;
   const awFor=avgSc(af,'f'),awAg=avgSc(af,'a'),hmFor=avgSc(hf,'f'),hmAg=avgSc(hf,'a');
   const awMarg=awFor!==null?awFor-awAg:0, hmMarg=hmFor!==null?hmFor-hmAg:0;
   const awR=af.length?Math.round((g.tm-af[0].dt)/864e5):null,hmR=hf.length?Math.round((g.tm-hf[0].dt)/864e5):null;
@@ -435,6 +440,10 @@ function genPicks(g,af,hf){
       if(Math.abs(fd)>.15){const b=fd>0?g.hm:g.aw,bp=fd>0?hmPct:awPct,bs=fd>0?hmStr:awStr,w=fd>0?g.aw:g.hm,wp=fd>0?awPct:hmPct;
         reasons.push(`${b.nm} carries stronger form at ${(bp*100).toFixed(0)}% L10${bs[0]==='W'&&parseInt(bs.slice(1))>=3?' with a '+bs+' streak':''}, while ${w.nm} sits at ${(wp*100).toFixed(0)}%`)}
       else reasons.push(`Form is close \u2014 ${g.aw.nm} at ${(awPct*100).toFixed(0)}% and ${g.hm.nm} at ${(hmPct*100).toFixed(0)}% L10, making this a tighter spread play`)}
+    else if(awRecPct!==null&&hmRecPct!==null){const fd=hmRecPct-awRecPct;score+=fd*6;
+      if(Math.abs(fd)>.1){const b=fd>0?g.hm:g.aw,bp=fd>0?hmRecPct:awRecPct,w=fd>0?g.aw:g.hm,wp=fd>0?awRecPct:hmRecPct;
+        reasons.push(`${b.nm} holds a stronger season record (${(bp*100).toFixed(0)}% win rate) vs ${w.nm} (${(wp*100).toFixed(0)}%)`)}
+      else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec}) vs ${g.hm.nm} (${g.hm.rec}), making this a tight call`)}
     if(hmMarg&&awMarg&&Math.abs(hmMarg-awMarg)>2){score+=(hmMarg-awMarg)*0.35;const b=hmMarg>awMarg?g.hm:g.aw,m=hmMarg>awMarg?hmMarg:awMarg;
       reasons.push(`${b.nm} has been winning by ${Math.abs(m).toFixed(1)} per game, indicating they're not just winning \u2014 they're covering`)}
     if(Math.abs(restDiff)>=2){score+=restDiff*0.6;const r=restDiff>0?g.hm:g.aw,t=restDiff>0?g.aw:g.hm;
@@ -444,8 +453,10 @@ function genPicks(g,af,hf){
     if(g.ha>0)reasons.push(`Home-court worth ~${g.ha}pts in ${spName} for ${g.hm.nm}`);
     if(spEdges.length)reasons.push(`Sharp signal: ${spEdges[0].ep.toFixed(1)}% spread edge at ${spEdges[0].bb}`);
     const side=score>=0?g.hm:g.aw,mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
-    const pickStr=spFav?`${spFav.name} ${spFav.point>0?'+':''}${spFav.point} (${fp(spFav.price)})`:side.nm+' to cover';
-    const pickSideName=spFav?spFav.name:side.nm;
+    const spSideOdds=spFav&&g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='spreads')?.outcomes?.find(o=>o.name===side.nm||side.nm.includes(o.name.split(' ').pop()));
+    const pickStr=spSideOdds?`${spSideOdds.name} ${spSideOdds.point>0?'+':''}${spSideOdds.point} (${fp(spSideOdds.price)})`:spFav?`${spFav.name} ${spFav.point>0?'+':''}${spFav.point} (${fp(spFav.price)})`:side.nm+' to cover';
+    const pickSideName=spSideOdds?spSideOdds.name:spFav?spFav.name:side.nm;
+    if(!reasons.length)reasons.push(`${side.nm} (${side.rec||'no record'}) is the edge here based on available matchup data`);
     picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
       evData:calcEV(g,'spreads',pickSideName),lineRange:getLineRange(g,'spreads'),sharp:getSharp(spEdges)});
   }
@@ -469,16 +480,20 @@ function genPicks(g,af,hf){
 
   // ── MONEYLINE ──
   {let score=g.ha,reasons=[];
-    if(af.length>=3&&hf.length>=3)score+=(hmPct-awPct)*10;
+    const pctDiff=hmPct-awPct;
+    if(Math.abs(pctDiff)>0.02)score+=pctDiff*10;
     if(hmMarg&&awMarg)score+=(hmMarg-awMarg)*0.3;
     if(Math.abs(restDiff)>=2)score+=restDiff*0.5;
     if(Math.abs(awOut-hmOut)>1)score+=(awOut-hmOut)*0.7;
     const side=score>=0?g.hm:g.aw,other=score>=0?g.aw:g.hm,mlO=score>=0?mlHm:mlAw;
     const mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     let mlPrice=mlO?` (${fp(mlO.price)})`:'';
-    reasons.push(`${side.nm} is the straight-up play, backed by convergence of form${g.ha>0&&score>=0?', home-court':''}, and matchup profile`);
+    reasons.push(`${side.nm} is the straight-up play${g.ha>0&&score>=0?', backed by home-court advantage':''}${mlEdges.length?', with sharp book edge':''}`);
     if(af.length>=3&&hf.length>=3){const sp2=score>=0?hmPct:awPct,op2=score>=0?awPct:hmPct;
       if(Math.abs(sp2-op2)>.1)reasons.push(`Form gap (${(sp2*100).toFixed(0)}% vs ${(op2*100).toFixed(0)}% L10) translates directly to ML value`)}
+    else if(awRecPct!==null&&hmRecPct!==null){const sp2=score>=0?hmRecPct:awRecPct,op2=score>=0?awRecPct:hmRecPct;
+      if(Math.abs(sp2-op2)>.05)reasons.push(`Season record edge: ${side.nm} at ${(sp2*100).toFixed(0)}% win rate vs ${other.nm} at ${(op2*100).toFixed(0)}% (${side.rec} vs ${other.rec})`);
+      else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec||'N/A'}) vs ${g.hm.nm} (${g.hm.rec||'N/A'})`)}
     if(mlEdges.length)reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 implied probability gap signals sharp value`);
     if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
