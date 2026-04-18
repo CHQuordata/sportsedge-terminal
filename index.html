@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDGE TERMINAL | Sports Betting Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-panel: #111118;
+  --bg-panel-alt: #16161f;
+  --bg-hover: #1c1c28;
+  --bg-selected: #1a1a2e;
+  --border: #2a2a3a;
+  --border-bright: #3a3a50;
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-dim: #555570;
+  --green: #00e676;
+  --green-dim: #004d2a;
+  --green-bg: rgba(0,230,118,0.08);
+  --red: #ff4444;
+  --red-dim: #4d0015;
+  --red-bg: rgba(255,68,68,0.08);
+  --amber: #ffab00;
+  --amber-dim: #4d3300;
+  --blue: #448aff;
+  --blue-dim: #1a3366;
+  --cyan: #00e5ff;
+  --magenta: #e040fb;
+  --mono: 'JetBrains Mono', 'Courier New', monospace;
+  --sans: 'Inter', -apple-system, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══ TOP BAR ═══ */
+.topbar {
+  height: 36px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+  z-index: 100;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--green);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.logo span { color: var(--text-dim); font-weight: 400; }
+
+.topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.sport-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.sport-tab {
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.sport-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+.sport-tab.active {
+  color: var(--green);
+  background: var(--green-bg);
+  border-color: rgba(0,230,118,0.2);
+}
+
+.topbar-spacer { flex: 1; }
+
+.api-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.api-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.api-dot.connected { background: var(--green); }
+
+.topbar-btn {
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.topbar-btn:hover { color: var(--text-primary); border-color: var(--border-bright); }
+
+.kbd {
+  display: inline-block;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+/* ═══ MAIN LAYOUT ═══ */
+.main {
+  display: grid;
+  grid-template-columns: 340px 1fr 320px;
+  grid-template-rows: 1fr;
+  height: calc(100vh - 36px - 24px);
+}
+
+/* ═══ PANELS ═══ */
+.panel {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel:last-child { border-right: none; }
+
+.panel-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.panel-badge {
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+}
+
+.panel-badge.green { color: var(--green); background: var(--green-bg); }
+.panel-badge.amber { color: var(--amber); background: rgba(255,171,0,0.1); }
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ═══ EDGE SCANNER (LEFT PANEL) ═══ */
+.edge-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.edge-row:hover { background: var(--bg-hover); }
+.edge-row.selected { background: var(--bg-selected); border-left: 2px solid var(--green); padding-left: 10px; }
+
+.edge-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.edge-matchup {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.edge-score {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+  min-width: 42px;
+  text-align: center;
+}
+
+.edge-score.high { color: var(--green); background: var(--green-bg); }
+.edge-score.medium { color: var(--amber); background: rgba(255,171,0,0.1); }
+.edge-score.low { color: var(--text-secondary); background: var(--bg-panel-alt); }
+
+.edge-row-mid {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.edge-market {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--bg-panel-alt);
+  color: var(--text-secondary);
+}
+
+.edge-side {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--cyan);
+}
+
+.edge-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.edge-books {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+.edge-best-odds {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* ═══ CENTER PANEL - MATCHUP DETAIL ═══ */
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+  gap: 12px;
+}
+
+.detail-empty-icon { font-size: 40px; opacity: 0.3; }
+.detail-empty-text { font-size: 12px; letter-spacing: 1px; }
+
+.detail-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.detail-teams {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.detail-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+}
+
+.detail-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* Book comparison table */
+.book-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.book-table th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+}
+
+.book-table td {
+  font-size: 11px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(42,42,58,0.3);
+  color: var(--text-primary);
+}
+
+.book-table tr:hover td { background: var(--bg-hover); }
+
+.book-table .best-price {
+  color: var(--green);
+  font-weight: 600;
+  position: relative;
+}
+
+.book-table .best-price::before {
+  content: '►';
+  position: absolute;
+  left: 0;
+  font-size: 7px;
+  color: var(--green);
+}
+
+.book-table .worst-price { color: var(--red-dim); }
+
+.impl-prob {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Edge highlight bar */
+.edge-highlight {
+  background: var(--green-bg);
+  border: 1px solid rgba(0,230,118,0.15);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 12px 16px;
+}
+
+.edge-highlight-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--green);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.edge-highlight-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.edge-highlight-detail {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ═══ RIGHT PANEL - WATCHLIST / STATS ═══ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  margin-bottom: 1px;
+}
+
+.stat-cell {
+  background: var(--bg-panel);
+  padding: 10px 12px;
+}
+
+.stat-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stat-value.green { color: var(--green); }
+.stat-value.red { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+
+.watchlist-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.watchlist-item:hover { background: var(--bg-hover); }
+
+.watchlist-matchup {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.watchlist-edge {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.watchlist-edge.positive { color: var(--green); }
+.watchlist-edge.negative { color: var(--red); }
+
+/* ═══ BOTTOM BAR ═══ */
+.bottombar {
+  height: 24px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.bottombar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bottombar-spacer { flex: 1; }
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ═══ SETUP MODAL ═══ */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 6px;
+  padding: 32px;
+  width: 440px;
+  max-width: 90vw;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--green);
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.modal-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.modal-input:focus { border-color: var(--green); }
+
+.modal-input::placeholder { color: var(--text-dim); }
+
+.modal-btn {
+  width: 100%;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bg-primary);
+  background: var(--green);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  letter-spacing: 1px;
+  transition: opacity 0.2s;
+}
+
+.modal-btn:hover { opacity: 0.9; }
+.modal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.modal-link {
+  display: block;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 10px;
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.modal-link:hover { text-decoration: underline; }
+
+/* ═══ LOADING STATES ═══ */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-panel-alt) 25%, var(--bg-hover) 50%, var(--bg-panel-alt) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 3px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.loading-row {
+  padding: 12px;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+}
+
+.loading-row .skeleton-line {
+  height: 10px;
+  margin-bottom: 6px;
+}
+
+.loading-row .skeleton-line:nth-child(1) { width: 70%; }
+.loading-row .skeleton-line:nth-child(2) { width: 50%; }
+.loading-row .skeleton-line:nth-child(3) { width: 40%; }
+
+/* ═══ KEYBOARD SHORTCUTS OVERLAY ═══ */
+.shortcuts-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.shortcuts-overlay.visible { display: flex; }
+
+.shortcuts-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  border-radius: 6px;
+  padding: 24px 32px;
+  min-width: 360px;
+}
+
+.shortcuts-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.shortcut-keys {
+  display: flex;
+  gap: 4px;
+}
+
+.shortcut-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ═══ NO EDGES STATE ═══ */
+.no-edges {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+  text-align: center;
+  gap: 8px;
+}
+
+.no-edges-icon { font-size: 32px; opacity: 0.3; }
+.no-edges-text { font-size: 11px; letter-spacing: 0.5px; }
+
+/* ═══ EDGE TIER FILTER ═══ */
+.filter-bar {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.filter-btn {
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-btn:hover { color: var(--text-secondary); border-color: var(--border-bright); }
+.filter-btn.active { color: var(--green); border-color: rgba(0,230,118,0.3); background: var(--green-bg); }
+
+.filter-spacer { flex: 1; }
+
+.filter-count {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 1100px) {
+  .main { grid-template-columns: 300px 1fr; }
+  .panel:last-child { display: none; }
+}
+
+@media (max-width: 768px) {
+  .main { grid-template-columns: 1fr; }
+  .topbar { overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ═══ -->
+<div class="topbar">
+  <div class="logo">EDGE<span>TERMINAL</span></div>
+  <div class="topbar-divider"></div>
+  <div class="sport-tabs" id="sportTabs">
+    <button class="sport-tab active" data-sport="all" onclick="setSport('all')">ALL</button>
+    <button class="sport-tab" data-sport="americanfootball_nfl" onclick="setSport('americanfootball_nfl')">NFL</button>
+    <button class="sport-tab" data-sport="basketball_nba" onclick="setSport('basketball_nba')">NBA</button>
+    <button class="sport-tab" data-sport="baseball_mlb" onclick="setSport('baseball_mlb')">MLB</button>
+    <button class="sport-tab" data-sport="icehockey_nhl" onclick="setSport('icehockey_nhl')">NHL</button>
+    <button class="sport-tab" data-sport="tennis_" onclick="setSport('tennis_')">TENNIS</button>
+    <button class="sport-tab" data-sport="mma_mixed_martial_arts" onclick="setSport('mma_mixed_martial_arts')">MMA</button>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div class="api-status">
+    <div class="api-dot" id="apiDot"></div>
+    <span id="apiStatusText">NO API KEY</span>
+  </div>
+  <button class="topbar-btn" onclick="showSetup()">API KEY</button>
+  <button class="topbar-btn" onclick="refreshData()">REFRESH <span class="kbd">R</span></button>
+  <button class="topbar-btn" onclick="toggleShortcuts()">? <span class="kbd">?</span></button>
+</div>
+
+<!-- ═══ MAIN GRID ═══ -->
+<div class="main">
+
+  <!-- LEFT: EDGE SCANNER -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Edge Scanner</span>
+      <span class="panel-badge green" id="edgeCount">0 EDGES</span>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">ALL</button>
+      <button class="filter-btn" data-filter="high" onclick="setFilter('high')">HIGH</button>
+      <button class="filter-btn" data-filter="medium" onclick="setFilter('medium')">MED</button>
+      <button class="filter-btn" data-filter="h2h" onclick="setFilter('h2h')">H2H</button>
+      <button class="filter-btn" data-filter="spreads" onclick="setFilter('spreads')">SPREAD</button>
+      <button class="filter-btn" data-filter="totals" onclick="setFilter('totals')">TOTAL</button>
+      <div class="filter-spacer"></div>
+    </div>
+    <div class="panel-body" id="edgeList">
+      <div class="no-edges">
+        <div class="no-edges-icon">⚡</div>
+        <div class="no-edges-text">Enter API key to scan for edges</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: MATCHUP DETAIL -->
+  <div class="panel">
+    <div class="panel-body" id="detailPanel">
+      <div class="detail-empty">
+        <div class="detail-empty-icon">◈</div>
+        <div class="detail-empty-text">SELECT AN EDGE TO ANALYZE</div>
+        <div style="font-size:10px; color: var(--text-dim); margin-top: 8px;">
+          Use <span class="kbd">↑</span> <span class="kbd">↓</span> to navigate &nbsp; <span class="kbd">Enter</span> to select
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: STATS & WATCHLIST -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Market Overview</span>
+      <span class="panel-badge amber" id="marketCount">0 EVENTS</span>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="stat-label">EVENTS</div>
+        <div class="stat-value" id="statEvents">—</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">EDGES FOUND</div>
+        <div class="stat-value green" id="statEdges">—</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">AVG EDGE</div>
+        <div class="stat-value amber" id="statAvgEdge">—</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">BEST EDGE</div>
+        <div class="stat-value green" id="statBestEdge">—</div>
+      </div>
+    </div>
+    <div class="panel-header" style="margin-top:0;">
+      <span class="panel-title">Top Edges by Sport</span>
+    </div>
+    <div class="panel-body" id="watchlist">
+      <div class="no-edges" style="padding: 20px;">
+        <div class="no-edges-text">Scan to populate</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BOTTOM BAR ═══ -->
+<div class="bottombar">
+  <div class="bottombar-item">
+    <span style="color:var(--green);">●</span> EDGE TERMINAL v1.0
+  </div>
+  <div class="bottombar-item" id="lastRefresh">LAST SCAN: NEVER</div>
+  <div class="bottombar-spacer"></div>
+  <div class="bottombar-item" id="apiCalls">API CALLS: —/500</div>
+  <div class="bottombar-item">
+    <span class="kbd">?</span> SHORTCUTS
+  </div>
+</div>
+
+<!-- ═══ SETUP MODAL ═══ -->
+<div class="modal-overlay" id="setupModal">
+  <div class="modal">
+    <div class="modal-title">EDGE TERMINAL</div>
+    <div class="modal-subtitle">
+      Enter your Odds API key to start scanning for mispriced lines across all major sportsbooks.
+      The key is stored locally in your browser — never sent anywhere except the-odds-api.com.
+    </div>
+    <input class="modal-input" id="apiKeyInput" type="password" placeholder="Enter API key..." autocomplete="off">
+    <button class="modal-btn" id="connectBtn" onclick="connectApi()">CONNECT & SCAN</button>
+    <a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get a free API key → the-odds-api.com</a>
+  </div>
+</div>
+
+<!-- ═══ KEYBOARD SHORTCUTS OVERLAY ═══ -->
+<div class="shortcuts-overlay" id="shortcutsOverlay">
+  <div class="shortcuts-panel">
+    <div class="shortcuts-title">KEYBOARD SHORTCUTS</div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">R</span></div><div class="shortcut-desc">Refresh / rescan</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">↑</span> <span class="kbd">↓</span></div><div class="shortcut-desc">Navigate edges</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">Enter</span></div><div class="shortcut-desc">Select edge</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">1</span>–<span class="kbd">7</span></div><div class="shortcut-desc">Switch sport tab</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">K</span></div><div class="shortcut-desc">API key setup</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">?</span></div><div class="shortcut-desc">Toggle shortcuts</div></div>
+    <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd">Esc</span></div><div class="shortcut-desc">Close overlay</div></div>
+    <div style="margin-top:16px; font-size:10px; color:var(--text-dim); text-align:center;">Press any key to close</div>
+  </div>
+</div>
+
+<script>
+// ═══ STATE ═══
+let API_KEY = localStorage.getItem('odds_api_key') || '';
+let currentSport = 'all';
+let currentFilter = 'all';
+let allEdges = [];
+let filteredEdges = [];
+let selectedEdgeIdx = -1;
+let allEvents = [];
+let apiCallsUsed = parseInt(localStorage.getItem('api_calls') || '0');
+
+// Sports config for The Odds API
+const SPORTS = {
+  americanfootball_nfl: { label: 'NFL', icon: '🏈' },
+  basketball_nba: { label: 'NBA', icon: '🏀' },
+  baseball_mlb: { label: 'MLB', icon: '⚾' },
+  icehockey_nhl: { label: 'NHL', icon: '🏒' },
+  tennis_atp_french_open: { label: 'ATP', icon: '🎾' },
+  tennis_wta_french_open: { label: 'WTA', icon: '🎾' },
+  mma_mixed_martial_arts: { label: 'MMA', icon: '🥊' },
+};
+
+// All tennis keys to scan
+const TENNIS_KEYS = [
+  'tennis_atp_aus_open_singles',
+  'tennis_wta_aus_open_singles',
+  'tennis_atp_french_open',
+  'tennis_wta_french_open',
+  'tennis_atp_us_open',
+  'tennis_wta_us_open',
+  'tennis_atp_wimbledon',
+  'tennis_wta_wimbledon',
+];
+
+const SPORT_KEYS = [
+  'americanfootball_nfl',
+  'basketball_nba',
+  'baseball_mlb',
+  'icehockey_nhl',
+  'mma_mixed_martial_arts',
+];
+
+// ═══ INIT ═══
+function init() {
+  if (API_KEY) {
+    document.getElementById('setupModal').style.display = 'none';
+    document.getElementById('apiDot').classList.add('connected');
+    document.getElementById('apiStatusText').textContent = 'CONNECTED';
+    refreshData();
+  }
+}
+
+// ═══ API CONNECTION ═══
+function showSetup() {
+  document.getElementById('setupModal').style.display = 'flex';
+  document.getElementById('apiKeyInput').value = API_KEY;
+  document.getElementById('apiKeyInput').focus();
+}
+
+function connectApi() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) return;
+  API_KEY = key;
+  localStorage.setItem('odds_api_key', key);
+  document.getElementById('setupModal').style.display = 'none';
+  document.getElementById('apiDot').classList.add('connected');
+  document.getElementById('apiStatusText').textContent = 'CONNECTED';
+  refreshData();
+}
+
+// ═══ DATA FETCHING ═══
+async function fetchOdds(sportKey) {
+  const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=${API_KEY}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american&bookmakerKey=draftkings,fanduel,betmgm,caesars,pointsbet,bovada,betonlineag,mybookieag,williamhill_us,betrivers`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 401) {
+        document.getElementById('apiStatusText').textContent = 'INVALID KEY';
+        document.getElementById('apiDot').classList.remove('connected');
+        return [];
+      }
+      return [];
+    }
+    const remaining = res.headers.get('x-requests-remaining');
+    if (remaining) {
+      const used = 500 - parseInt(remaining);
+      apiCallsUsed = used;
+      localStorage.setItem('api_calls', used.toString());
+      document.getElementById('apiCalls').textContent = `API CALLS: ${used}/500`;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error(`Error fetching ${sportKey}:`, e);
+    return [];
+  }
+}
+
+async function fetchInSeasonSports() {
+  const url = `https://api.the-odds-api.com/v4/sports/?apiKey=${API_KEY}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+async function refreshData() {
+  if (!API_KEY) { showSetup(); return; }
+
+  // Show loading
+  showLoading();
+
+  // First, get in-season sports to find active tennis tournaments
+  const sports = await fetchInSeasonSports();
+  const activeTennisKeys = sports
+    .filter(s => s.key.startsWith('tennis_') && s.active)
+    .map(s => s.key);
+
+  const activeKeys = sports
+    .filter(s => SPORT_KEYS.includes(s.key) && s.active)
+    .map(s => s.key);
+
+  const allKeys = [...activeKeys, ...activeTennisKeys];
+
+  // Fetch all odds in parallel
+  allEvents = [];
+  const results = await Promise.all(allKeys.map(k => fetchOdds(k)));
+  results.forEach((events, i) => {
+    events.forEach(e => {
+      e._sportKey = allKeys[i];
+      e._sportLabel = getSportLabel(allKeys[i]);
+    });
+    allEvents.push(...events);
+  });
+
+  // Run edge detection
+  allEdges = detectEdges(allEvents);
+  applyFilters();
+
+  // Update stats
+  document.getElementById('statEvents').textContent = allEvents.length;
+  document.getElementById('statEdges').textContent = allEdges.length;
+  document.getElementById('marketCount').textContent = allEvents.length + ' EVENTS';
+
+  if (allEdges.length > 0) {
+    const avg = allEdges.reduce((s, e) => s + e.edgePercent, 0) / allEdges.length;
+    document.getElementById('statAvgEdge').textContent = avg.toFixed(1) + '%';
+    document.getElementById('statBestEdge').textContent = allEdges[0].edgePercent.toFixed(1) + '%';
+  }
+
+  // Update watchlist with top edge per sport
+  updateWatchlist();
+
+  // Update timestamp
+  const now = new Date();
+  document.getElementById('lastRefresh').textContent =
+    `LAST SCAN: ${now.toLocaleTimeString('en-US', { hour12: false })}`;
+}
+
+function getSportLabel(key) {
+  if (key.startsWith('tennis_atp')) return 'ATP';
+  if (key.startsWith('tennis_wta')) return 'WTA';
+  if (SPORTS[key]) return SPORTS[key].label;
+  return key.split('_').pop().toUpperCase();
+}
+
+function getSportCategory(key) {
+  if (key.startsWith('tennis_')) return 'tennis';
+  return key;
+}
+
+// ═══ EDGE DETECTION ENGINE ═══
+function detectEdges(events) {
+  const edges = [];
+
+  events.forEach(event => {
+    const markets = {};
+
+    // Organize by market type
+    (event.bookmakers || []).forEach(bk => {
+      bk.markets.forEach(mkt => {
+        if (!markets[mkt.key]) markets[mkt.key] = [];
+        mkt.outcomes.forEach(oc => {
+          markets[mkt.key].push({
+            book: bk.title,
+            bookKey: bk.key,
+            name: oc.name,
+            price: oc.price,
+            point: oc.point,
+          });
+        });
+      });
+    });
+
+    // Analyze each market
+    Object.keys(markets).forEach(mktKey => {
+      const outcomes = markets[mktKey];
+      const sides = {};
+
+      // Group by side (team/outcome name + point)
+      outcomes.forEach(o => {
+        const sideKey = o.point !== undefined ? `${o.name} ${o.point}` : o.name;
+        if (!sides[sideKey]) sides[sideKey] = [];
+        sides[sideKey].push(o);
+      });
+
+      // For each side, find edges
+      Object.keys(sides).forEach(sideKey => {
+        const offers = sides[sideKey];
+        if (offers.length < 2) return; // Need at least 2 books
+
+        // Convert to implied probabilities
+        const probs = offers.map(o => ({
+          ...o,
+          impliedProb: americanToImplied(o.price),
+        }));
+
+        // Consensus = average implied probability
+        const consensusProb = probs.reduce((s, p) => s + p.impliedProb, 0) / probs.length;
+
+        // Find best price (lowest implied prob = best odds for bettor)
+        const bestOffer = probs.reduce((best, p) =>
+          p.impliedProb < best.impliedProb ? p : best, probs[0]);
+
+        // Edge = consensus thinks it's more likely than best book prices it
+        const edgePercent = ((consensusProb - bestOffer.impliedProb) / consensusProb) * 100;
+
+        // Only flag meaningful edges (>3%)
+        if (edgePercent > 3) {
+          const worstOffer = probs.reduce((worst, p) =>
+            p.impliedProb > worst.impliedProb ? p : worst, probs[0]);
+
+          edges.push({
+            event,
+            market: mktKey,
+            marketLabel: mktKey === 'h2h' ? 'ML' : mktKey === 'spreads' ? 'SPREAD' : 'TOTAL',
+            side: sideKey,
+            sideName: bestOffer.name,
+            point: bestOffer.point,
+            bestBook: bestOffer.book,
+            bestPrice: bestOffer.price,
+            bestImplied: bestOffer.impliedProb,
+            worstBook: worstOffer.book,
+            worstPrice: worstOffer.price,
+            worstImplied: worstOffer.impliedProb,
+            consensusProb,
+            edgePercent,
+            numBooks: offers.length,
+            allOffers: probs.sort((a, b) => a.impliedProb - b.impliedProb),
+            tier: edgePercent >= 8 ? 'high' : edgePercent >= 5 ? 'medium' : 'low',
+            sportKey: event._sportKey,
+            sportLabel: event._sportLabel,
+          });
+        }
+      });
+    });
+  });
+
+  // Sort by edge magnitude
+  edges.sort((a, b) => b.edgePercent - a.edgePercent);
+  return edges;
+}
+
+function americanToImplied(price) {
+  if (price > 0) return 100 / (price + 100);
+  return Math.abs(price) / (Math.abs(price) + 100);
+}
+
+function americanToDecimal(price) {
+  if (price > 0) return (price / 100) + 1;
+  return (100 / Math.abs(price)) + 1;
+}
+
+function formatPrice(price) {
+  return price > 0 ? `+${price}` : `${price}`;
+}
+
+// ═══ FILTERS ═══
+function setSport(sport) {
+  currentSport = sport;
+  document.querySelectorAll('.sport-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.sport-tab[data-sport="${sport}"]`).classList.add('active');
+  applyFilters();
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.filter-btn[data-filter="${filter}"]`).classList.add('active');
+  applyFilters();
+}
+
+function applyFilters() {
+  filteredEdges = allEdges.filter(e => {
+    // Sport filter
+    if (currentSport !== 'all') {
+      if (currentSport === 'tennis_') {
+        if (!e.sportKey.startsWith('tennis_')) return false;
+      } else if (e.sportKey !== currentSport) return false;
+    }
+    // Tier/market filter
+    if (currentFilter === 'high') return e.tier === 'high';
+    if (currentFilter === 'medium') return e.tier === 'medium';
+    if (currentFilter === 'h2h') return e.market === 'h2h';
+    if (currentFilter === 'spreads') return e.market === 'spreads';
+    if (currentFilter === 'totals') return e.market === 'totals';
+    return true;
+  });
+
+  renderEdgeList();
+  document.getElementById('edgeCount').textContent = filteredEdges.length + ' EDGES';
+  selectedEdgeIdx = -1;
+}
+
+// ═══ RENDERING ═══
+function showLoading() {
+  const el = document.getElementById('edgeList');
+  el.innerHTML = Array(8).fill(0).map(() => `
+    <div class="loading-row">
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line"></div>
+    </div>
+  `).join('');
+}
+
+function renderEdgeList() {
+  const el = document.getElementById('edgeList');
+
+  if (filteredEdges.length === 0) {
+    el.innerHTML = `
+      <div class="no-edges">
+        <div class="no-edges-icon">◇</div>
+        <div class="no-edges-text">${allEdges.length === 0 ? 'No edges detected. Try refreshing.' : 'No edges match current filters.'}</div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = filteredEdges.map((edge, i) => `
+    <div class="edge-row ${i === selectedEdgeIdx ? 'selected' : ''}" onclick="selectEdge(${i})" data-idx="${i}">
+      <div class="edge-row-top">
+        <div class="edge-matchup">${edge.event.away_team} @ ${edge.event.home_team}</div>
+        <div class="edge-score ${edge.tier}">${edge.edgePercent.toFixed(1)}%</div>
+      </div>
+      <div class="edge-row-mid">
+        <span class="edge-market">${edge.marketLabel}</span>
+        <span class="edge-side">${edge.side}</span>
+        <span style="font-size:9px; color:var(--text-dim);">${edge.sportLabel}</span>
+      </div>
+      <div class="edge-row-bottom">
+        <span class="edge-books">${edge.bestBook} · ${edge.numBooks} books</span>
+        <span class="edge-best-odds">${formatPrice(edge.bestPrice)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectEdge(idx) {
+  selectedEdgeIdx = idx;
+  renderEdgeList();
+  renderDetail(filteredEdges[idx]);
+}
+
+function renderDetail(edge) {
+  const el = document.getElementById('detailPanel');
+  const dt = new Date(edge.event.commence_time);
+  const timeStr = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+    ' · ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  el.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-teams">${edge.event.away_team} @ ${edge.event.home_team}</div>
+      <div class="detail-meta">
+        <div class="detail-meta-item">${edge.sportLabel}</div>
+        <div class="detail-meta-item">🕐 ${timeStr}</div>
+        <div class="detail-meta-item">${edge.numBooks} books reporting</div>
+      </div>
+    </div>
+
+    <div class="edge-highlight">
+      <div class="edge-highlight-label">⚡ Detected Edge — ${edge.marketLabel}</div>
+      <div class="edge-highlight-value">${edge.edgePercent.toFixed(1)}% EDGE on ${edge.side}</div>
+      <div class="edge-highlight-detail">
+        Best: ${edge.bestBook} at ${formatPrice(edge.bestPrice)} (${(edge.bestImplied * 100).toFixed(1)}% implied)
+        · Consensus: ${(edge.consensusProb * 100).toFixed(1)}% implied
+        · Worst: ${edge.worstBook} at ${formatPrice(edge.worstPrice)} (${(edge.worstImplied * 100).toFixed(1)}% implied)
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Book-by-Book Comparison — ${edge.marketLabel}: ${edge.side}</div>
+      <table class="book-table">
+        <thead>
+          <tr>
+            <th>BOOK</th>
+            <th>PRICE</th>
+            <th>IMPLIED %</th>
+            <th>vs CONSENSUS</th>
+            <th>DECIMAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${edge.allOffers.map((o, i) => {
+            const diff = ((edge.consensusProb - o.impliedProb) / edge.consensusProb * 100);
+            const isBest = i === 0;
+            const isWorst = i === edge.allOffers.length - 1;
+            return `
+              <tr>
+                <td>${o.book}</td>
+                <td class="${isBest ? 'best-price' : isWorst ? 'worst-price' : ''}" style="${isBest ? 'padding-left:16px' : ''}">
+                  ${formatPrice(o.price)}
+                </td>
+                <td class="impl-prob">${(o.impliedProb * 100).toFixed(1)}%</td>
+                <td style="color: ${diff > 0 ? 'var(--green)' : diff < -2 ? 'var(--red)' : 'var(--text-dim)'}">
+                  ${diff > 0 ? '+' : ''}${diff.toFixed(1)}%
+                </td>
+                <td style="color:var(--text-dim)">${americanToDecimal(o.price).toFixed(3)}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">All Markets — ${edge.event.away_team} vs ${edge.event.home_team}</div>
+      ${renderAllMarkets(edge.event)}
+    </div>
+  `;
+}
+
+function renderAllMarkets(event) {
+  const marketHtml = [];
+  const marketData = {};
+
+  (event.bookmakers || []).forEach(bk => {
+    bk.markets.forEach(mkt => {
+      if (!marketData[mkt.key]) marketData[mkt.key] = {};
+      mkt.outcomes.forEach(oc => {
+        const sideKey = oc.point !== undefined ? `${oc.name} ${oc.point}` : oc.name;
+        if (!marketData[mkt.key][sideKey]) marketData[mkt.key][sideKey] = [];
+        marketData[mkt.key][sideKey].push({ book: bk.title, price: oc.price });
+      });
+    });
+  });
+
+  Object.keys(marketData).forEach(mktKey => {
+    const label = mktKey === 'h2h' ? 'MONEYLINE' : mktKey === 'spreads' ? 'SPREAD' : 'TOTAL';
+    let rows = '';
+    Object.keys(marketData[mktKey]).forEach(side => {
+      const offers = marketData[mktKey][side].sort((a, b) => {
+        // Sort so best price first (highest for +, lowest absolute for -)
+        return americanToImplied(a.price) - americanToImplied(b.price);
+      });
+      const best = offers[0];
+      rows += `<div style="display:flex; justify-content:space-between; padding: 4px 0; border-bottom: 1px solid rgba(42,42,58,0.3);">
+        <span style="color:var(--text-secondary); font-size:11px; min-width:140px;">${side}</span>
+        <span style="color:var(--green); font-size:11px; font-weight:600;">${formatPrice(best.price)}</span>
+        <span style="color:var(--text-dim); font-size:10px;">${best.book}</span>
+        <span style="color:var(--text-dim); font-size:10px;">${offers.length} books</span>
+      </div>`;
+    });
+
+    marketHtml.push(`
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px; font-weight:600; color:var(--amber); letter-spacing:1px; margin-bottom:6px;">${label}</div>
+        ${rows}
+      </div>
+    `);
+  });
+
+  return marketHtml.join('');
+}
+
+function updateWatchlist() {
+  const el = document.getElementById('watchlist');
+
+  // Group edges by sport and take the best per sport
+  const bySport = {};
+  allEdges.forEach(e => {
+    const cat = getSportCategory(e.sportKey);
+    if (!bySport[cat] || e.edgePercent > bySport[cat].edgePercent) {
+      bySport[cat] = e;
+    }
+  });
+
+  const items = Object.values(bySport).sort((a, b) => b.edgePercent - a.edgePercent);
+
+  if (items.length === 0) {
+    el.innerHTML = '<div class="no-edges" style="padding:20px;"><div class="no-edges-text">No edges yet</div></div>';
+    return;
+  }
+
+  el.innerHTML = items.map(e => `
+    <div class="watchlist-item" onclick="jumpToEdge('${e.sportKey}', '${e.side}')">
+      <div>
+        <div class="watchlist-matchup">${e.sportLabel} · ${e.event.away_team} @ ${e.event.home_team}</div>
+        <div style="font-size:9px; color:var(--text-dim); margin-top:2px;">${e.marketLabel}: ${e.side} · ${e.bestBook}</div>
+      </div>
+      <div>
+        <div class="watchlist-edge positive">${e.edgePercent.toFixed(1)}%</div>
+        <div style="font-size:10px; color:var(--green); text-align:right; font-weight:600;">${formatPrice(e.bestPrice)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function jumpToEdge(sportKey, side) {
+  const idx = filteredEdges.findIndex(e => e.sportKey === sportKey && e.side === side);
+  if (idx >= 0) selectEdge(idx);
+}
+
+// ═══ KEYBOARD SHORTCUTS ═══
+document.addEventListener('keydown', (e) => {
+  // Close overlays on Escape
+  if (e.key === 'Escape') {
+    document.getElementById('setupModal').style.display = 'none';
+    document.getElementById('shortcutsOverlay').classList.remove('visible');
+    return;
+  }
+
+  // Don't capture when typing in input
+  if (e.target.tagName === 'INPUT') {
+    if (e.key === 'Enter') connectApi();
+    return;
+  }
+
+  // Close shortcuts overlay on any key
+  if (document.getElementById('shortcutsOverlay').classList.contains('visible')) {
+    document.getElementById('shortcutsOverlay').classList.remove('visible');
+    return;
+  }
+
+  switch (e.key) {
+    case 'r': case 'R': refreshData(); break;
+    case '?': toggleShortcuts(); break;
+    case 'k': case 'K': showSetup(); break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (filteredEdges.length > 0) {
+        selectedEdgeIdx = Math.min(selectedEdgeIdx + 1, filteredEdges.length - 1);
+        selectEdge(selectedEdgeIdx);
+        scrollToSelected();
+      }
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if (filteredEdges.length > 0) {
+        selectedEdgeIdx = Math.max(selectedEdgeIdx - 1, 0);
+        selectEdge(selectedEdgeIdx);
+        scrollToSelected();
+      }
+      break;
+    case 'Enter':
+      if (selectedEdgeIdx >= 0) selectEdge(selectedEdgeIdx);
+      break;
+    case '1': setSport('all'); break;
+    case '2': setSport('americanfootball_nfl'); break;
+    case '3': setSport('basketball_nba'); break;
+    case '4': setSport('baseball_mlb'); break;
+    case '5': setSport('icehockey_nhl'); break;
+    case '6': setSport('tennis_'); break;
+    case '7': setSport('mma_mixed_martial_arts'); break;
+  }
+});
+
+function scrollToSelected() {
+  const row = document.querySelector(`.edge-row[data-idx="${selectedEdgeIdx}"]`);
+  if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function toggleShortcuts() {
+  document.getElementById('shortcutsOverlay').classList.toggle('visible');
+}
+
+// ═══ BOOT ═══
+init();
+</script>
+</body>
+</html>
