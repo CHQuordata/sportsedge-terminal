@@ -92,6 +92,23 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .edge-card{background:var(--grn-bg);border:1px solid var(--grn-bdr);border-radius:4px;padding:10px 12px;margin-bottom:8px}
 .note{padding:8px 16px;background:var(--bg0);font-size:9px;color:var(--t4);letter-spacing:.5px}.note strong{color:var(--amb)}
 .picks-section{padding:8px 0}
+/* ── AI PICKS ENGINE ── */
+.picks-tab{color:var(--amb)!important}.picks-tab.active{color:var(--amb)!important;background:rgba(255,171,0,.1)!important;border-color:rgba(255,171,0,.25)!important}
+.pick-item{padding:8px 12px;border-bottom:1px solid rgba(42,42,62,.4);cursor:pointer;transition:background .1s}.pick-item:hover{background:var(--bg3)}.pick-item.sel{background:var(--bg4);border-left:2px solid var(--amb);padding-left:10px}
+.pick-item-top{display:flex;align-items:center;gap:8px;margin-bottom:3px}.pick-item-rank{font-size:9px;font-weight:700;color:var(--t4);min-width:20px}.pick-item-match{font-size:10px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pick-item-pick{font-size:11px;font-weight:600;color:var(--t1);margin-left:28px;margin-top:2px}
+.pib{padding:1px 5px;font-size:8px;font-weight:700;border-radius:2px;letter-spacing:.5px;white-space:nowrap}
+.pib-HIGH,.pib-W{color:var(--grn);background:var(--grn-bg)}.pib-MEDIUM{color:var(--amb);background:var(--amb-bg)}.pib-LOW{color:var(--t3);background:var(--bg3)}.pib-L{color:var(--red);background:var(--red-bg)}.pib-P,.pib-Q{color:var(--t2);background:var(--bg3)}
+.pick-gen-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;padding:24px;text-align:center}
+.gen-btn{padding:10px 20px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:1px;color:var(--bg0);background:var(--amb);border:none;border-radius:4px;cursor:pointer}.gen-btn:hover{opacity:.9}.gen-btn:disabled{opacity:.4;cursor:not-allowed}
+.pick-det-hdr{padding:14px 16px;border-bottom:1px solid var(--bdr);background:var(--bg2)}.pick-det-match{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:4px;font-family:var(--sans)}.pick-det-pick{font-size:13px;font-weight:600;color:var(--amb);margin-bottom:6px}
+.filter-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.filter-tag{padding:2px 7px;font-size:9px;background:var(--bg3);border:1px solid var(--bdr);border-radius:10px;color:var(--t3)}
+.parlay-card{margin:6px 12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px}.parlay-title{font-size:9px;font-weight:600;letter-spacing:1.2px;color:var(--amb);text-transform:uppercase;margin-bottom:8px}
+.parlay-leg{padding:3px 0;font-size:10px;color:var(--t2);border-bottom:1px solid rgba(42,42,62,.3);display:flex;gap:6px;align-items:flex-start}.parlay-leg:last-child{border-bottom:none}.parlay-leg::before{content:'▸';color:var(--amb);font-size:8px;margin-top:2px;flex-shrink:0}
+.lean-item{padding:7px 12px;border-bottom:1px solid rgba(42,42,62,.3)}.lean-match{font-size:10px;font-weight:500;color:var(--t1);margin-bottom:2px}.lean-text{font-size:10px;color:var(--t3);margin-bottom:2px}.lean-trigger{font-size:9px;color:var(--t4);font-style:italic}
+.rec-stat{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid rgba(42,42,62,.3)}.rec-lbl{font-size:10px;color:var(--t3)}.rec-val{font-size:12px;font-weight:600}.rv-pos{color:var(--grn)}.rv-neg{color:var(--red)}.rv-neu{color:var(--t2)}
+.rule-item{padding:6px 12px;border-bottom:1px solid rgba(42,42,62,.3);font-size:10px;color:var(--t2);line-height:1.5}.rule-num{color:var(--amb);font-weight:700;margin-right:4px}
+.analyst-note{padding:10px 12px;background:rgba(255,171,0,.05);border-left:2px solid var(--amb);margin:8px 8px 0;font-size:10px;color:var(--t2);line-height:1.6;border-radius:0 4px 4px 0}
+.grade-row{padding:5px 12px;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid rgba(42,42,62,.3)}.grade-pick{flex:1;font-size:10px;color:var(--t1)}.grade-note{font-size:9px;color:var(--t4);margin-top:1px}
 </style>
 </head>
 <body>
@@ -105,6 +122,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     <button class="sport-tab" data-sport="nfl" onclick="setSport('nfl')">NFL</button>
     <button class="sport-tab" data-sport="tennis" onclick="setSport('tennis')">TENNIS</button>
     <button class="sport-tab" data-sport="mma" onclick="setSport('mma')">MMA</button>
+    <button class="sport-tab picks-tab" data-sport="picks" onclick="switchToPicksView()">⚡ PICKS</button>
   </div>
   <div class="topbar-sp"></div>
   <div class="api-st"><div class="api-dot" id="workerDot"></div><span id="workerSt">NO WORKER</span></div>
@@ -112,11 +130,14 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
   <div class="topbar-div"></div>
   <div class="api-st"><div class="api-dot" id="apiDot"></div><span id="apiSt">NO KEY</span></div>
   <button class="tb-btn" onclick="showSetup()">API KEY <span class="kbd">K</span></button>
+  <div class="topbar-div"></div>
+  <div class="api-st"><div class="api-dot" id="aiDot"></div><span id="aiSt">NO AI</span></div>
+  <button class="tb-btn" onclick="showPicksSetup()">AI KEY <span class="kbd">A</span></button>
   <button class="tb-btn" onclick="refreshAll()">SCAN <span class="kbd">R</span></button>
   <button class="tb-btn" onclick="toggleSC()">?</button>
 </div>
 <div class="main">
-  <div class="panel"><div class="panel-hdr"><span class="panel-title">Today's Slate</span><span class="badge a" id="slateCount">LOADING</span></div><div class="panel-body" id="slateList"></div></div>
+  <div class="panel"><div class="panel-hdr"><span class="panel-title" id="panelHdrTitle">Today's Slate</span><span class="badge a" id="slateCount">LOADING</span></div><div class="panel-body" id="slateList"></div></div>
   <div class="panel" style="background:var(--bg0)"><div class="panel-body" id="detailPanel" style="background:var(--bg1)"><div class="detail-empty"><div class="detail-empty-icon">&#9672;</div><div class="detail-empty-text">SELECT A MATCHUP TO RESEARCH</div><div style="font-size:10px;color:var(--t4);margin-top:8px">Use <span class="kbd">&#8593;</span><span class="kbd">&#8595;</span> to navigate</div></div></div></div>
   <div class="panel"><div class="panel-hdr"><span class="panel-title">Dashboard</span></div>
     <div class="stat-grid"><div class="stat-cell"><div class="stat-lbl">GAMES</div><div class="stat-val" id="stG">-</div></div><div class="stat-cell"><div class="stat-lbl">EDGES</div><div class="stat-val g" id="stE">-</div></div><div class="stat-cell"><div class="stat-lbl">SPORTS</div><div class="stat-val a" id="stS">-</div></div><div class="stat-cell"><div class="stat-lbl">INJURIES</div><div class="stat-val r" id="stI">-</div></div></div>
@@ -126,6 +147,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 <div class="bottombar"><div><span style="color:var(--grn)">&#9679;</span> SPORTSEDGE v2.9</div><div id="lastScan">LAST SCAN: NEVER</div><div class="bottombar-sp"></div><div id="apiCalls">API: -/500</div><div><span class="kbd">?</span> HELP</div></div>
 <div class="modal-ov" id="workerModal"><div class="modal"><div class="modal-title">CLOUDFLARE WORKER</div><div class="modal-sub">Enter your deployed worker URL to enable Pinnacle odds for MMA and tennis. No API credits consumed — Pinnacle is free with an account.<br><br>Deploy instructions in <code>worker/</code> folder of the repo.</div><input class="modal-input" id="workerUrlInput" type="text" placeholder="https://sportsedge-proxy.yourname.workers.dev" autocomplete="off"><button class="modal-btn" onclick="connectWorker()">CONNECT WORKER</button><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('workerModal').style.display='none'">Cancel</div></div></div>
 <div class="modal-ov" id="setupModal"><div class="modal"><div class="modal-title">SPORTSEDGE TERMINAL</div><div class="modal-sub">Enter your Odds API key for live odds, EV calculation, and edge detection across 10+ sportsbooks.<br><br>Without a key, ESPN provides schedules, injuries, form, and records for all sports including tennis &amp; UFC.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only</div></div></div>
+<div class="modal-ov" id="claudeModal"><div class="modal"><div class="modal-title" style="color:var(--amb)">AI PICKS ENGINE</div><div class="modal-sub">Enter your Anthropic API key to enable self-learning daily picks with grading, memory, and cumulative record tracking.<br><br>Uses <strong>claude-opus-4-7</strong> for best analysis quality. Picks are generated on-demand and stored locally — your key never leaves your browser.</div><input class="modal-input" id="claudeKeyInput" type="password" placeholder="sk-ant-api03-..." autocomplete="off"><button class="modal-btn" style="background:var(--amb)" onclick="connectClaude()">CONNECT AI ENGINE</button><a class="modal-link" href="https://console.anthropic.com/" target="_blank">Get API key → console.anthropic.com</a><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('claudeModal').style.display='none'">Cancel</div></div></div>
 <div class="sc-ov" id="scOverlay"><div class="sc-panel"><div class="sc-title">KEYBOARD SHORTCUTS</div><div class="sc-row"><div><span class="kbd">R</span></div><div class="sc-desc">Refresh all data</div></div><div class="sc-row"><div><span class="kbd">&#8593;</span><span class="kbd">&#8595;</span></div><div class="sc-desc">Navigate slate</div></div><div class="sc-row"><div><span class="kbd">Enter</span></div><div class="sc-desc">Select matchup</div></div><div class="sc-row"><div><span class="kbd">1-7</span></div><div class="sc-desc">Sport tabs</div></div><div class="sc-row"><div><span class="kbd">K</span></div><div class="sc-desc">API key setup</div></div><div class="sc-row"><div><span class="kbd">Esc</span></div><div class="sc-desc">Close overlay</div></div></div></div>
 
 <script>
@@ -151,6 +173,7 @@ function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Un
 async function init(){
   if(AK){$('setupModal').style.display='none';$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   if(WORKER_URL){$('workerDot').classList.add('ok');$('workerSt').textContent='PINNACLE'}
+  if(CLAUDE_KEY){$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY'}
   await refreshAll()}
 function showSetup(){$('setupModal').style.display='flex';$('apiKeyInput').focus()}
 function showWorkerSetup(){$('workerModal').style.display='flex';$('workerUrlInput').value=WORKER_URL;$('workerUrlInput').focus()}
@@ -375,8 +398,8 @@ function renderMetrics(pk){
 // ══════════════════════════════
 // ── FILTERING & RENDERING
 // ══════════════════════════════
-function setSport(s){cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;applyFilters()}
-function applyFilters(){fG=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
+function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;$('panelHdrTitle').textContent="Today's Slate";applyFilters()}
+function applyFilters(){if(cView==='picks')return;fG=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
 
 function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div class="no-data">No games found<div style="font-size:10px;margin-top:8px">Hit SCAN to refresh or check another sport tab</div></div>';return}
   const grp={};fG.forEach((g,i)=>{const lb=g.spL;if(!grp[lb])grp[lb]=[];grp[lb].push({...g,_i:i})});
@@ -566,13 +589,328 @@ function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<
 function jumpTo(id){const i=fG.findIndex(g=>g.id===id);if(i>=0)selGame(i)}
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('setupModal').style.display='none';$('scOverlay').classList.remove('vis');return}if(e.target.tagName==='INPUT'){if(e.key==='Enter')connectApi();return}if($('scOverlay').classList.contains('vis')){$('scOverlay').classList.remove('vis');return}
-  switch(e.key){case'r':case'R':refreshAll();break;case'?':toggleSC();break;case'k':case'K':showSetup();break;case'w':case'W':showWorkerSetup();break;
-    case'ArrowDown':e.preventDefault();if(fG.length){selIdx=Math.min(selIdx+1,fG.length-1);selGame(selIdx);scrSel()}break;
-    case'ArrowUp':e.preventDefault();if(fG.length){selIdx=Math.max(selIdx-1,0);selGame(selIdx);scrSel()}break;
-    case'Enter':if(selIdx>=0)selGame(selIdx);break;
-    case'1':setSport('all');break;case'2':setSport('nba');break;case'3':setSport('nhl');break;case'4':setSport('mlb');break;case'5':setSport('nfl');break;case'6':setSport('tennis');break;case'7':setSport('mma');break}});
+  switch(e.key){case'r':case'R':refreshAll();break;case'?':toggleSC();break;case'k':case'K':showSetup();break;case'w':case'W':showWorkerSetup();break;case'a':case'A':showPicksSetup();break;
+    case'p':case'P':switchToPicksView();break;
+    case'g':case'G':if(cView==='picks')generatePicks();break;
+    case'ArrowDown':e.preventDefault();if(cView==='picks'&&todayPicksData?.picks){const pp=todayPicksData.picks.filter(p=>!p.is_lean);selPickIdx=Math.min(selPickIdx+1,pp.length-1);selPick(selPickIdx)}else if(fG.length){selIdx=Math.min(selIdx+1,fG.length-1);selGame(selIdx);scrSel()}break;
+    case'ArrowUp':e.preventDefault();if(cView==='picks'&&todayPicksData?.picks){selPickIdx=Math.max(selPickIdx-1,0);selPick(selPickIdx)}else if(fG.length){selIdx=Math.max(selIdx-1,0);selGame(selIdx);scrSel()}break;
+    case'Enter':if(cView==='picks'&&selPickIdx>=0)selPick(selPickIdx);else if(selIdx>=0)selGame(selIdx);break;
+    case'1':setSport('all');break;case'2':setSport('nba');break;case'3':setSport('nhl');break;case'4':setSport('mlb');break;case'5':setSport('nfl');break;case'6':setSport('tennis');break;case'7':setSport('mma');break;case'8':switchToPicksView();break}});
 function scrSel(){const r=document.querySelector(`.game-row[data-i="${selIdx}"]`);if(r)r.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function toggleSC(){$('scOverlay').classList.toggle('vis')}
+
+// ══════════════════════════════════════════════════
+// ── AI PICKS ENGINE
+// ══════════════════════════════════════════════════
+let CLAUDE_KEY=localStorage.getItem('et_claude_key')||'',cView='slate',selPickIdx=-1,isGenerating=false,todayPicksData=null;
+
+const DEFAULT_LEARNED_RULES=`1. Max 8 graded picks per slate. Pick #9 goes to leans.
+2. Max 4 MEDIUM-confidence picks. Demote weakest to leans if exceeded.
+3. Never 2+ graded picks on the same game/match. One pick per event.
+4. No MLB totals until pitchers have 30+ IP. Early-season ERA is noise — use K/9, xERA, park factors.
+5. MLB SP edge alone is not enough. Require offensive or bullpen advantage on top.
+6. H2H records are supporting factors, never primary edges. Rosters turn over.
+7. Contextualize tennis W-L records — check opposition quality, surface splits, and trajectory.
+8. Tennis is the #1 sport — be aggressive. Clay plays are the single best edge in the portfolio.
+9. NHL motivation plays are high-signal. Desperate playoff teams vs eliminated opponents.
+10. Shootout/OT losses are variance, not process errors. Do not over-correct after bad beats.`;
+
+function showPicksSetup(){$('claudeModal').style.display='flex';$('claudeKeyInput').focus()}
+function connectClaude(){const k=$('claudeKeyInput').value.trim();if(!k)return;CLAUDE_KEY=k;localStorage.setItem('et_claude_key',k);$('claudeModal').style.display='none';$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY';if(cView==='picks')renderPicksOverview()}
+
+function switchToPicksView(){
+  cView='picks';
+  document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('.sport-tab[data-sport="picks"]').classList.add('active');
+  $('panelHdrTitle').textContent="TODAY'S PICKS";
+  $('slateCount').textContent='';
+  const savedDate=localStorage.getItem('et_picks_date');
+  if(savedDate===new Date().toDateString()){try{todayPicksData=JSON.parse(localStorage.getItem('et_picks_today')||'null')}catch(e){todayPicksData=null}}
+  else todayPicksData=null;
+  renderPicksLeaderboard();renderPicksOverview();
+}
+
+function renderPicksLeaderboard(){
+  const el=$('slateList');
+  if(!todayPicksData?.picks?.length){
+    el.innerHTML='<div class="pick-gen-state" style="height:200px"><div style="font-size:28px;opacity:.25">⚡</div><div style="font-size:10px;letter-spacing:1px;color:var(--t4)">NO PICKS YET</div><div style="font-size:9px;color:var(--t4);margin-top:4px">Press GENERATE in the main panel</div></div>';
+    return;
+  }
+  const graded=todayPicksData.picks.filter(p=>!p.is_lean);
+  const leans=todayPicksData.leans||[];
+  let h=`<div class="sport-group-hdr">⚡ PICKS (${graded.length})</div>`;
+  graded.forEach((p,i)=>{
+    const res=p.result;const sp=p.sport;
+    const ic=sp==='tennis'?'🎾':sp==='nba'?'🏀':sp==='nhl'?'🏒':sp==='mlb'?'⚾':sp==='nfl'?'🏈':sp==='mma'?'🥊':'⚡';
+    h+=`<div class="pick-item${selPickIdx===i?' sel':''}" onclick="selPick(${i})">
+      <div class="pick-item-top">
+        <span class="pick-item-rank">#${p.rank||i+1}</span>
+        <span>${ic}</span>
+        <span class="pick-item-match">${p.matchup}</span>
+        ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}</span>`}
+      </div>
+      <div class="pick-item-pick">${p.pick}</div>
+    </div>`;
+  });
+  if(leans.length){
+    h+=`<div class="sport-group-hdr">👁 LEANS (${leans.length})</div>`;
+    leans.forEach((l,i)=>{
+      h+=`<div class="pick-item" onclick="selLean(${i})" style="opacity:.65">
+        <div class="pick-item-top"><span class="pick-item-rank" style="color:var(--t4)">L</span><span class="pick-item-match">${l.matchup}</span></div>
+        <div class="pick-item-pick" style="color:var(--t3)">${l.lean}</div>
+      </div>`;
+    });
+  }
+  el.innerHTML=h;
+}
+
+function renderPicksOverview(){
+  const el=$('detailPanel');
+  if(!todayPicksData){
+    if(!CLAUDE_KEY){
+      el.innerHTML=`<div class="pick-gen-state"><div style="font-size:36px;opacity:.2">🤖</div><div style="font-size:13px;letter-spacing:1px;color:var(--t2)">AI PICKS ENGINE</div><div style="font-size:10px;color:var(--t4);margin-top:8px;max-width:300px;line-height:1.7">Self-learning daily picks generator. Grades yesterday's picks, updates its own rules, generates today's slate with full analysis. Memory persists in your browser.</div><button class="gen-btn" style="margin-top:20px" onclick="showPicksSetup()">CONNECT AI KEY →</button></div>`;
+    }else{
+      el.innerHTML=`<div class="pick-gen-state"><div style="font-size:36px;opacity:.2">⚡</div><div style="font-size:13px;letter-spacing:1px;color:var(--t2)">READY TO ANALYZE</div><div style="font-size:10px;color:var(--t4);margin-top:8px;max-width:300px;line-height:1.7">AI will grade yesterday's picks, update its learned rules, then generate today's slate based on live odds + ESPN data.</div><button class="gen-btn${isGenerating?' pulse':''}" style="margin-top:20px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING SLATE...':'GENERATE TODAY\'S PICKS ⚡'}</button></div>`;
+    }
+    return;
+  }
+  const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
+  const ov=rec.overall||{w:0,l:0,p:0};const total=ov.w+ov.l+(ov.p||0);
+  const hr=total?((ov.w/total)*100).toFixed(1)+'%':'—';
+  let h='';
+  if(todayPicksData.analyst_note)h+=`<div class="analyst-note">📊 ${todayPicksData.analyst_note}</div>`;
+  // Record strip
+  h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>RECORD</div>
+    <div class="rec-stat"><span class="rec-lbl">OVERALL</span><span class="rec-val ${ov.w>ov.l?'rv-pos':ov.w<ov.l?'rv-neg':'rv-neu'}">${ov.w}-${ov.l}${ov.p?' ('+ov.p+'P)':''}</span></div>
+    <div class="rec-stat"><span class="rec-lbl">HIT RATE</span><span class="rec-val ${parseFloat(hr)>=55?'rv-pos':parseFloat(hr)<45&&total>0?'rv-neg':'rv-neu'}">${hr}</span></div>`;
+  if(rec.by_confidence){['HIGH','MEDIUM','LOW'].forEach(c=>{const cr=rec.by_confidence[c]||{};if((cr.w||0)+(cr.l||0)>0)h+=`<div class="rec-stat"><span class="rec-lbl">${c}</span><span class="rec-val ${(cr.w||0)>(cr.l||0)?'rv-pos':(cr.w||0)<(cr.l||0)?'rv-neg':'rv-neu'}">${cr.w||0}-${cr.l||0}</span></div>`})}
+  if(rec.by_sport){const sp=Object.entries(rec.by_sport).filter(([,r])=>(r.w||0)+(r.l||0)>0);if(sp.length){h+=`<div style="padding:4px 12px 2px;font-size:9px;color:var(--t4);letter-spacing:1px">BY SPORT</div>`;sp.forEach(([s,r])=>{const ic=s==='tennis'?'🎾':s==='nba'?'🏀':s==='nhl'?'🏒':s==='mlb'?'⚾':s==='mma'?'🥊':'⚡';h+=`<div class="rec-stat"><span class="rec-lbl">${ic} ${s.toUpperCase()}</span><span class="rec-val ${(r.w||0)>(r.l||0)?'rv-pos':(r.w||0)<(r.l||0)?'rv-neg':'rv-neu'}">${r.w||0}-${r.l||0}</span></div>`})}}
+  h+='</div>';
+  // Grading
+  if(todayPicksData.grading?.length){
+    const gradable=todayPicksData.grading.filter(g=>g.result&&g.result!=='?');
+    if(gradable.length){
+      h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>YESTERDAY GRADED</div>`;
+      todayPicksData.grading.forEach(g=>{h+=`<div class="grade-row"><span class="pib pib-${g.result||'Q'}" style="flex-shrink:0">${g.result||'?'}</span><span class="grade-pick">${g.pick}</span><span class="grade-note">${g.note||''}</span></div>`});
+      h+='</div>';
+    }
+  }
+  // Parlays
+  if(todayPicksData.parlays?.length){
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>PARLAYS</div>`;
+    todayPicksData.parlays.forEach(p=>{h+=`<div class="parlay-card"><div class="parlay-title">${p.type||'Parlay'}</div>`;(p.legs||[]).forEach(leg=>{h+=`<div class="parlay-leg">${leg}</div>`});if(p.note)h+=`<div style="font-size:9px;color:var(--t4);margin-top:6px;font-style:italic">${p.note}</div>`;h+=`</div>`});
+    h+='</div>';
+  }
+  // Inactive sports
+  if(todayPicksData.inactive_sports?.length){
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--t4)"></div>INACTIVE SPORTS</div><table class="dtable"><thead><tr><th>SPORT</th><th>STATUS</th></tr></thead><tbody>`;
+    todayPicksData.inactive_sports.forEach(s=>{h+=`<tr><td>${s.sport}</td><td style="color:var(--t3)">${s.status}</td></tr>`});
+    h+='</tbody></table></div>';
+  }
+  // Learned rules
+  const rules=(localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES).split('\n').filter(r=>r.trim());
+  h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>LEARNED RULES (${rules.length})</div>`;
+  rules.forEach((r,i)=>{h+=`<div class="rule-item"><span class="rule-num">${i+1}.</span>${r.replace(/^\d+\.\s*/,'')}</div>`});
+  h+='</div>';
+  h+=`<div style="padding:12px 16px"><button class="gen-btn${isGenerating?' pulse':''}" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING...':'↻ REGENERATE PICKS'}</button></div>`;
+  el.innerHTML=h;el.scrollTop=0;
+}
+
+function selPick(idx){
+  selPickIdx=idx;renderPicksLeaderboard();
+  const picks=todayPicksData?.picks?.filter(p=>!p.is_lean)||[];
+  const p=picks[idx];if(!p)return;
+  const el=$('detailPanel');
+  const cc=p.confidence==='HIGH'?'var(--grn)':p.confidence==='MEDIUM'?'var(--amb)':'var(--t3)';
+  let h=`<div class="pick-det-hdr"><div class="pick-det-match">${p.matchup}</div><div class="pick-det-pick">${p.pick}</div>
+    <div style="font-size:10px;color:${cc};font-weight:600">● ${p.confidence} CONFIDENCE${p.odds?' · '+(p.odds>0?'+':'')+p.odds:''}</div>
+    ${p.filters?.length?`<div class="filter-tags">${p.filters.map(f=>`<span class="filter-tag">${f.replace(/_/g,' ')}</span>`).join('')}</div>`:''}
+    ${p.result?`<div style="margin-top:8px"><span class="pib pib-${p.result}">RESULT: ${p.result}</span></div>`:''}
+  </div>`;
+  h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:${cc}"></div>ANALYSIS</div><div style="font-size:11px;color:var(--t2);line-height:1.7">${p.reasoning||'No analysis provided.'}</div></div>`;
+  const g=allG.find(gm=>{const ms=p.matchup.toLowerCase();return gm.aw.nm.toLowerCase().split(' ').some(w=>w.length>3&&ms.includes(w))||gm.hm.nm.toLowerCase().split(' ').some(w=>w.length>3&&ms.includes(w))});
+  if(g?.odds?.bookmakers?.length)h+=renderOdds(g);
+  const ge=g?allE.filter(e=>e.g.id===g.id):[];
+  if(ge.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>EDGE DETECTION</div>${ge.map(e=>`<div class="edge-card"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--grn)">${e.ml}: ${e.side}</span><span style="font-size:13px;font-weight:700;color:var(--grn)">${e.ep.toFixed(1)}%</span></div><div style="font-size:9px;color:var(--t2)">Best: ${e.bb} ${fp(e.bp)}</div></div>`).join('')}</div>`;
+  el.innerHTML=h;el.scrollTop=0;
+}
+
+function selLean(idx){
+  selPickIdx=-1;renderPicksLeaderboard();
+  const l=todayPicksData?.leans?.[idx];if(!l)return;
+  $('detailPanel').innerHTML=`<div class="pick-det-hdr"><div class="pick-det-match">${l.matchup}</div><div style="font-size:11px;color:var(--t3);margin-top:4px">LEAN — monitoring, not a graded pick</div></div>
+    <div class="sec"><div class="sec-title"><div class="ind" style="background:var(--t3)"></div>LEAN</div><div style="font-size:11px;color:var(--t2);line-height:1.7">${l.lean}</div></div>
+    ${l.trigger?`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>PROMOTION TRIGGER</div><div style="font-size:11px;color:var(--t2)">${l.trigger}</div></div>`:''}`;
+}
+
+function buildGamesContext(){
+  const now=new Date();
+  let ctx=`TODAY: ${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}\nTIME: ${now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}\n\nGAMES ON SLATE (${allG.length}):\n\n`;
+  allG.forEach(g=>{
+    const t=g.st==='STATUS_IN_PROGRESS'?`LIVE ${g.stD}`:g.st==='STATUS_FINAL'?`FINAL${g.aw.sc!=null?' '+g.aw.sc+'-'+g.hm.sc:''}`:g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+    ctx+=`[${g.spL}] ${g.aw.nm} @ ${g.hm.nm} — ${t}\n`;
+    if(g.aw.rec||g.hm.rec)ctx+=`  Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
+    if(g.aw.rank||g.hm.rank)ctx+=`  Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:'?'} vs ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:'?'}\n`;
+    if(g.odds?.bookmakers?.length){const bk=g.odds.bookmakers[0];
+      const ml=bk.markets.find(m=>m.key==='h2h'),sp=bk.markets.find(m=>m.key==='spreads'),to=bk.markets.find(m=>m.key==='totals');
+      if(ml)ctx+=`  ML: ${ml.outcomes.map(o=>o.name+' '+(o.price>0?'+':'')+o.price).join(' | ')}\n`;
+      if(sp)ctx+=`  Spread: ${sp.outcomes.map(o=>o.name+' '+(o.point>0?'+':'')+o.point+' ('+(o.price>0?'+':'')+o.price+')').join(' | ')}\n`;
+      if(to)ctx+=`  Total: ${to.outcomes.map(o=>o.name+' '+o.point+' ('+(o.price>0?'+':'')+o.price+')').join(' | ')}\n`;
+    }else if(g.eOdds)ctx+=`  Line: ${g.eOdds.details||''} O/U ${g.eOdds.overUnder||'N/A'}\n`;
+    const gE=allE.filter(e=>e.g.id===g.id);
+    if(gE.length)ctx+=`  SHARP: ${gE.slice(0,3).map(e=>`${e.ml} ${e.side} ${e.ep.toFixed(1)}% @ ${e.bb}`).join(' | ')}\n`;
+    const awI=g.inj.aw.filter(i=>i.sc==='O'||i.sc==='D'),hmI=g.inj.hm.filter(i=>i.sc==='O'||i.sc==='D');
+    if(awI.length)ctx+=`  ${g.aw.nm} INJ: ${awI.map(i=>i.nm+' ('+i.sc+')').join(', ')}\n`;
+    if(hmI.length)ctx+=`  ${g.hm.nm} INJ: ${hmI.map(i=>i.nm+' ('+i.sc+')').join(', ')}\n`;
+    ctx+='\n';
+  });
+  return ctx;
+}
+
+function getYesterdayPicks(){
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  const y=new Date();y.setDate(y.getDate()-1);
+  const ySlate=history.find(s=>new Date(s.date).toDateString()===y.toDateString());
+  return ySlate?.picks?.filter(p=>!p.is_lean&&!p.result)||[];
+}
+
+function updateCumulativeRecord(grading,picks){
+  const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{"overall":{"w":0,"l":0,"p":0},"by_confidence":{},"by_sport":{}}');
+  if(!rec.overall)rec.overall={w:0,l:0,p:0};
+  if(!rec.by_confidence)rec.by_confidence={};
+  if(!rec.by_sport)rec.by_sport={};
+  grading.forEach(g=>{
+    if(!['W','L','P'].includes(g.result))return;
+    const k=g.result.toLowerCase();rec.overall[k]=(rec.overall[k]||0)+1;
+    const mp=picks?.find(p=>p.pick===g.pick||(p.matchup&&g.pick?.includes(p.matchup.split(' vs ')[0]?.split(' ').pop()||'')));
+    if(mp){const sp=mp.sport||'unknown',cf=mp.confidence||'MEDIUM';
+      if(!rec.by_sport[sp])rec.by_sport[sp]={w:0,l:0,p:0};
+      if(!rec.by_confidence[cf])rec.by_confidence[cf]={w:0,l:0,p:0};
+      rec.by_sport[sp][k]=(rec.by_sport[sp][k]||0)+1;
+      rec.by_confidence[cf][k]=(rec.by_confidence[cf][k]||0)+1;
+    }
+  });
+  localStorage.setItem('et_cumulative',JSON.stringify(rec));
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  const y=new Date();y.setDate(y.getDate()-1);
+  const yi=history.findIndex(s=>new Date(s.date).toDateString()===y.toDateString());
+  if(yi>=0)history[yi].grading=grading;
+  localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+}
+
+function saveTodayToHistory(){
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  const today=new Date().toISOString().split('T')[0];
+  const idx=history.findIndex(s=>s.date===today);
+  const entry={date:today,picks:todayPicksData?.picks||[]};
+  if(idx>=0)history[idx]=entry;else history.unshift(entry);
+  localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+}
+
+function buildSystemPrompt(learnedRules,rec){
+  const ov=rec.overall||{w:0,l:0,p:0};const total=ov.w+ov.l+(ov.p||0);
+  const hr=total?((ov.w/total)*100).toFixed(1)+'%':'No record yet';
+  const byConf=rec.by_confidence?Object.entries(rec.by_confidence).filter(([,r])=>(r.w||0)+(r.l||0)>0).map(([c,r])=>`${c}: ${r.w||0}-${r.l||0}`).join(' | '):'';
+  const bySp=rec.by_sport?Object.entries(rec.by_sport).filter(([,r])=>(r.w||0)+(r.l||0)>0).map(([s,r])=>`${s}: ${r.w||0}-${r.l||0}`).join(' | '):'';
+  return `You are a sharp sports betting analyst embedded in SPORTSEDGE TERMINAL. Your job each day:
+1. Grade yesterday's picks using results visible in the game data
+2. Update your learned rules based on patterns from grading
+3. Generate today's best picks from the live data provided
+
+## YOUR TRACK RECORD
+Overall: ${ov.w}-${ov.l}${ov.p?' ('+ov.p+'P)':''} | Hit Rate: ${hr}
+${byConf?'By Confidence: '+byConf:''}
+${bySp?'By Sport: '+bySp:''}
+
+## LEARNED RULES (enforce every slate — update when new patterns emerge)
+${learnedRules}
+
+## METHODOLOGY
+Team sports (NBA/NHL/MLB/NFL) — qualify with 2+ signals:
+• Line Movement: ≥0.5pt spread shift or ≥15¢ ML move from opener
+• Rest Edge: back-to-back, 3-in-4 nights, short rest vs long rest
+• Injury Edge: key player out not fully priced in
+• ATS Trend: covering ≥60% in relevant split
+• Sharp Signal: book edge detected in live data, reverse line movement
+• Situational: revenge, letdown, playoff positioning, eliminated team
+
+Tennis (ATP/WTA) — qualify with 1 strong signal:
+• Surface Form: clay specialist vs hard-court player on clay
+• H2H on Surface: head-to-head record on specific surface
+• Tournament Form/Momentum: recent results in current swing
+• Ranking-Form Divergence: ranked much higher/lower than current form
+• Fatigue/Load: deep run last week, back-to-back tournaments
+• Surface Transition R1: round 1 after surface switch = upset spot
+
+MMA: record, recent finishes, opponent quality, reach/style matchup.
+
+## CRITICAL RULES
+- Max 8 graded picks (is_lean:false). Extras go to leans.
+- Max 4 MEDIUM picks. Demote weakest if exceeded.
+- Never 2+ graded picks on same game.
+- Tennis is highest-ROI — always include when active. Clay parlay every clay tournament.
+- List every inactive sport explicitly with reason.
+- Grade all yesterday picks. Use "?" only if truly no result found.
+
+## RESPONSE FORMAT — JSON ONLY, no other text:
+\`\`\`json
+{
+  "date":"YYYY-MM-DD",
+  "grading":[{"pick":"exact pick text","sport":"sport","result":"W|L|P|?","note":"brief reason"}],
+  "learned_rules_update":"Full updated rules list — keep valid existing rules, add new lessons",
+  "picks":[{"rank":1,"sport":"tennis","matchup":"Player A vs Player B","pick":"Player A ML (-130)","confidence":"HIGH","odds":-130,"reasoning":"Multi-sentence analysis covering key edges","filters":["surface_form"],"is_lean":false}],
+  "parlays":[{"type":"2-Leg Conservative","legs":["leg1","leg2"],"note":"why these combine"}],
+  "leans":[{"matchup":"...","lean":"side and why","trigger":"what would promote to graded pick"}],
+  "inactive_sports":[{"sport":"NFL","status":"Offseason — returns September 2026"}],
+  "analyst_note":"1-2 sentence slate summary"
+}
+\`\`\``;
+}
+
+function buildUserMsg(gamesCtx,yesterdayPicks){
+  let msg=gamesCtx;
+  if(yesterdayPicks.length){
+    msg+=`\nYESTERDAY'S UNGRADED PICKS (grade using results in game data above):\n`;
+    yesterdayPicks.forEach(p=>{msg+=`- ${(p.sport||'').toUpperCase()}: ${p.matchup||''} | ${p.pick||''} | ${p.confidence||''}\n`});
+    msg+='\n';
+  }else msg+='\n(No prior picks to grade — first slate or already graded)\n\n';
+  msg+='Analyze the slate and generate today\'s picks. Enforce all learned rules strictly.';
+  return msg;
+}
+
+async function generatePicks(){
+  if(!CLAUDE_KEY){showPicksSetup();return}
+  if(isGenerating)return;
+  isGenerating=true;renderPicksOverview();
+  try{
+    const gamesCtx=buildGamesContext();
+    const yPicks=getYesterdayPicks();
+    const rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;
+    const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json'},
+      body:JSON.stringify({model:'claude-opus-4-7',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)}]})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
+    const data=await resp.json();
+    const text=data.content[0].text;
+    const m=text.match(/```json\s*([\s\S]+?)\s*```/)||text.match(/(\{[\s\S]+\})/);
+    if(!m)throw new Error('No JSON in response');
+    const result=JSON.parse(m[1]);
+    todayPicksData=result;
+    localStorage.setItem('et_picks_today',JSON.stringify(result));
+    localStorage.setItem('et_picks_date',new Date().toDateString());
+    if(result.learned_rules_update)localStorage.setItem('et_learned_rules',result.learned_rules_update);
+    if(result.grading?.length)updateCumulativeRecord(result.grading,result.picks);
+    saveTodayToHistory();
+  }catch(e){
+    $('detailPanel').innerHTML=`<div class="pick-gen-state"><div style="font-size:28px">⚠️</div><div style="font-size:11px;color:var(--red);margin-top:8px">GENERATION FAILED</div><div style="font-size:10px;color:var(--t4);margin-top:6px;max-width:280px;line-height:1.6">${e.message}</div><button class="gen-btn" style="margin-top:16px" onclick="generatePicks()">RETRY</button></div>`;
+    isGenerating=false;return;
+  }
+  isGenerating=false;renderPicksLeaderboard();renderPicksOverview();
+}
+
 init();
 </script>
 </body>
