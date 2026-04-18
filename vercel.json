@@ -1,8 +1,0 @@
-{
-  "regions": ["lhr1"],
-  "functions": {
-    "api/**/*.js": {
-      "maxDuration": 15
-    }
-  }
-}
