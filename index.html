@@ -196,6 +196,7 @@ async function refreshAll(){
           const comps=cp.competitors;if(!comps||comps.length<2)return;
           if(!comps[0].athlete||!comps[1].athlete)return; // skip doubles/mixed
           const mDate=new Date(cp.date||ev.date);const st=cp.status?.type?.name;
+          if(['STATUS_FINAL','STATUS_RETIRED','STATUS_WALKOVER','STATUS_FORFEIT'].includes(st))return;
           if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
           const mId=cp.id||`${lg}_${ev.id}_${cp.order||0}`;
           if(seenIds.has(mId))return;seenIds.add(mId);
