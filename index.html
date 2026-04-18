@@ -431,16 +431,17 @@ function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div
 // ══════════════════════════════
 async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$('detailPanel');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
-  let af=[],hf=[],pitchers=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null;
+  let af=[],hf=[],pitchers=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null,tnSum=null;
   const _ec=g.isTeam&&g.aw.id&&E[g.sp],_eo=g.st!=='STATUS_FINAL';
-  const [_fr,_sm,_wx,_awt,_hmt,_awn,_hmn]=await Promise.all([
+  const [_fr,_sm,_wx,_awt,_hmt,_awn,_hmn,_tns]=await Promise.all([
     _ec?(()=>{const c=E[g.sp],szn=sportSeason(g.cat);return Promise.all([espnSched(c.s,c.l,g.aw.id,szn),espnSched(c.s,c.l,g.hm.id,szn)])})():Promise.resolve(null),
     _eo&&(g.cat==='mlb'||g.cat==='nfl')?fetchGameSummary(g.cat,g.id):Promise.resolve(null),
     _eo&&isOutdoor(g.ven,g.cat)?fetchWeather(cityFromTeam(g.hm.nm)):Promise.resolve(null),
     _eo&&g.cat==='tennis'&&g.aw.id?fetchTennisPlayerStats(g.sp,g.aw.id):Promise.resolve(null),
     _eo&&g.cat==='tennis'&&g.hm.id?fetchTennisPlayerStats(g.sp,g.hm.id):Promise.resolve(null),
     _eo&&g.cat==='nba'&&g.aw.id?fetchNBATeamStats(g.aw.id):Promise.resolve(null),
-    _eo&&g.cat==='nba'&&g.hm.id?fetchNBATeamStats(g.hm.id):Promise.resolve(null)]);
+    _eo&&g.cat==='nba'&&g.hm.id?fetchNBATeamStats(g.hm.id):Promise.resolve(null),
+    _eo&&g.cat==='tennis'?fetchTennisMatchSummary(g.sp,g.id,g.aw.nm,g.hm.nm):Promise.resolve(null)]);
   if(_fr){af=xForm(_fr[0],g.aw.id);hf=xForm(_fr[1],g.hm.id)}
   if(_sm)pitchers=extractPitchers(_sm);
   if(_wx)weather=_wx;
@@ -448,6 +449,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   if(_hmt)hmTn=extractTennisStats(_hmt);
   if(_awn)awNba=extractNBAStats(_awn);
   if(_hmn)hmNba=extractNBAStats(_hmn);
+  if(_tns)tnSum=_tns;
   let h='';
   const ts=g.tm.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' \u00B7 '+g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   h+=`<div class="det-header"><div class="det-teams">${g.aw.nm} ${g.isTeam?'@':'vs'} ${g.hm.nm}</div><div class="det-records">${g.aw.rec?g.aw.nm+' ('+g.aw.rec+')':g.aw.nm} vs ${g.hm.rec?g.hm.nm+' ('+g.hm.rec+')':g.hm.nm}</div><div class="det-meta"><span>${g.spI} ${g.spL}</span><span>${ts}</span>${g.ven?`<span>${g.ven}</span>`:''}${g.bc?`<span>${g.bc}</span>`:''}</div></div>`;
@@ -501,19 +503,46 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       if(pl.rec)h+=`<div class="tn-stat"><div class="tn-sv" style="font-size:10px;color:var(--t2)">${pl.rec}</div><div class="tn-sl">REC</div></div>`;
       h+=`</div></div>`;
     });
+    h+=`</div>`;
+    // ── ESPN sourced data (H2H + article) ──
+    const bdr='border-top:1px solid rgba(42,42,62,.3);margin-top:6px;padding-top:6px';
+    if(tnSum){
+      // H2H block
+      const h2hData=tnSum.h2hPlayers||[];
+      let h2hLine=null;
+      if(h2hData.length>=2){const p0=h2hData[0],p1=h2hData[1];const w0=p0.h2h?.wins??p0.h2h?.value??null,w1=p1.h2h?.wins??p1.h2h?.value??null;if(w0!==null&&w1!==null){const tot=parseInt(w0)+parseInt(w1);const leader=parseInt(w0)>=parseInt(w1)?p0.nm:p1.nm;h2hLine=tot>0?`${leader.split(' ').pop()} leads H2H ${Math.max(w0,w1)}-${Math.min(w0,w1)} all-time (${tot} meetings)`:`No prior meetings`;}else if(p0.h2h?.displayValue){h2hLine=`H2H: ${p0.nm.split(' ').pop()} — ${p0.h2h.displayValue}`;}}
+      else if(tnSum.h2hComp){const cv=tnSum.h2hComp?.displayValue||tnSum.h2hComp?.summary;if(cv)h2hLine=`H2H: ${cv}`;}
+      // Article/news block
+      const hasArticle=tnSum.espnHead||tnSum.newsHead;
+      const hasH2H=!!h2hLine;
+      if(hasH2H||hasArticle){
+        h+=`<div style="${bdr}">`;
+        if(hasH2H)h+=`<div style="font-size:10px;color:var(--grn);font-weight:600;margin-bottom:${hasArticle?'6px':'0'}">${h2hLine}</div>`;
+        if(hasArticle){
+          const head=tnSum.newsHead||tnSum.espnHead;
+          const desc=tnSum.newsDesc||(tnSum.espnStory?tnSum.espnStory.slice(0,280)+'…':null);
+          const link=tnSum.newsLink||tnSum.espnLink;
+          h+=`<div style="font-size:8px;color:var(--t4);letter-spacing:1px;font-weight:600;margin-bottom:3px">ESPN PREVIEW</div>`;
+          if(head)h+=`<div style="font-size:10px;color:var(--cyn);font-weight:600;line-height:1.3;margin-bottom:4px">${head}</div>`;
+          if(desc)h+=`<div style="font-size:9px;color:var(--t2);line-height:1.45;margin-bottom:4px">${desc}</div>`;
+          if(link)h+=`<a href="${link}" target="_blank" style="font-size:8px;color:var(--t4);text-decoration:none">→ full article on ESPN ↗</a>`;
+        }
+        h+=`</div>`;
+      }
+    }
+    // ── Computed matchup signals ──
     const awR2=g.aw.rank,hmR2=g.hm.rank,awS2=g.aw.seed,hmS2=g.hm.seed;
     const awH2=awTn?.hand,hmH2=hmTn?.hand,awAge2=awTn?.age,hmAge2=hmTn?.age;
     const sigs=[];
-    if(awR2&&hmR2){const gap=Math.abs(awR2-hmR2),hi=awR2<hmR2?g.aw:g.hm;const wp=gap>=50?'~72%':gap>=25?'~65%':gap>=10?'~60%':gap>=5?'~57%':'~53%';sigs.push(`Ranking: #${Math.min(awR2,hmR2)} vs #${Math.max(awR2,hmR2)} (${gap}-rank gap on ${surfTxt}) — ${hi.nm.split(' ').pop()} holds ${wp} win rate at this separation in ATP/WTA data`);}
-    else if(awR2||hmR2){const r=awR2||hmR2,rnm=(awR2?g.aw:g.hm).nm.split(' ').pop();sigs.push(`Ranked #${r} ${rnm} vs unranked opponent — ranked player wins ~74% at this level`);}
-    if(awS2&&hmS2){const sg=Math.abs(awS2-hmS2),loS=Math.min(awS2,hmS2),hiS=Math.max(awS2,hmS2);sigs.push(`Seeds [${loS}] vs [${hiS}] — ${sg}-seed gap: ${sg>=6?'significant draw separation, upset territory for higher seed':sg>=3?'moderate gap, lower seed holds ~63%':'tight seeding bracket, near even on paper'}`);}
-    else if(awS2&&!hmS2){sigs.push(`${g.aw.nm.split(' ').pop()} seeded [${awS2}] vs unseeded — seeded players win ~68% on ${surfTxt} at this stage`);}
-    else if(!awS2&&hmS2){sigs.push(`${g.hm.nm.split(' ').pop()} seeded [${hmS2}] vs unseeded — seeded players win ~68% on ${surfTxt} at this stage`);}
-    if(awH2&&hmH2&&awH2!==hmH2){const lhNm=(awH2==='L'?g.aw:g.hm).nm.split(' ').pop(),rhNm=(awH2==='R'?g.aw:g.hm).nm.split(' ').pop();if(surf==='clay')sigs.push(`Handedness: ${lhNm} (LH) vs ${rhNm} (RH) on clay — kick serve pulls wide to RH backhand, structural angle advantage; LH players win ~58% on clay vs RH opponents in ATP/WTA data`);else if(surf==='grass')sigs.push(`Handedness: ${lhNm} (LH) on grass — wide serve to deuce & body T elevated; LH wins ~54% on grass vs RH`);else sigs.push(`Handedness: ${lhNm} left-handed vs ${rhNm} — mild tactical variation on ${surfTxt} (~52% LH win rate vs RH)`);}
-    if(awAge2&&hmAge2&&Math.abs(awAge2-hmAge2)>=5){const olderNm=(awAge2>hmAge2?g.aw:g.hm).nm.split(' ').pop(),youngNm=(awAge2>hmAge2?g.hm:g.aw).nm.split(' ').pop(),oldA=Math.max(awAge2,hmAge2),youngA=Math.min(awAge2,hmAge2);if(surf==='clay')sigs.push(`Age gap: ${olderNm} (${oldA}) vs ${youngNm} (${youngA}) on clay — ${oldA>=33?'clay rewards court IQ & pattern recognition; fatigue risk in long sets for older player':'experience-based reading of clay patterns vs younger\'s raw athleticism'}`);else sigs.push(`Age gap: ${olderNm} (${oldA}) vs ${youngNm} (${youngA}) — ${oldA>=33?'veteran vs emerging player; physical freshness advantage amplified on fast surfaces':'prime vs developing — fitness gap is minimal'}`);}
-    const awWp=parseRec(g.aw.rec),hmWp=parseRec(g.hm.rec);if(awWp!==null&&hmWp!==null&&Math.abs(awWp-hmWp)>=0.08){const betNm=(awWp>hmWp?g.aw:g.hm).nm.split(' ').pop(),betRec=(awWp>hmWp?g.aw:g.hm).rec;sigs.push(`Season form: ${betNm} (${betRec}) — ${(Math.abs(awWp-hmWp)*100).toFixed(0)}pp win-rate edge on the season`);}
-    if(!sigs.length)sigs.push(`Surface: ${surfTxt} — insufficient data for quantitative edge signals; no odds or rank differential available`);
-    h+=`</div><div style="border-top:1px solid rgba(42,42,62,.3);margin-top:6px;padding-top:6px">${sigs.map(s=>`<div style="font-size:9px;color:var(--t2);padding:2px 0;line-height:1.45">▸ ${s}</div>`).join('')}</div></div>`}
+    if(awR2&&hmR2){const gap=Math.abs(awR2-hmR2),hi=awR2<hmR2?g.aw:g.hm;const wp=gap>=50?'72':gap>=25?'65':gap>=10?'60':gap>=5?'57':'53';sigs.push(`Rankings #${Math.min(awR2,hmR2)} vs #${Math.max(awR2,hmR2)} — ${gap}-rank gap favors ${hi.nm.split(' ').pop()}, est. ~${wp}% win probability on ${surfTxt}`);}
+    if(awS2&&hmS2){const sg=Math.abs(awS2-hmS2),loS=Math.min(awS2,hmS2);sigs.push(`Draw seeds [${loS}] vs [${Math.max(awS2,hmS2)}] — ${sg}-seed gap: ${sg>=5?'draw committee gave significant form edge to ['+loS+']':sg>=2?'moderate advantage to ['+loS+'] per committee assessment':'near-even seeding'}`);}
+    else if(awS2&&!hmS2)sigs.push(`${g.aw.nm.split(' ').pop()} seeded [${awS2}] vs unseeded — committee's form read favors ${g.aw.nm.split(' ').pop()}`);
+    else if(!awS2&&hmS2)sigs.push(`${g.hm.nm.split(' ').pop()} seeded [${hmS2}] vs unseeded — committee's form read favors ${g.hm.nm.split(' ').pop()}`);
+    if(awH2&&hmH2&&awH2!==hmH2){const lhNm=(awH2==='L'?g.aw:g.hm).nm.split(' ').pop();if(surf==='clay')sigs.push(`${lhNm} (LH) vs RH on clay — kick serve angles out wide, ${lhNm}'s topspin curves into opponent backhand; structural LH advantage on clay`);else if(surf==='grass')sigs.push(`${lhNm} (LH) on grass — wide serve to deuce court and T serve into body are uniquely effective; LH grass advantage`);else sigs.push(`${lhNm} left-handed — LH/RH tactical variation, marginal edge on ${surfTxt}`);}
+    if(awAge2&&hmAge2&&Math.abs(awAge2-hmAge2)>=5){const olderNm=(awAge2>hmAge2?g.aw:g.hm).nm.split(' ').pop(),youngNm=(awAge2>hmAge2?g.hm:g.aw).nm.split(' ').pop(),oldA=Math.max(awAge2,hmAge2),youngA=Math.min(awAge2,hmAge2);sigs.push(`Age: ${olderNm} ${oldA} vs ${youngNm} ${youngA} — ${oldA>=34?oldA+' puts physical recovery at a premium in long sets':'age gap is '+Math.abs(oldA-youngA)+' years, trajectory signal'}`);}
+    const awWp=parseRec(g.aw.rec),hmWp=parseRec(g.hm.rec);if(awWp!==null&&hmWp!==null&&Math.abs(awWp-hmWp)>=0.08){const better=awWp>hmWp?g.aw:g.hm;sigs.push(`Season record: ${better.nm.split(' ').pop()} (${better.rec}) — ${(Math.abs(awWp-hmWp)*100).toFixed(0)}pp higher win rate this season`);}
+    if(sigs.length){h+=`<div style="${bdr}"><div style="font-size:8px;color:var(--t4);letter-spacing:1px;font-weight:600;margin-bottom:4px">MATCHUP SIGNALS</div>${sigs.map(s=>`<div style="font-size:9px;color:var(--t2);padding:2px 0;line-height:1.45">▸ ${s}</div>`).join('')}</div>`;}
+    h+=`</div>`}
   // ── SP Matchup (MLB) ──
   if(pitchers){const ap=pitchers.away,hp=pitchers.home;h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SP MATCHUP</div><div class="sp-matchup">`;
     [['away',ap,g.aw],[' home',hp,g.hm]].forEach(([side,p,tm])=>{if(!p)return;h+=`<div class="sp-card"><div class="sp-nm">${tm.ab}<span class="sp-hand">${p.hand}HP</span><div style="font-size:10px;color:var(--t2);margin-top:2px">${p.name}</div></div><div class="sp-stats"><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.era)<3.5?'var(--grn)':parseFloat(p.era)>4.5?'var(--red)':'var(--cyn)'}">${p.era}</div><div class="sp-sl">ERA</div></div><div class="sp-stat"><div class="sp-sv">${p.whip}</div><div class="sp-sl">WHIP</div></div><div class="sp-stat"><div class="sp-sv">${p.k9}</div><div class="sp-sl">K/9</div></div><div class="sp-stat"><div class="sp-sv" style="color:var(--t3)">${p.w}-${p.l}</div><div class="sp-sl">W-L</div></div></div></div>`});
@@ -563,6 +592,7 @@ function isOutdoor(venue,cat){if(!['mlb','nfl'].includes(cat))return false;if(ca
 function cityFromTeam(nm){return(nm||'').split(' ').slice(0,-1).join(' ')||nm}
 function kellyPct(conf,pickStr){const m=(pickStr||'').match(/\(([+-]\d+)\)/);const amer=m?parseInt(m[1]):(conf==='HIGH'?-115:-110);const dec=amer>0?amer/100+1:100/Math.abs(amer)+1;const p=conf==='HIGH'?0.60:conf==='MEDIUM'?0.54:0.50;const k=(p*(dec-1)-(1-p))/(dec-1);return Math.max(0,k*100)}
 async function fetchTennisPlayerStats(lg,aid){if(!aid)return null;try{const r=await fetch(`https://sports.core.api.espn.com/v2/sports/tennis/leagues/${lg}/athletes/${aid}`);return r.ok?r.json():null}catch(e){return null}}
+async function fetchTennisMatchSummary(sp,gid,awNm,hmNm){try{const[sum,news]=await Promise.all([fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/summary?event=${gid}`).then(r=>r.ok?r.json():null).catch(()=>null),fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/news?limit=25`).then(r=>r.ok?r.json():null).catch(()=>null)]);const out={};if(sum){const comp=sum.header?.competitions?.[0];const comps=comp?.competitors||[];comps.forEach(c=>{if(c.headToHeadMatchups){if(!out.h2hPlayers)out.h2hPlayers=[];out.h2hPlayers.push({nm:c.athlete?.displayName||'',h2h:c.headToHeadMatchups})}});if(comp?.headToHeadMatchups){out.h2hComp=comp.headToHeadMatchups;}const art=sum.article;if(art?.story||art?.description){out.espnStory=(art.story||art.description).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();out.espnLink=art.links?.web?.href||null;}out.espnHead=art?.headline||sum.header?.competitions?.[0]?.notes?.[0]?.headline||null;}if(news?.articles){const awL=(awNm||'').split(' ').pop().toLowerCase(),hmL=(hmNm||'').split(' ').pop().toLowerCase();const art=news.articles.find(a=>{const t=((a.headline||'')+' '+(a.description||'')).toLowerCase();return awL.length>3&&hmL.length>3&&t.includes(awL)&&t.includes(hmL)});if(art){out.newsHead=art.headline;out.newsDesc=art.description;out.newsLink=art.links?.web?.href||null;}}return Object.keys(out).length?out:null}catch(e){return null}}
 function extractTennisStats(d){if(!d)return null;return{hand:d.hand?.abbreviation||null,handFull:d.hand?.displayValue||null,age:d.age||null,country:d.birthPlace?.country?.displayName||null}}
 async function fetchNBATeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${tid}/statistics`);return r.ok?r.json():null}catch(e){return null}}
 function extractNBAStats(d){if(!d)return null;const all=[];(d.results?.splits?.categories||d.splits?.categories||[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));(d.results?.stats||[]).forEach(s=>all.push(s));const gs=(...ns)=>{for(const n of ns){const s=all.find(x=>x.name===n||x.abbreviation===n);if(s)return s}return null};const dv=(...ns)=>gs(...ns)?.displayValue||null;return{offRtg:dv('offensiveRating','offRating'),defRtg:dv('defensiveRating','defRating'),netRtg:dv('netRating'),pace:dv('possessionsPerGame','pace'),ppg:dv('avgPoints','pointsPerGame'),papg:dv('avgPointsAllowed','opponentPointsPerGame')}}
@@ -579,7 +609,7 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
 // ══════════════════════════════════════════════════
 // ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
-function getSurface(venue){const v=(venue||'').toLowerCase();if(/clay|terre battue|tierra batida|arcilla/.test(v))return'clay';if(/roland garros|madrid open|rome\b|roma\b|foro italico|internazionali|barcelona|conde de god|monte.carlo|monte carlo|geneva|lyon|hamburg|bucharest|munich|estoril|marrakech|marrakesh|istanbul|prague|strasbourg|cluj|budapest|bogota|houston|stuttgart|oeiras|jamor|warsaw|warszawa|lausanne|palermo|bastad|b.?stad|rabat|kit[zs]b.hel|umag|gstaad|c.rdoba|buenos.aires|\brio\b|belgrade|beograd|casablanca|perugia|cagliari|florence|firenze|santiago|lima|montevideo|parma|salzburg|fes |marbella|bogot|open de france|open sabadell|banque.*monaco|kremlin.*tennis/.test(v))return'clay';if(/wimbledon|queen.s club|queens club|eastbourne|halle|hertogenbosch|s-hertogenbosch|rosmalen|birmingham|nottingham|mallorca|antalya|bad homburg/.test(v))return'grass';if(/\bindoor\b|bercy|paris.master|paris-bercy|wien\b|vienna|basel|stockholm|rotterdam|marseille|montpellier|sofia\b|zagreb|antwerp|metz\b|milan.*indoor/.test(v))return'indoor';return'hard'}
+function getSurface(venue){const v=(venue||'').toLowerCase();if(/clay|terre battue|tierra batida|arcilla/.test(v))return'clay';if(/roland garros|french open|madrid open|rome\b|roma\b|foro italico|internazionali|barcelona|conde de god|monte.carlo|monte carlo|geneva|lyon|hamburg|bucharest|munich|estoril|marrakech|marrakesh|istanbul|prague|strasbourg|cluj|budapest|bogota|houston|stuttgart|porsche tennis|oeiras|jamor|warsaw|warszawa|lausanne|palermo|bastad|b.?stad|rabat|kit[zs]b.hel|umag|gstaad|c.rdoba|buenos.aires|\brio\b|belgrade|beograd|casablanca|perugia|cagliari|florence|firenze|santiago|lima|montevideo|parma|salzburg|fes |marbella|bogot|open de france|open sabadell|banque.*monaco|kremlin.*tennis|grand prix de tennis/.test(v))return'clay';if(/wimbledon|queen.s club|queens club|eastbourne|halle|hertogenbosch|s-hertogenbosch|rosmalen|birmingham|nottingham|mallorca|antalya|bad homburg/.test(v))return'grass';if(/\bindoor\b|bercy|paris.master|paris-bercy|wien\b|vienna|basel|stockholm|rotterdam|marseille|montpellier|sofia\b|zagreb|antwerp|metz\b|milan.*indoor/.test(v))return'indoor';return'hard'}
 function rankTier(r){if(!r)return'unranked';if(r<=10)return`#${r} (top 10)`;if(r<=20)return`#${r} (top 20)`;if(r<=50)return`#${r} (top 50)`;if(r<=100)return`#${r} (top 100)`;return`#${r}`}
 function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;const w=parseInt(m[1]),l=parseInt(m[2]);return w+l>0?w/(w+l):null}
 function genPicks(g,af,hf,pitchers,weather,ext={}){
