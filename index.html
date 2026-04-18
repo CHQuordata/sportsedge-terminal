@@ -402,11 +402,11 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       const hasMetrics=pk.evData||pk.lineRange||(pk.sharp&&pk.sharp.r>0);
       h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
     });h+=`</div>`;}
-  else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">Odds API Key Required</div><div class="pick-reasoning" style="margin-top:6px">Tennis and MMA picks require live odds data \u2014 ESPN doesn\u2019t publish lines for these sports. Add your Odds API key (free at the-odds-api.com) to unlock EV%, sharp signal, and ML picks for this match.</div></div>`;}
+  else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">No Lines Available</div><div class="pick-reasoning" style="margin-top:6px">No odds found for this match. The Odds API may not have listed it yet \u2014 try refreshing closer to match time.</div></div>`;}
 
   if(g.odds?.bookmakers?.length)h+=renderOdds(g);
   else if(g.eOdds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>CONSENSUS LINE</div><div style="font-size:12px">${g.eOdds.details||'N/A'}</div>${g.eOdds.overUnder?`<div style="font-size:12px;color:var(--t2)">O/U ${g.eOdds.overUnder}</div>`:''}<div style="font-size:9px;color:var(--t4);margin-top:8px">Add API key for full book comparison + edge detection</div></div>`;
-  else if(!g.odds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>ODDS</div><div style="font-size:10px;color:var(--t3)">No odds data. Add Odds API key for live lines, EV, and edge detection.</div></div>`;
+  else if(!g.odds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>ODDS</div><div style="font-size:10px;color:var(--t3)">No lines found for this match \u2014 may not be listed yet. Try refreshing closer to game time.</div></div>`;
 
   const ge=allE.filter(e=>e.g.id===g.id);
   if(ge.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>EDGE DETECTION (${ge.length})</div>${ge.map(e=>`<div class="edge-card"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--grn)">${e.ml}: ${e.side}</span><span style="font-size:13px;font-weight:700;color:var(--grn)">${e.ep.toFixed(1)}%</span></div><div style="font-size:9px;color:var(--t2)">Best: ${e.bb} ${fp(e.bp)} (${(e.bi*100).toFixed(1)}%) \u00B7 Consensus: ${(e.con*100).toFixed(1)}%</div></div>`).join('')}</div>`;
@@ -420,7 +420,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
     if(g.inj.aw.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin-bottom:6px">${g.aw.nm.toUpperCase()}</div>`;g.inj.aw.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
     if(g.inj.hm.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin:12px 0 6px">${g.hm.nm.toUpperCase()}</div>`;g.inj.hm.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
     h+='</div>'}
-  h+=`<div class="note"><strong>NOTE:</strong> EV% derived from no-vig consensus across books. Sharp signal = edge magnitude. For ATS trends, H2H, and situational spots \u2014 use your SPORTSEDGE analyst session.</div>`;
+  h+=`<div class="note"><strong>NOTE:</strong> EV% derived from no-vig consensus across books. Sharp signal = edge magnitude. No lines = The Odds API has no market for this match yet.</div>`;
   el.innerHTML=h;el.scrollTop=0}
 
 function xForm(d,tid){if(!d?.events)return[];return d.events.filter(e=>e.competitions?.[0]?.status?.type?.completed).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).map(e=>{const c=e.competitions[0],t=c.competitors.find(x=>x.id===tid||x.team?.id==tid),o=c.competitors.find(x=>x!==t);return{dt:new Date(e.date),r:t?.winner?'W':'L',sc:`${t?.score||0}-${o?.score||0}`,opp:o?.team?.abbreviation||'?',hm:t?.homeAway==='home'}})}
@@ -441,6 +441,8 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
 // ══════════════════════════════════════════════════
 // ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
+function getSurface(venue){const v=(venue||'').toLowerCase();if(/roland garros|madrid|rome|barcelona|monte.carlo|geneva|lyon|hamburg|bucharest|munich|estoril|marrakech|istanbul|prague|strasbourg|cluj|budapest|bogota|houston|stuttgart/.test(v))return'clay';if(/wimbledon|queen.s|eastbourne|halle|hertogenbosch|birmingham|nottingham|b.?stad/.test(v))return'grass';return'hard'}
+function rankTier(r){if(!r)return'unranked';if(r<=10)return`#${r} (top 10)`;if(r<=20)return`#${r} (top 20)`;if(r<=50)return`#${r} (top 50)`;if(r<=100)return`#${r} (top 100)`;return`#${r}`}
 function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;const w=parseInt(m[1]),l=parseInt(m[2]);return w+l>0?w/(w+l):null}
 function genPicks(g,af,hf){
   const awRecPct=parseRec(g.aw.rec),hmRecPct=parseRec(g.hm.rec);
@@ -486,9 +488,11 @@ function genPicks(g,af,hf){
         reasons.push(`${b.nm} holds a stronger season record (${(bp*100).toFixed(0)}% win rate) vs ${w.nm} (${(wp*100).toFixed(0)}%)`)}
       else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec}) vs ${g.hm.nm} (${g.hm.rec}), making this a tight call`)}
     else if(awRank!==null&&hmRank!==null){const rd=awRank-hmRank;score+=rd*0.08;
-      if(Math.abs(rd)>=20){const b=rd>0?g.hm:g.aw,w=rd>0?g.aw:g.hm,br=rd>0?hmRank:awRank,wr=rd>0?awRank:hmRank;
-        reasons.push(`${b.nm} (ranked #${br}) carries a significant world ranking edge over ${w.nm} (ranked #${wr})`)}
-      else reasons.push(`Rankings are close \u2014 ${g.aw.nm} (#${awRank}) vs ${g.hm.nm} (#${hmRank})`)}
+      const surf=getSurface(g.ven),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
+      const b=rd>0?g.hm:g.aw,w=rd>0?g.aw:g.hm,br=rd>0?hmRank:awRank,wr=rd>0?awRank:hmRank;
+      if(Math.abs(rd)>=50)reasons.push(`${b.nm} (${rankTier(br)}) vs ${w.nm} (${rankTier(wr)}) on ${surfTxt} — a ${Math.abs(rd)}-place gap at this level is significant; ${g.spL} data shows higher-ranked players win this tier of matchup at a high clip`);
+      else if(Math.abs(rd)>=20)reasons.push(`${b.nm} (${rankTier(br)}) holds a ${Math.abs(rd)}-place edge over ${w.nm} (${rankTier(wr)}) on ${surfTxt} — tier separation is a consistent signal in ${g.spL}`);
+      else reasons.push(`Rankings tight on ${surfTxt} — ${g.aw.nm} (#${awRank}) vs ${g.hm.nm} (#${hmRank}); narrow edge, defer to surface form and head-to-head`)}
     if(hmMarg&&awMarg&&Math.abs(hmMarg-awMarg)>2){score+=(hmMarg-awMarg)*0.35;const b=hmMarg>awMarg?g.hm:g.aw,m=hmMarg>awMarg?hmMarg:awMarg;
       reasons.push(`${b.nm} has been winning by ${Math.abs(m).toFixed(1)} per game, indicating they're not just winning \u2014 they're covering`)}
     if(Math.abs(restDiff)>=2){score+=restDiff*0.6;const r=restDiff>0?g.hm:g.aw,t=restDiff>0?g.aw:g.hm;
@@ -540,10 +544,13 @@ function genPicks(g,af,hf){
       if(Math.abs(sp2-op2)>.05)reasons.push(`Season record edge: ${side.nm} at ${(sp2*100).toFixed(0)}% win rate vs ${other.nm} at ${(op2*100).toFixed(0)}% (${side.rec} vs ${other.rec})`);
       else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec||'N/A'}) vs ${g.hm.nm} (${g.hm.rec||'N/A'})`)}
     else if(awRank!==null&&hmRank!==null){const sp2=score>=0?hmRank:awRank,op2=score>=0?awRank:hmRank;
-      if(Math.abs(awRank-hmRank)>=5)reasons.push(`World ranking edge: ${side.nm} (#${sp2}) vs ${other.nm} (#${op2})`);
-      else reasons.push(`Closely matched on ATP/WTA rankings \u2014 ${side.nm} (#${sp2}) vs ${other.nm} (#${op2})`)}
-    else if(awRank!==null||hmRank!==null){const ranked=awRank?g.aw:g.hm,r=awRank||hmRank;
-      reasons.push(`${ranked.nm} is ranked #${r} in the world`)}
+      const surf=getSurface(g.ven),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
+      const rd2=Math.abs(awRank-hmRank);
+      if(rd2>=50)reasons.push(`${side.nm} (${rankTier(sp2)}) vs ${other.nm} (${rankTier(op2)}) on ${surfTxt} — a ${rd2}-place gap is a structural edge; ${side.nm} is the clear tier-up in this ${g.spL} draw`);
+      else if(rd2>=10)reasons.push(`${side.nm} (${rankTier(sp2)}) outranks ${other.nm} (${rankTier(op2)}) by ${rd2} places on ${surfTxt} — ranking separation is a reliable ML signal in ${g.spL}`);
+      else reasons.push(`Near-identical rankings on ${surfTxt} — ${side.nm} (#${sp2}) vs ${other.nm} (#${op2}); coin-flip territory, surface form and recent results should break the tie`)}
+    else if(awRank!==null||hmRank!==null){const ranked=awRank?g.aw:g.hm,r=awRank||hmRank,unr=awRank?g.hm:g.aw;
+      reasons.push(`${ranked.nm} (${rankTier(r)}) faces ${unr.nm} (unranked) — ranked player holds a structural edge in ${g.spL}`)}
     if(mlEdges.length)reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 implied probability gap signals sharp value`);
     if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
@@ -556,7 +563,7 @@ function genPicks(g,af,hf){
 }
 
 function updateStats(){$('stG').textContent=allG.length;$('stE').textContent=allE.length;$('stS').textContent=new Set(allG.map(g=>g.cat)).size;let inj=0;allG.forEach(g=>{inj+=g.inj.aw.filter(i=>i.sc==='O').length+g.inj.hm.filter(i=>i.sc==='O').length});$('stI').textContent=inj}
-function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<div class="no-data" style="padding:20px">${AK?'No edges detected':'Add API key for edges'}</div>`;return}
+function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<div class="no-data" style="padding:20px">No edges detected</div>`;return}
   el.innerHTML=allE.slice(0,15).map(e=>`<div class="edge-alert" onclick="jumpTo('${e.g.id}')"><div class="edge-top"><div class="edge-matchup">${e.g.aw.ab} ${e.g.isTeam?'@':'vs'} ${e.g.hm.ab}</div><div class="edge-pct ${e.tier}">${e.ep.toFixed(1)}%</div></div><div class="edge-detail">${e.ml}: ${e.side} \u00B7 ${e.bb} \u00B7 ${fp(e.bp)}</div></div>`).join('')}
 function jumpTo(id){const i=fG.findIndex(g=>g.id===id);if(i>=0)selGame(i)}
 
