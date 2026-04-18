@@ -178,7 +178,7 @@ async function espnFetch(sport,league,ep='scoreboard',params=''){
   try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/${ep}${params}`);return r.ok?r.json():null}catch(e){return null}}
 async function espnSched(sport,league,tid,szn){
   try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams/${tid}/schedule?season=${szn}`);return r.ok?r.json():null}catch(e){return null}}
-function sportSeason(cat){const y=new Date().getFullYear(),m=new Date().getMonth();return cat==='nfl'?(m<8?y-1:y):y}
+function sportSeason(cat){const y=new Date().getFullYear(),m=new Date().getMonth();return cat==='mlb'?y:m<9?y-1:y}
 async function oddsFetch(sk){
   if(!AK)return[];try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/${sk}/odds/?apiKey=${AK}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`);
   if(!r.ok)return[];const rem=r.headers.get('x-requests-remaining');if(rem)$('apiCalls').textContent=`API: ${500-parseInt(rem)}/500`;return r.json()}catch(e){return[]}}
