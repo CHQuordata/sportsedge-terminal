@@ -194,6 +194,7 @@ async function refreshAll(){
       (ev.groupings||[]).forEach(grp=>{
         (grp.competitions||[]).forEach(cp=>{
           const comps=cp.competitors;if(!comps||comps.length<2)return;
+          if(!comps[0].athlete||!comps[1].athlete)return; // skip doubles/mixed
           const mDate=new Date(cp.date||ev.date);const st=cp.status?.type?.name;
           if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
           const mId=cp.id||`${lg}_${ev.id}_${cp.order||0}`;
