@@ -251,7 +251,7 @@ async function refreshAll(){
           if(!comps[0].athlete||!comps[1].athlete)return; // skip doubles/mixed
           const mDate=new Date(cp.date||ev.date);const st=cp.status?.type?.name;
           if(['STATUS_FINAL','STATUS_RETIRED','STATUS_WALKOVER','STATUS_FORFEIT'].includes(st)){
-            comps.forEach((cx,i)=>{const aid=cx.id;if(!aid)return;const op=comps[1-i];const sc=(cx.linescores||[]).map((ls,si)=>`${ls.value}-${op.linescores?.[si]?.value??''}`).join(' ');if(!tennisForm.has(aid))tennisForm.set(aid,[]);tennisForm.get(aid).push({W:!!cx.winner,opp:op.athlete?.shortName||op.athlete?.displayName?.split(' ').pop()||'?',score:sc,round:cp.round?.displayName||'',tn:ev.name||'',dt:mDate});});
+            comps.forEach((cx,i)=>{const aid=cx.id;if(!aid)return;const op=comps[1-i];const sc=(cx.linescores||[]).map((ls,si)=>`${ls.value}-${op.linescores?.[si]?.value??''}`).join(' ');if(!tennisForm.has(aid))tennisForm.set(aid,[]);tennisForm.get(aid).push({W:!!cx.winner,opp:op.athlete?.shortName||op.athlete?.displayName?.split(' ').pop()||'?',oppId:op.id||null,score:sc,round:cp.round?.displayName||'',tn:ev.name||'',dt:mDate});});
             return;
           }
           if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
@@ -510,31 +510,42 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       h+=`</div>`;
     });
     h+=`</div>`;
-    // ── ESPN sourced data (H2H + article) ──
+    // ── H2H + ESPN article ──
     const bdr='border-top:1px solid rgba(42,42,62,.3);margin-top:6px;padding-top:6px';
-    if(tnSum){
-      // H2H block
-      const h2hData=tnSum.h2hPlayers||[];
+    {
+      // 1. Try ESPN summary H2H
       let h2hLine=null;
-      if(h2hData.length>=2){const p0=h2hData[0],p1=h2hData[1];const w0=p0.h2h?.wins??p0.h2h?.value??null,w1=p1.h2h?.wins??p1.h2h?.value??null;if(w0!==null&&w1!==null){const tot=parseInt(w0)+parseInt(w1);const leader=parseInt(w0)>=parseInt(w1)?p0.nm:p1.nm;h2hLine=tot>0?`${leader.split(' ').pop()} leads H2H ${Math.max(w0,w1)}-${Math.min(w0,w1)} all-time (${tot} meetings)`:`No prior meetings`;}else if(p0.h2h?.displayValue){h2hLine=`H2H: ${p0.nm.split(' ').pop()} — ${p0.h2h.displayValue}`;}}
-      else if(tnSum.h2hComp){const cv=tnSum.h2hComp?.displayValue||tnSum.h2hComp?.summary;if(cv)h2hLine=`H2H: ${cv}`;}
-      // Article/news block
-      const hasArticle=tnSum.espnHead||tnSum.newsHead;
-      const hasH2H=!!h2hLine;
-      if(hasH2H||hasArticle){
-        h+=`<div style="${bdr}">`;
-        if(hasH2H)h+=`<div style="font-size:10px;color:var(--grn);font-weight:600;margin-bottom:${hasArticle?'6px':'0'}">${h2hLine}</div>`;
-        if(hasArticle){
-          const head=tnSum.newsHead||tnSum.espnHead;
-          const desc=tnSum.newsDesc||(tnSum.espnStory?tnSum.espnStory.slice(0,280)+'…':null);
-          const link=tnSum.newsLink||tnSum.espnLink;
-          h+=`<div style="font-size:8px;color:var(--t4);letter-spacing:1px;font-weight:600;margin-bottom:3px">ESPN PREVIEW</div>`;
-          if(head)h+=`<div style="font-size:10px;color:var(--cyn);font-weight:600;line-height:1.3;margin-bottom:4px">${head}</div>`;
-          if(desc)h+=`<div style="font-size:9px;color:var(--t2);line-height:1.45;margin-bottom:4px">${desc}</div>`;
-          if(link)h+=`<a href="${link}" target="_blank" style="font-size:8px;color:var(--t4);text-decoration:none">→ full article on ESPN ↗</a>`;
+      const h2hData=tnSum?.h2hPlayers||[];
+      if(h2hData.length>=2){const p0=h2hData[0],p1=h2hData[1];const w0=p0.h2h?.wins??p0.h2h?.value??null,w1=p1.h2h?.wins??p1.h2h?.value??null;if(w0!==null&&w1!==null){const tot=parseInt(w0)+parseInt(w1);const leader=parseInt(w0)>=parseInt(w1)?p0.nm:p1.nm;h2hLine=tot>0?`${leader.split(' ').pop()} leads H2H ${Math.max(w0,w1)}-${Math.min(w0,w1)} (${tot} meetings)`:null;}}
+      else if(tnSum?.h2hComp?.displayValue){h2hLine=`H2H: ${tnSum.h2hComp.displayValue}`;}
+      // 2. Fall back: cross-reference tennisForm by oppId
+      if(!h2hLine){
+        const awFAll=tennisForm.get(String(g.aw.id))||[];
+        const hmId=String(g.hm.id);
+        const meetings=awFAll.filter(f=>String(f.oppId)===hmId);
+        if(meetings.length>0){
+          const awW=meetings.filter(f=>f.W).length,hmW=meetings.length-awW;
+          const leader=awW>=hmW?g.aw.nm.split(' ').pop():g.hm.nm.split(' ').pop();
+          h2hLine=`${leader} leads H2H ${Math.max(awW,hmW)}-${Math.min(awW,hmW)} (${meetings.length} recent meeting${meetings.length>1?'s':''})`;
         }
-        h+=`</div>`;
       }
+      // 3. Always show H2H bullet
+      const h2hDisplay=h2hLine||`No H2H on record — likely first meeting`;
+      const h2hColor=h2hLine?'var(--grn)':'var(--t3)';
+      // Article/news block
+      const hasArticle=tnSum?.espnHead||tnSum?.newsHead;
+      h+=`<div style="${bdr}">`;
+      h+=`<div style="font-size:10px;font-weight:600;color:${h2hColor};margin-bottom:${hasArticle?'6px':'0'}">● ${h2hDisplay}</div>`;
+      if(hasArticle){
+        const head=tnSum.newsHead||tnSum.espnHead;
+        const desc=tnSum.newsDesc||(tnSum.espnStory?tnSum.espnStory.slice(0,280)+'…':null);
+        const link=tnSum.newsLink||tnSum.espnLink;
+        h+=`<div style="font-size:8px;color:var(--t4);letter-spacing:1px;font-weight:600;margin-bottom:3px">ESPN PREVIEW</div>`;
+        if(head)h+=`<div style="font-size:10px;color:var(--cyn);font-weight:600;line-height:1.3;margin-bottom:4px">${head}</div>`;
+        if(desc)h+=`<div style="font-size:9px;color:var(--t2);line-height:1.45;margin-bottom:4px">${desc}</div>`;
+        if(link)h+=`<a href="${link}" target="_blank" style="font-size:8px;color:var(--t4);text-decoration:none">→ full article on ESPN ↗</a>`;
+      }
+      h+=`</div>`;
     }
     // ── Computed matchup signals ──
     const awR2=g.aw.rank,hmR2=g.hm.rank,awS2=g.aw.seed,hmS2=g.hm.seed;
