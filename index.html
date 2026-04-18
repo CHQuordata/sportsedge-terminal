@@ -428,7 +428,8 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   const picks=genPicks(g,af,hf);
   if(picks.length){h+=`<div class="picks-section">`;
     picks.forEach(pk=>{const cls=pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
-      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${renderMetrics(pk)}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
+      const hasMetrics=pk.evData||pk.lineRange||(pk.sharp&&pk.sharp.r>0);
+      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
     });h+=`</div>`;}
   else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">Odds API Key Required</div><div class="pick-reasoning" style="margin-top:6px">Tennis and MMA picks require live odds data \u2014 ESPN doesn\u2019t publish lines for these sports. Add your Odds API key (free at the-odds-api.com) to unlock EV%, sharp signal, and ML picks for this match.</div></div>`;}
 
