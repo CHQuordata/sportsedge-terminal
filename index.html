@@ -37,7 +37,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .game-odds{display:flex;gap:8px;margin-top:4px;font-size:10px}.game-odds span{color:var(--t2)}.game-odds .fav{color:var(--cyn);font-weight:500}
 .detail-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t4);gap:12px}.detail-empty-icon{font-size:48px;opacity:.2}.detail-empty-text{font-size:12px;letter-spacing:1px}
 .det-header{padding:16px;border-bottom:1px solid var(--bdr);background:var(--bg2)}
-.det-teams{font-size:18px;font-weight:700;color:var(--t1);margin-bottom:2px;font-family:var(--sans)}.det-records{font-size:11px;color:var(--t2);margin-bottom:6px}.det-meta{display:flex;gap:16px;font-size:10px;color:var(--t3)}
+.det-teams{font-size:18px;font-weight:700;color:var(--t1);margin-bottom:2px;font-family:var(--sans)}.det-records{font-size:11px;color:var(--t2);margin-bottom:6px}.det-meta{display:flex;gap:16px;font-size:10px;color:var(--t3);flex-wrap:wrap}
 .sec{padding:14px 16px;border-bottom:1px solid rgba(42,42,62,.5)}
 .sec-title{font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .ind{width:3px;height:12px;border-radius:1px}
@@ -47,7 +47,14 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .pick-card.medium .pick-label{color:var(--amb)}.pick-card.low .pick-label{color:var(--t3)}
 .pick-main{font-size:15px;font-weight:700;color:var(--grn);margin-bottom:4px}
 .pick-card.medium .pick-main{color:var(--amb)}.pick-card.low .pick-main{color:var(--t2)}
-.pick-conf{font-size:10px;font-weight:600;margin-bottom:8px}.pick-conf.high{color:var(--grn)}.pick-conf.medium{color:var(--amb)}.pick-conf.low{color:var(--t3)}
+.pick-conf{font-size:10px;font-weight:600;margin-bottom:6px}.pick-conf.high{color:var(--grn)}.pick-conf.medium{color:var(--amb)}.pick-conf.low{color:var(--t3)}
+.pick-metrics{display:flex;gap:16px;margin:8px 0;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);flex-wrap:wrap}
+.pm{display:flex;flex-direction:column;gap:2px;min-width:65px}
+.pm-lbl{font-size:7px;font-weight:700;letter-spacing:1.2px;color:var(--t4);text-transform:uppercase}
+.pm-val{font-size:13px;font-weight:700}.pm-val.pos{color:var(--grn)}.pm-val.neg{color:var(--red)}.pm-val.neu{color:var(--t2)}
+.pm-sub{font-size:7px;color:var(--t4);margin-top:1px}
+.sharp-bars{display:flex;gap:2px;align-items:flex-end;margin-top:2px}
+.sb{width:6px;height:10px;border-radius:1px;background:var(--bg4)}.sb.on{background:var(--grn)}
 .pick-reasoning{font-size:10px;color:var(--t2);line-height:1.6}
 .dtable{width:100%;border-collapse:collapse}.dtable th{font-size:9px;font-weight:600;letter-spacing:.5px;color:var(--t4);text-align:left;padding:4px 8px;border-bottom:1px solid var(--bdr);text-transform:uppercase}
 .dtable td{font-size:11px;padding:5px 8px;border-bottom:1px solid rgba(42,42,62,.3);color:var(--t1)}.dtable tr:hover td{background:var(--bg3)}.dtable .best{color:var(--grn);font-weight:600}
@@ -89,7 +96,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 </head>
 <body>
 <div class="topbar">
-  <div class="logo">SPORTSEDGE<span>TERMINAL v2</span></div><div class="topbar-div"></div>
+  <div class="logo">SPORTSEDGE<span>TERMINAL v2.2</span></div><div class="topbar-div"></div>
   <div class="sport-tabs" id="sportTabs">
     <button class="sport-tab active" data-sport="all" onclick="setSport('all')">ALL</button>
     <button class="sport-tab" data-sport="nba" onclick="setSport('nba')">NBA</button>
@@ -113,14 +120,12 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     <div class="panel-hdr"><span class="panel-title">Top Edges</span></div><div class="panel-body" id="edgeAlerts"><div class="no-data" style="padding:20px">Scan to populate</div></div>
   </div>
 </div>
-<div class="bottombar"><div><span style="color:var(--grn)">&#9679;</span> SPORTSEDGE v2.1</div><div id="lastScan">LAST SCAN: NEVER</div><div class="bottombar-sp"></div><div id="apiCalls">API: -/500</div><div><span class="kbd">?</span> HELP</div></div>
-<div class="modal-ov" id="setupModal"><div class="modal"><div class="modal-title">SPORTSEDGE TERMINAL</div><div class="modal-sub">Enter your Odds API key for live odds + edge detection. ESPN data (schedules, injuries, form) loads free with no key.<br><br><strong style="color:var(--amb)">Tennis &amp; MMA odds require the API key.</strong> ESPN provides schedules for both but no betting lines.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only (no tennis/MMA odds)</div></div></div>
-<div class="sc-ov" id="scOverlay"><div class="sc-panel"><div class="sc-title">KEYBOARD SHORTCUTS</div><div class="sc-row"><div><span class="kbd">R</span></div><div class="sc-desc">Refresh</div></div><div class="sc-row"><div><span class="kbd">&#8593;</span><span class="kbd">&#8595;</span></div><div class="sc-desc">Navigate</div></div><div class="sc-row"><div><span class="kbd">Enter</span></div><div class="sc-desc">Select</div></div><div class="sc-row"><div><span class="kbd">1-7</span></div><div class="sc-desc">Sport tabs</div></div><div class="sc-row"><div><span class="kbd">K</span></div><div class="sc-desc">API key</div></div><div class="sc-row"><div><span class="kbd">Esc</span></div><div class="sc-desc">Close</div></div></div></div>
+<div class="bottombar"><div><span style="color:var(--grn)">&#9679;</span> SPORTSEDGE v2.2</div><div id="lastScan">LAST SCAN: NEVER</div><div class="bottombar-sp"></div><div id="apiCalls">API: -/500</div><div><span class="kbd">?</span> HELP</div></div>
+<div class="modal-ov" id="setupModal"><div class="modal"><div class="modal-title">SPORTSEDGE TERMINAL</div><div class="modal-sub">Enter your Odds API key for live odds, EV calculation, and edge detection across 10+ sportsbooks.<br><br>Without a key, ESPN provides schedules, injuries, form, and records for all sports including tennis &amp; UFC.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only</div></div></div>
+<div class="sc-ov" id="scOverlay"><div class="sc-panel"><div class="sc-title">KEYBOARD SHORTCUTS</div><div class="sc-row"><div><span class="kbd">R</span></div><div class="sc-desc">Refresh all data</div></div><div class="sc-row"><div><span class="kbd">&#8593;</span><span class="kbd">&#8595;</span></div><div class="sc-desc">Navigate slate</div></div><div class="sc-row"><div><span class="kbd">Enter</span></div><div class="sc-desc">Select matchup</div></div><div class="sc-row"><div><span class="kbd">1-7</span></div><div class="sc-desc">Sport tabs</div></div><div class="sc-row"><div><span class="kbd">K</span></div><div class="sc-desc">API key setup</div></div><div class="sc-row"><div><span class="kbd">Esc</span></div><div class="sc-desc">Close overlay</div></div></div></div>
 
 <script>
 let AK=localStorage.getItem('odds_api_key')||'',cSport='all',selIdx=-1,allG=[],fG=[],allE=[];
-
-// Sport configs — now includes tennis (atp/wta) via ESPN
 const E={
   nba:{s:'basketball',l:'nba',lb:'NBA',ic:'\u{1F3C0}',ok:'basketball_nba',ha:3,cat:'nba',isTeam:true},
   nhl:{s:'ice-hockey',l:'nhl',lb:'NHL',ic:'\u{1F3D2}',ok:'icehockey_nhl',ha:.3,cat:'nhl',isTeam:true},
@@ -129,8 +134,6 @@ const E={
   atp:{s:'tennis',l:'atp',lb:'ATP',ic:'\u{1F3BE}',ok:null,ha:0,cat:'tennis',isTeam:false},
   wta:{s:'tennis',l:'wta',lb:'WTA',ic:'\u{1F3BE}',ok:null,ha:0,cat:'tennis',isTeam:false}
 };
-
-// Sport-specific labels for analysis
 const SPL={nba:'NBA',nhl:'NHL',mlb:'MLB',nfl:'NFL',atp:'ATP',wta:'WTA',tennis:'Tennis',mma:'UFC'};
 
 function $(id){return document.getElementById(id)}
@@ -138,12 +141,14 @@ function fp(p){return p>0?'+'+p:''+p}
 function aimp(p){return p>0?100/(p+100):Math.abs(p)/(Math.abs(p)+100)}
 function dfmt(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
 
+// Helper to parse athlete-based competitors (tennis/MMA)
+function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null}}
+
 async function init(){if(AK){$('setupModal').style.display='none';$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}await refreshAll()}
 function showSetup(){$('setupModal').style.display='flex';$('apiKeyInput').focus()}
 function connectApi(){const k=$('apiKeyInput').value.trim();if(!k)return;AK=k;localStorage.setItem('odds_api_key',k);$('setupModal').style.display='none';$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED';refreshAll()}
 function skipApi(){$('setupModal').style.display='none';refreshAll()}
 
-// ── API HELPERS ──
 async function espnFetch(sport,league,ep='scoreboard',params=''){
   try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/${ep}${params}`);return r.ok?r.json():null}catch(e){return null}}
 async function espnSched(sport,league,tid){
@@ -152,22 +157,21 @@ async function oddsFetch(sk){
   if(!AK)return[];try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/${sk}/odds/?apiKey=${AK}&regions=us,us2&markets=h2h,spreads,totals&oddsFormat=american`);
   if(!r.ok)return[];const rem=r.headers.get('x-requests-remaining');if(rem)$('apiCalls').textContent=`API: ${500-parseInt(rem)}/500`;return r.json()}catch(e){return[]}}
 
-// ── MAIN REFRESH ──
+// ══════════════════════════════
+// ── MAIN REFRESH
+// ══════════════════════════════
 async function refreshAll(){
   $('slateList').innerHTML=Array(6).fill('<div class="loading-row"><div class="skel" style="width:70%"></div><div class="skel" style="width:50%"></div><div class="skel" style="width:40%"></div></div>').join('');
   allG=[];allE=[];
-  const now=new Date();
-  const today=dfmt(now);
-  const tmrw=new Date(now);tmrw.setDate(now.getDate()+1);
-  const tmrwStr=dfmt(tmrw);
+  const now=new Date(), today=dfmt(now);
+  const tmrw=new Date(now);tmrw.setDate(now.getDate()+1);const tmrwStr=dfmt(tmrw);
   const startOfToday=new Date(now);startOfToday.setHours(0,0,0,0);
   const seenIds=new Set();
 
   // ── ESPN: Team sports (today + tomorrow) ──
   const teamSports=Object.entries(E).filter(([k,c])=>c.isTeam);
   await Promise.all(teamSports.flatMap(([k,c])=>[today,tmrwStr].map(async dt=>{
-    const d=await espnFetch(c.s,c.l,'scoreboard',`?dates=${dt}`);
-    if(!d?.events)return;
+    const d=await espnFetch(c.s,c.l,'scoreboard',`?dates=${dt}`);if(!d?.events)return;
     d.events.forEach(ev=>{
       if(seenIds.has(ev.id))return;seenIds.add(ev.id);
       const cp=ev.competitions?.[0];if(!cp)return;
@@ -178,118 +182,161 @@ async function refreshAll(){
         hm:{nm:hm.team.displayName,ab:hm.team.abbreviation,id:hm.team.id,rec:hm.records?.[0]?.summary||'',sc:hm.score},
         tm:new Date(ev.date),st:ev.status?.type?.name,stD:ev.status?.type?.shortDetail||'',
         ven:cp.venue?.fullName||'',bc:cp.broadcasts?.[0]?.names?.[0]||'',
-        odds:null,inj:{aw:[],hm:[]},eOdds:cp.odds?.[0]||null,ha:c.ha,isTeam:true})
+        odds:null,inj:{aw:[],hm:[]},eOdds:cp.odds?.[0]||null,ha:c.ha,isTeam:true});
     });
   })));
 
-  // ── ESPN: Tennis (ATP + WTA) — filter to today/upcoming only ──
+  // ── ESPN: Tennis (ATP + WTA) — FIXED: no homeAway in tennis ──
   await Promise.all(['atp','wta'].map(async lg=>{
-    const c=E[lg];
-    const d=await espnFetch(c.s,c.l);
-    if(!d?.events)return;
+    const c=E[lg];const d=await espnFetch(c.s,c.l);if(!d?.events)return;
     d.events.forEach(ev=>{
-      const evDate=new Date(ev.date);
-      const st=ev.status?.type?.name;
-      // Only show matches from today forward, or currently live
-      if(evDate<startOfToday && st!=='STATUS_IN_PROGRESS')return;
+      const evDate=new Date(ev.date);const st=ev.status?.type?.name;
+      if(evDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
       if(seenIds.has(ev.id))return;seenIds.add(ev.id);
       const cp=ev.competitions?.[0];if(!cp)return;
       const comps=cp.competitors;if(!comps||comps.length<2)return;
-      // Tennis uses athlete, not team
-      const p1=comps[0],p2=comps[1];
-      const mkPlayer=(p)=>({
-        nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',
-        ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',
-        id:p.id||null,rec:'',sc:p.score||null
-      });
-      // Determine home/away (in tennis this is arbitrary — use order)
+      // FIX: Tennis has no homeAway — just use array order
       allG.push({id:ev.id,sp:lg,cat:'tennis',spL:c.lb,spI:c.ic,
-        aw:mkPlayer(p1.homeAway==='away'?p1:p2),
-        hm:mkPlayer(p1.homeAway==='home'?p1:p2),
+        aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
         tm:evDate,st,stD:ev.status?.type?.shortDetail||'',
         ven:cp.venue?.fullName||'',bc:'',
-        odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false})
+        odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
     });
   }));
 
+  // ── ESPN: MMA/UFC — each event has multiple competitions (fights) ──
+  const mmaData=await espnFetch('mma','ufc');
+  if(mmaData?.events){
+    mmaData.events.forEach(ev=>{
+      const evVenue=ev.competitions?.[0]?.venue?.fullName||'';
+      (ev.competitions||[]).forEach(cp=>{
+        const comps=cp.competitors;if(!comps||comps.length<2)return;
+        const fDate=new Date(cp.date||ev.date);
+        if(fDate<startOfToday&&cp.status?.type?.name!=='STATUS_IN_PROGRESS')return;
+        const fId=cp.id||`mma_${ev.id}_${cp.order||0}`;
+        if(seenIds.has(fId))return;seenIds.add(fId);
+        allG.push({id:fId,sp:'mma',cat:'mma',spL:'UFC',spI:'\u{1F94A}',
+          aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
+          tm:fDate,st:cp.status?.type?.name||'pre',stD:cp.status?.type?.shortDetail||'',
+          ven:evVenue,bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+      });
+    });
+  }
+
   // ── ODDS API (if key present) ──
   if(AK){
-    // Team sports odds
     await Promise.all(teamSports.map(async([k,c])=>{
-      const od=await oddsFetch(c.ok);
-      od.forEach(o=>{
+      const od=await oddsFetch(c.ok);od.forEach(o=>{
         const g=allG.find(x=>x.sp===k&&(x.hm.nm.includes(o.home_team.split(' ').pop())||o.home_team.includes(x.hm.ab)));
         if(g)g.odds=o;
       });
     }));
-    // Tennis odds — fetch all active tennis markets
-    try{
-      const r=await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${AK}`);
-      if(r.ok){
-        const sp=await r.json();
-        const tk=sp.filter(x=>x.key.startsWith('tennis_')&&x.active).map(x=>x.key);
-        await Promise.all(tk.map(async t=>{
-          const od=await oddsFetch(t);
-          od.forEach(o=>{
-            // Try to match with existing ESPN tennis games
-            const existing=allG.find(x=>x.cat==='tennis'&&(
-              x.aw.nm.includes(o.away_team.split(' ').pop())&&x.hm.nm.includes(o.home_team.split(' ').pop())||
-              x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop())
-            ));
-            if(existing){existing.odds=o;return;}
-            // No ESPN match — add as odds-only entry
-            const lg=t.includes('wta')?'wta':'atp';
-            allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:t.includes('wta')?'WTA':'ATP',spI:'\u{1F3BE}',
-              aw:{nm:o.away_team,ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
-              hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
-              tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
-          });
-        }));
+    // Tennis odds
+    try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${AK}`);
+      if(r.ok){const sp=await r.json();const tk=sp.filter(x=>x.key.startsWith('tennis_')&&x.active).map(x=>x.key);
+        await Promise.all(tk.map(async t=>{const od=await oddsFetch(t);od.forEach(o=>{
+          const existing=allG.find(x=>x.cat==='tennis'&&(
+            (x.aw.nm.includes(o.away_team.split(' ').pop())&&x.hm.nm.includes(o.home_team.split(' ').pop()))||
+            (x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop()))));
+          if(existing){existing.odds=o;return;}
+          const lg=t.includes('wta')?'wta':'atp';
+          allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:t.includes('wta')?'WTA':'ATP',spI:'\u{1F3BE}',
+            aw:{nm:o.away_team,ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
+            hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
+            tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+        })}));
       }
     }catch(e){}
-    // MMA odds
+    // MMA odds — match to existing ESPN fights
     const mma=await oddsFetch('mma_mixed_martial_arts');
-    mma.forEach(o=>{allG.push({id:'m_'+o.id,sp:'mma',cat:'mma',spL:'UFC',spI:'\u{1F94A}',
-      aw:{nm:o.away_team,ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
-      hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
-      tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false})});
-    // Detect edges
+    mma.forEach(o=>{
+      const existing=allG.find(x=>x.cat==='mma'&&(
+        x.aw.nm.includes(o.away_team.split(' ').pop())||x.hm.nm.includes(o.home_team.split(' ').pop())));
+      if(existing){existing.odds=o;return;}
+      allG.push({id:'m_'+o.id,sp:'mma',cat:'mma',spL:'UFC',spI:'\u{1F94A}',
+        aw:{nm:o.away_team,ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
+        hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
+        tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+    });
     allE=detectEdges(allG.filter(g=>g.odds));
   }
 
   // ── ESPN Injuries (team sports only) ──
-  for(const[k,c]of teamSports){
-    const inj=await espnFetch(c.s,c.l,'injuries');if(!inj)continue;
-    (inj.injuries||[]).forEach(ti=>{
-      const tn=ti.team?.displayName;if(!tn)return;
-      allG.filter(g=>g.sp===k).forEach(g=>{
-        const side=g.aw.nm===tn?'aw':g.hm.nm===tn?'hm':null;if(!side)return;
-        (ti.injuries||[]).forEach(i=>{g.inj[side].push({nm:i.athlete?.displayName||'?',pos:i.athlete?.position?.abbreviation||'',st:i.status||'',sc:(i.status||'')[0]?.toUpperCase()||'',desc:i.details?.detail||i.details?.type||''})})
-      });
-    });
+  for(const[k,c]of teamSports){const inj=await espnFetch(c.s,c.l,'injuries');if(!inj)continue;
+    (inj.injuries||[]).forEach(ti=>{const tn=ti.team?.displayName;if(!tn)return;
+      allG.filter(g=>g.sp===k).forEach(g=>{const side=g.aw.nm===tn?'aw':g.hm.nm===tn?'hm':null;if(!side)return;
+        (ti.injuries||[]).forEach(i=>{g.inj[side].push({nm:i.athlete?.displayName||'?',pos:i.athlete?.position?.abbreviation||'',st:i.status||'',sc:(i.status||'')[0]?.toUpperCase()||'',desc:i.details?.detail||i.details?.type||''})})})});
   }
-
-  // Sort: live first, then by time
   allG.sort((a,b)=>{const al=a.st==='STATUS_IN_PROGRESS'?0:a.st==='STATUS_SCHEDULED'||a.st==='pre'?1:2;const bl=b.st==='STATUS_IN_PROGRESS'?0:b.st==='STATUS_SCHEDULED'||b.st==='pre'?1:2;return al!==bl?al-bl:a.tm-b.tm});
-  applyFilters();updateStats();updateEdges();
-  $('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
+  applyFilters();updateStats();updateEdges();$('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
 }
 
-// ── EDGE DETECTION ──
 function detectEdges(games){const edges=[];games.forEach(g=>{if(!g.odds?.bookmakers)return;const M={};g.odds.bookmakers.forEach(b=>{b.markets.forEach(m=>{if(!M[m.key])M[m.key]=[];m.outcomes.forEach(o=>{M[m.key].push({bk:b.title,nm:o.name,pr:o.price,pt:o.point})})})});
   Object.keys(M).forEach(mk=>{const S={};M[mk].forEach(o=>{const k=o.pt!==undefined?`${o.nm} ${o.pt}`:o.nm;if(!S[k])S[k]=[];S[k].push(o)});
     Object.keys(S).forEach(sk=>{const of2=S[sk];if(of2.length<2)return;const P=of2.map(o=>({...o,ip:aimp(o.pr)}));const con=P.reduce((s,p)=>s+p.ip,0)/P.length;const best=P.reduce((b,p)=>p.ip<b.ip?p:b,P[0]);const edge=((con-best.ip)/con)*100;
-      if(edge>3)edges.push({g,mk,ml:mk==='h2h'?'ML':mk==='spreads'?'SPREAD':'TOTAL',side:sk,bb:best.bk,bp:best.pr,bi:best.ip,con,ep:edge,nb:of2.length,all:P.sort((a,b)=>a.ip-b.ip),tier:edge>=8?'high':edge>=5?'med':'low'})})})});
+      if(edge>3)edges.push({g,mk,ml:mk==='h2h'?'ML':mk==='spreads'?'SPREAD':'TOTAL',side:sk,bb:best.bk,bp:best.pr,bi:best.ip,con,ep:edge,nb:of2.length,tier:edge>=8?'high':edge>=5?'med':'low'})})})});
   return edges.sort((a,b)=>b.ep-a.ep)}
 
-// ── FILTERING ──
-function setSport(s){cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;applyFilters()}
-function applyFilters(){
-  fG=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);
-  renderSlate();$('slateCount').textContent=fG.length+' GAMES';
+// ══════════════════════════════
+// ── EV / LINE RANGE / SHARP
+// ══════════════════════════════
+function calcEV(g, market, pickName){
+  if(!g.odds?.bookmakers?.length)return null;
+  const pp=[],op=[];
+  g.odds.bookmakers.forEach(b=>{const m=b.markets.find(x=>x.key===market);if(!m)return;
+    m.outcomes.forEach(o=>{const key=o.point!==undefined?`${o.name} ${o.point}`:o.name;
+      if(key.includes(pickName)||o.name.includes(pickName.split(' ')[0]))pp.push({pr:o.price,bk:b.title});
+      else op.push({pr:o.price,bk:b.title});
+    });
+  });
+  if(!pp.length||!op.length)return null;
+  const pIP=pp.reduce((s,p)=>s+aimp(p.pr),0)/pp.length;
+  const oIP=op.reduce((s,p)=>s+aimp(p.pr),0)/op.length;
+  const tot=pIP+oIP;const trueP=pIP/tot;
+  const best=pp.reduce((b,p)=>aimp(p.pr)<aimp(b.pr)?p:b,pp[0]);
+  const dec=best.pr>0?(best.pr/100)+1:(100/Math.abs(best.pr))+1;
+  const ev=(trueP*dec-1)*100;
+  return{ev:+ev.toFixed(1),bp:best.pr,bk:best.bk,tp:(trueP*100).toFixed(0)};
 }
 
-// ── SLATE RENDERING ──
+function getLineRange(g, market){
+  if(!g.odds?.bookmakers?.length)return null;
+  const pts=new Map();
+  g.odds.bookmakers.forEach(b=>{const m=b.markets.find(x=>x.key===market);if(!m)return;
+    m.outcomes.forEach(o=>{if(o.point===undefined)return;if(!pts.has(o.name))pts.set(o.name,[]);pts.get(o.name).push(o.point)});
+  });
+  if(!pts.size)return null;
+  let txt='';pts.forEach((vals,nm)=>{const mn=Math.min(...vals),mx=Math.max(...vals);
+    if(mn!==mx)txt+=(txt?'  ':'')+(nm.split(' ').pop()||nm)+' '+(mn<0?mn:'+'+mn)+' to '+(mx<0?mx:'+'+mx);
+    else txt+=(txt?'  ':'')+(nm.split(' ').pop()||nm)+' '+(mn<0?mn:'+'+mn);
+  });
+  return txt||null;
+}
+
+function getSharp(edges){
+  if(!edges.length)return{r:0,n:'No data',bars:''};
+  const e=edges[0];const r=e.ep>=10?5:e.ep>=7?4:e.ep>=5?3:e.ep>=3?2:1;
+  return{r,n:`${e.ep.toFixed(1)}% @ ${e.bb}`,bars:Array(5).fill(0).map((_,i)=>`<div class="sb${i<r?' on':''}"></div>`).join('')};
+}
+
+function renderMetrics(pk){
+  let h='<div class="pick-metrics">';
+  // EV
+  if(pk.evData){h+=`<div class="pm"><div class="pm-lbl">EV</div><div class="pm-val ${pk.evData.ev>=0?'pos':'neg'}">${pk.evData.ev>=0?'+':''}${pk.evData.ev}%</div><div class="pm-sub">Best: ${pk.evData.bk}</div></div>`}
+  else{h+=`<div class="pm"><div class="pm-lbl">EV</div><div class="pm-val neu">N/A</div><div class="pm-sub">Need odds</div></div>`}
+  // Line Range
+  h+=`<div class="pm"><div class="pm-lbl">LINE RANGE</div><div class="pm-val neu" style="font-size:10px">${pk.lineRange||'N/A'}</div></div>`;
+  // Sharp
+  h+=`<div class="pm"><div class="pm-lbl">SHARP</div><div class="sharp-bars">${pk.sharp?.bars||Array(5).fill('<div class="sb"></div>').join('')}</div><div class="pm-sub">${pk.sharp?.n||'No data'}</div></div>`;
+  return h+'</div>';
+}
+
+// ══════════════════════════════
+// ── FILTERING & RENDERING
+// ══════════════════════════════
+function setSport(s){cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;applyFilters()}
+function applyFilters(){fG=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
+
 function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div class="no-data">No games found<div style="font-size:10px;margin-top:8px">Hit SCAN to refresh or check another sport tab</div></div>';return}
   const grp={};fG.forEach((g,i)=>{const lb=g.spL;if(!grp[lb])grp[lb]=[];grp[lb].push({...g,_i:i})});
   let h='';Object.entries(grp).forEach(([lb,gs])=>{h+=`<div class="sport-group-hdr">${gs[0].spI} ${lb} (${gs.length})</div>`;
@@ -299,86 +346,53 @@ function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div
       else if(g.odds){const h2=g.odds.bookmakers?.[0]?.markets?.find(m=>m.key==='h2h');if(h2)od=`<span>${h2.outcomes.map(o=>o.name.split(' ').pop()+' '+fp(o.price)).join(' / ')}</span>`}
       const te=allE.filter(e=>e.g.id===g.id)[0];const ic=g.inj.aw.length+g.inj.hm.length;
       const dateStr=g.tm.toDateString()!==new Date().toDateString()?` \u00B7 ${g.tm.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:'';
-      h+=`<div class="game-row ${g._i===selIdx?'sel':''}" onclick="selGame(${g._i})" data-i="${g._i}"><div class="game-teams">${g.aw.ab} ${live&&g.aw.sc?g.aw.sc:''} @ ${g.hm.ab} ${live&&g.hm.sc?g.hm.sc:''}</div><div class="game-meta"><span>${live?'<span class="live">LIVE</span>':t}${dateStr}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`})});
+      h+=`<div class="game-row ${g._i===selIdx?'sel':''}" onclick="selGame(${g._i})" data-i="${g._i}"><div class="game-teams">${g.aw.ab} ${live&&g.aw.sc?g.aw.sc:''} ${g.isTeam?'@':'vs'} ${g.hm.ab} ${live&&g.hm.sc?g.hm.sc:''}</div><div class="game-meta"><span>${live?'<span class="live">LIVE</span>':t}${dateStr}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`})});
   el.innerHTML=h}
 
-// ── DETAIL VIEW ──
+// ══════════════════════════════
+// ── DETAIL VIEW
+// ══════════════════════════════
 async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$('detailPanel');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
-  // Fetch form data (team sports only)
   let af=[],hf=[];
   if(g.isTeam&&g.aw.id&&E[g.sp]){const c=E[g.sp];const[a,b]=await Promise.all([espnSched(c.s,c.l,g.aw.id),espnSched(c.s,c.l,g.hm.id)]);af=xForm(a,g.aw.id);hf=xForm(b,g.hm.id)}
   let h='';
   const ts=g.tm.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' \u00B7 '+g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  // Header
   h+=`<div class="det-header"><div class="det-teams">${g.aw.nm} ${g.isTeam?'@':'vs'} ${g.hm.nm}</div><div class="det-records">${g.aw.rec?g.aw.nm+' ('+g.aw.rec+')':g.aw.nm} vs ${g.hm.rec?g.hm.nm+' ('+g.hm.rec+')':g.hm.nm}</div><div class="det-meta"><span>${g.spI} ${g.spL}</span><span>${ts}</span>${g.ven?`<span>${g.ven}</span>`:''}${g.bc?`<span>${g.bc}</span>`:''}</div></div>`;
 
-  // ── PICKS — multi-angle with detailed analysis ──
+  // PICKS with 4 metrics
   const picks=genPicks(g,af,hf);
-  if(picks.length){
-    h+=`<div class="picks-section">`;
-    picks.forEach(pk=>{
-      const cls=pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
-      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div><div class="pick-reasoning">${pk.reasoning}</div></div>`;
-    });
-    h+=`</div>`;
-  }
+  if(picks.length){h+=`<div class="picks-section">`;
+    picks.forEach(pk=>{const cls=pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
+      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${renderMetrics(pk)}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
+    });h+=`</div>`;}
 
-  // ── Odds table ──
   if(g.odds?.bookmakers?.length)h+=renderOdds(g);
   else if(g.eOdds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>CONSENSUS LINE</div><div style="font-size:12px">${g.eOdds.details||'N/A'}</div>${g.eOdds.overUnder?`<div style="font-size:12px;color:var(--t2)">O/U ${g.eOdds.overUnder}</div>`:''}<div style="font-size:9px;color:var(--t4);margin-top:8px">Add API key for full book comparison + edge detection</div></div>`;
-  else if(!g.isTeam&&!g.odds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>ODDS</div><div style="font-size:10px;color:var(--t3)">No odds data available. Add your Odds API key for live lines across 10+ sportsbooks.</div></div>`;
+  else if(!g.odds)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>ODDS</div><div style="font-size:10px;color:var(--t3)">No odds data. Add Odds API key for live lines, EV, and edge detection.</div></div>`;
 
-  // ── Edges for this game ──
   const ge=allE.filter(e=>e.g.id===g.id);
   if(ge.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>EDGE DETECTION (${ge.length})</div>${ge.map(e=>`<div class="edge-card"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--grn)">${e.ml}: ${e.side}</span><span style="font-size:13px;font-weight:700;color:var(--grn)">${e.ep.toFixed(1)}%</span></div><div style="font-size:9px;color:var(--t2)">Best: ${e.bb} ${fp(e.bp)} (${(e.bi*100).toFixed(1)}%) \u00B7 Consensus: ${(e.con*100).toFixed(1)}%</div></div>`).join('')}</div>`;
 
-  // ── Form ──
   if(af.length||hf.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>RECENT FORM (L10)</div>${formBar(g.aw.nm,af)}${formBar(g.hm.nm,hf)}</div>`;
-
-  // ── Scoring averages ──
-  if(af.length>=3&&hf.length>=3){
-    const awF=avgSc(af,'f'),awA=avgSc(af,'a'),hmF=avgSc(hf,'f'),hmA=avgSc(hf,'a');
-    if(awF!==null&&hmF!==null){
-      h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SCORING AVERAGES (L${Math.min(af.length,10)})</div>`;
-      h+=`<table class="dtable"><thead><tr><th>TEAM</th><th>PTS FOR</th><th>PTS AG</th><th>MARGIN</th></tr></thead><tbody>`;
-      h+=`<tr><td style="color:var(--cyn)">${g.aw.ab}</td><td>${awF.toFixed(1)}</td><td>${awA.toFixed(1)}</td><td class="${awF-awA>0?'best':''}" style="${awF-awA<0?'color:var(--red)':''}">${awF-awA>0?'+':''}${(awF-awA).toFixed(1)}</td></tr>`;
-      h+=`<tr><td style="color:var(--cyn)">${g.hm.ab}</td><td>${hmF.toFixed(1)}</td><td>${hmA.toFixed(1)}</td><td class="${hmF-hmA>0?'best':''}" style="${hmF-hmA<0?'color:var(--red)':''}">${hmF-hmA>0?'+':''}${(hmF-hmA).toFixed(1)}</td></tr>`;
-      h+=`</tbody></table></div>`;
-    }
-  }
-
-  // ── Rest & Schedule ──
-  if(af.length&&hf.length){
-    const ad=Math.round((g.tm-af[0].dt)/864e5),hd=Math.round((g.tm-hf[0].dt)/864e5),df=Math.abs(ad-hd);
-    const cls=d=>d<=1?'tired':d>=3?'fresh':'normal';
-    const et=ad>hd?g.aw.nm:hd>ad?g.hm.nm:null;
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>REST & SCHEDULE</div><div class="rest-bar"><div class="rest-team">${g.aw.nm}</div><div class="rest-days ${cls(ad)}">${ad}d</div></div><div class="rest-bar"><div class="rest-team">${g.hm.nm}</div><div class="rest-days ${cls(hd)}">${hd}d</div></div>${df>=2&&et?`<div class="rest-edge adv">REST EDGE: ${et} (+${df}d)</div>`:'<div class="rest-edge even">REST: Even</div>'}</div>`;
-  }
-
-  // ── Injuries ──
-  if(g.inj.aw.length||g.inj.hm.length){
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--red)"></div>INJURY REPORT</div>`;
+  if(af.length>=3&&hf.length>=3){const awF=avgSc(af,'f'),awA=avgSc(af,'a'),hmF=avgSc(hf,'f'),hmA=avgSc(hf,'a');
+    if(awF!==null&&hmF!==null){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SCORING AVERAGES (L${Math.min(af.length,10)})</div><table class="dtable"><thead><tr><th>TEAM</th><th>FOR</th><th>AG</th><th>MARGIN</th></tr></thead><tbody><tr><td style="color:var(--cyn)">${g.aw.ab}</td><td>${awF.toFixed(1)}</td><td>${awA.toFixed(1)}</td><td class="${awF-awA>0?'best':''}" style="${awF-awA<0?'color:var(--red)':''}">${awF-awA>0?'+':''}${(awF-awA).toFixed(1)}</td></tr><tr><td style="color:var(--cyn)">${g.hm.ab}</td><td>${hmF.toFixed(1)}</td><td>${hmA.toFixed(1)}</td><td class="${hmF-hmA>0?'best':''}" style="${hmF-hmA<0?'color:var(--red)':''}">${hmF-hmA>0?'+':''}${(hmF-hmA).toFixed(1)}</td></tr></tbody></table></div>`}}
+  if(af.length&&hf.length){const ad=Math.round((g.tm-af[0].dt)/864e5),hd=Math.round((g.tm-hf[0].dt)/864e5),df=Math.abs(ad-hd),cls=d=>d<=1?'tired':d>=3?'fresh':'normal',et=ad>hd?g.aw.nm:hd>ad?g.hm.nm:null;
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>REST & SCHEDULE</div><div class="rest-bar"><div class="rest-team">${g.aw.nm}</div><div class="rest-days ${cls(ad)}">${ad}d</div></div><div class="rest-bar"><div class="rest-team">${g.hm.nm}</div><div class="rest-days ${cls(hd)}">${hd}d</div></div>${df>=2&&et?`<div class="rest-edge adv">REST EDGE: ${et} (+${df}d)</div>`:'<div class="rest-edge even">REST: Even</div>'}</div>`}
+  if(g.inj.aw.length||g.inj.hm.length){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--red)"></div>INJURY REPORT</div>`;
     if(g.inj.aw.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin-bottom:6px">${g.aw.nm.toUpperCase()}</div>`;g.inj.aw.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
     if(g.inj.hm.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin:12px 0 6px">${g.hm.nm.toUpperCase()}</div>`;g.inj.hm.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
-    h+='</div>';
-  }
+    h+='</div>'}
+  h+=`<div class="note"><strong>NOTE:</strong> EV% derived from no-vig consensus across books. Sharp signal = edge magnitude. For ATS trends, H2H, and situational spots \u2014 use your SPORTSEDGE analyst session.</div>`;
+  el.innerHTML=h;el.scrollTop=0}
 
-  h+=`<div class="note"><strong>NOTE:</strong> Picks auto-generated from live ESPN + Odds API data. For ATS trends, H2H, line movement, and situational spots \u2014 consult your SPORTSEDGE analyst session for full context.</div>`;
-  el.innerHTML=h;el.scrollTop=0;
-}
-
-// ── FORM EXTRACTION ──
 function xForm(d,tid){if(!d?.events)return[];return d.events.filter(e=>e.competitions?.[0]?.status?.type?.completed).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).map(e=>{const c=e.competitions[0],t=c.competitors.find(x=>x.id===tid||x.team?.id==tid),o=c.competitors.find(x=>x!==t);return{dt:new Date(e.date),r:t?.winner?'W':'L',sc:`${t?.score||0}-${o?.score||0}`,opp:o?.team?.abbreviation||'?',hm:t?.homeAway==='home'}})}
-
 function avgSc(f,type){if(!f.length)return null;return f.reduce((s,x)=>{const p=x.sc.split('-');return s+(type==='f'?parseInt(p[0])||0:parseInt(p[1])||0)},0)/f.length}
-
 function formBar(nm,f){if(!f.length)return'';const w=f.filter(x=>x.r==='W').length,sk=streak(f),sc=sk[0]==='W'?'hot':sk[0]==='L'?'cold':'neutral';
   let h=`<div class="form-row"><div class="form-team">${nm}</div><div class="form-blocks">`;[...f].reverse().forEach(x=>{h+=`<div class="form-block ${x.r}" title="${x.r} ${x.sc} ${x.hm?'vs':'@'} ${x.opp}">${x.r}</div>`});
   return h+`</div><div class="form-streak ${sc}">${sk}</div><div style="font-size:10px;color:var(--t3)">${w}-${f.length-w}</div></div>`}
 function streak(f){if(!f.length)return'';let c=1;for(let i=1;i<f.length;i++){if(f[i].r===f[0].r)c++;else break}return f[0].r+c}
 
-// ── ODDS TABLE ──
 function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>LINES (${bks.length} BOOKS)</div>`;
   ['h2h','spreads','totals'].forEach(mk=>{const lb=mk==='h2h'?'MONEYLINE':mk==='spreads'?'SPREAD':'TOTAL';const R={};
     bks.forEach(b=>{const m=b.markets.find(x=>x.key===mk);if(!m)return;m.outcomes.forEach(o=>{const s=o.point!==undefined?`${o.name} ${o.point>0?'+':''}${o.point}`:o.name;if(!R[s])R[s]={};R[s][b.title]=o.price})});
@@ -388,210 +402,99 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
     h+=`</tbody></table></div>`});return h+'</div>'}
 
 // ══════════════════════════════════════════════════
-// ── DETAILED PICK GENERATION — multi-angle analysis
+// ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
 function genPicks(g,af,hf){
   if(!g.odds&&!g.eOdds&&!af.length&&!hf.length)return[];
   const picks=[];
-
-  // ── Calculate metrics ──
   const awW=af.filter(f=>f.r==='W').length, hmW=hf.filter(f=>f.r==='W').length;
   const awPct=af.length>=3?awW/af.length:.5, hmPct=hf.length>=3?hmW/hf.length:.5;
-  const awFor=avgSc(af,'f'), awAg=avgSc(af,'a');
-  const hmFor=avgSc(hf,'f'), hmAg=avgSc(hf,'a');
+  const awFor=avgSc(af,'f'),awAg=avgSc(af,'a'),hmFor=avgSc(hf,'f'),hmAg=avgSc(hf,'a');
   const awMarg=awFor!==null?awFor-awAg:0, hmMarg=hmFor!==null?hmFor-hmAg:0;
-  const awR=af.length?Math.round((g.tm-af[0].dt)/864e5):null;
-  const hmR=hf.length?Math.round((g.tm-hf[0].dt)/864e5):null;
+  const awR=af.length?Math.round((g.tm-af[0].dt)/864e5):null,hmR=hf.length?Math.round((g.tm-hf[0].dt)/864e5):null;
   const restDiff=(awR!==null&&hmR!==null)?hmR-awR:0;
-  const awOut=g.inj.aw.filter(i=>i.sc==='O').length, hmOut=g.inj.hm.filter(i=>i.sc==='O').length;
-  const awStr=streak(af), hmStr=streak(hf);
-
-  // Get odds data
+  const awOut=g.inj.aw.filter(i=>i.sc==='O').length,hmOut=g.inj.hm.filter(i=>i.sc==='O').length;
+  const awStr=streak(af),hmStr=streak(hf);
   let spFav=null,spDog=null,toOver=null,toUnder=null,mlAw=null,mlHm=null;
-  if(g.odds?.bookmakers?.length){
-    const bk=g.odds.bookmakers[0];
-    const sp=bk.markets.find(m=>m.key==='spreads');
-    const to=bk.markets.find(m=>m.key==='totals');
-    const ml=bk.markets.find(m=>m.key==='h2h');
+  if(g.odds?.bookmakers?.length){const bk=g.odds.bookmakers[0];
+    const sp=bk.markets.find(m=>m.key==='spreads'),to=bk.markets.find(m=>m.key==='totals'),ml=bk.markets.find(m=>m.key==='h2h');
     if(sp){spFav=sp.outcomes.find(o=>o.point<0)||sp.outcomes[0];spDog=sp.outcomes.find(o=>o.point>0)||sp.outcomes[1]}
     if(to){toOver=to.outcomes.find(o=>o.name==='Over');toUnder=to.outcomes.find(o=>o.name==='Under')}
-    if(ml){
-      ml.outcomes.forEach(o=>{
-        if(g.aw.nm.includes(o.name.split(' ').pop())||o.name.includes(g.aw.ab))mlAw=o;
-        if(g.hm.nm.includes(o.name.split(' ').pop())||o.name.includes(g.hm.ab))mlHm=o;
-      });
-      if(!mlAw&&ml.outcomes[0])mlAw=ml.outcomes[0];
-      if(!mlHm&&ml.outcomes[1])mlHm=ml.outcomes[1];
-    }
+    if(ml){ml.outcomes.forEach(o=>{if(g.aw.nm.includes(o.name.split(' ').pop())||o.name.includes(g.aw.ab))mlAw=o;if(g.hm.nm.includes(o.name.split(' ').pop())||o.name.includes(g.hm.ab))mlHm=o});
+      if(!mlAw&&ml.outcomes[0])mlAw=ml.outcomes[0];if(!mlHm&&ml.outcomes[1])mlHm=ml.outcomes[1]}
   }
   const mlEdges=allE.filter(e=>e.g.id===g.id&&e.mk==='h2h');
   const spEdges=allE.filter(e=>e.g.id===g.id&&e.mk==='spreads');
   const toEdges=allE.filter(e=>e.g.id===g.id&&e.mk==='totals');
   const spName=SPL[g.sp]||g.spL;
 
-  // ══════════════════════
-  // ── SPREAD ANALYSIS ──
-  // ══════════════════════
+  // ── SPREAD ──
   if(spFav||af.length>=3){
-    let score=g.ha; // baseline home advantage
-    let reasons=[];
-    // Form differential
-    if(af.length>=3&&hf.length>=3){
-      const fd=hmPct-awPct;
-      score+=fd*8;
-      if(Math.abs(fd)>.15){
-        const better=fd>0?g.hm:g.aw,worse=fd>0?g.aw:g.hm,bp=fd>0?hmPct:awPct,wp=fd>0?awPct:hmPct;
-        const bStr=fd>0?hmStr:awStr;
-        reasons.push(`${better.nm} carries the stronger form at ${(bp*100).toFixed(0)}% over their last ${Math.min(af.length,10)} games${bStr[0]==='W'&&parseInt(bStr.slice(1))>=3?' with a '+bStr+' streak':''}, while ${worse.nm} sits at ${(wp*100).toFixed(0)}%`);
-      } else {
-        reasons.push(`Form is close between these two \u2014 ${g.aw.nm} at ${(awPct*100).toFixed(0)}% and ${g.hm.nm} at ${(hmPct*100).toFixed(0)}% over L10, making this a tighter spread play`);
-      }
-    }
-    // Scoring margin
-    if(hmMarg&&awMarg&&Math.abs(hmMarg-awMarg)>2){
-      const margDiff=hmMarg-awMarg;
-      score+=margDiff*0.35;
-      const better=margDiff>0?g.hm:g.aw,m=margDiff>0?hmMarg:awMarg;
-      reasons.push(`${better.nm} has been winning by an average of ${Math.abs(m).toFixed(1)} points per game recently, indicating they're not just winning \u2014 they're covering`);
-    }
-    // Rest
-    if(Math.abs(restDiff)>=2){
-      score+=restDiff*0.6;
-      const rested=restDiff>0?g.hm:g.aw,tired=restDiff>0?g.aw:g.hm;
-      const sportNote=g.cat==='nba'?' \u2014 one of the most reliable edges in NBA basketball':g.cat==='nhl'?' \u2014 back-to-back fatigue is systematically underpriced in hockey':'';
-      reasons.push(`${rested.nm} holds a ${Math.abs(restDiff)}-day rest advantage over ${tired.nm}${sportNote}`);
-    }
-    // Injuries
-    if(Math.abs(awOut-hmOut)>1){
-      score+=(awOut-hmOut)*0.7;
-      const healthier=awOut>hmOut?g.hm:g.aw,banged=awOut>hmOut?g.aw:g.hm,cnt=Math.max(awOut,hmOut);
-      reasons.push(`${banged.nm} is playing without ${cnt} players (OUT status), which thins their rotation and limits lineup flexibility against a healthier ${healthier.nm} squad`);
-    } else if(awOut>0||hmOut>0){
-      reasons.push(`Injury report is relatively balanced (${g.aw.ab}: ${awOut} OUT, ${g.hm.ab}: ${hmOut} OUT) and shouldn't swing the line significantly`);
-    }
-    // Home court
-    if(g.ha>0&&!reasons.some(r=>r.includes('home'))){
-      reasons.push(`${g.hm.nm} gets the home-court boost, worth roughly ${g.ha} points in ${spName} \u2014 built into the line but still a factor in close matchups`);
-    }
-    // Edge
-    if(spEdges.length){
-      reasons.push(`Sharp signal: ${spEdges[0].ep.toFixed(1)}% spread edge detected at ${spEdges[0].bb} on ${spEdges[0].side}, suggesting the market hasn't fully adjusted`);
-    }
-
-    const side=score>=0?g.hm:g.aw;
-    const mag=Math.abs(score);
-    const conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
+    let score=g.ha,reasons=[];
+    if(af.length>=3&&hf.length>=3){const fd=hmPct-awPct;score+=fd*8;
+      if(Math.abs(fd)>.15){const b=fd>0?g.hm:g.aw,bp=fd>0?hmPct:awPct,bs=fd>0?hmStr:awStr,w=fd>0?g.aw:g.hm,wp=fd>0?awPct:hmPct;
+        reasons.push(`${b.nm} carries stronger form at ${(bp*100).toFixed(0)}% L10${bs[0]==='W'&&parseInt(bs.slice(1))>=3?' with a '+bs+' streak':''}, while ${w.nm} sits at ${(wp*100).toFixed(0)}%`)}
+      else reasons.push(`Form is close \u2014 ${g.aw.nm} at ${(awPct*100).toFixed(0)}% and ${g.hm.nm} at ${(hmPct*100).toFixed(0)}% L10, making this a tighter spread play`)}
+    if(hmMarg&&awMarg&&Math.abs(hmMarg-awMarg)>2){score+=(hmMarg-awMarg)*0.35;const b=hmMarg>awMarg?g.hm:g.aw,m=hmMarg>awMarg?hmMarg:awMarg;
+      reasons.push(`${b.nm} has been winning by ${Math.abs(m).toFixed(1)} per game, indicating they're not just winning \u2014 they're covering`)}
+    if(Math.abs(restDiff)>=2){score+=restDiff*0.6;const r=restDiff>0?g.hm:g.aw,t=restDiff>0?g.aw:g.hm;
+      reasons.push(`${r.nm} holds a ${Math.abs(restDiff)}-day rest advantage over ${t.nm}${g.cat==='nba'?' \u2014 one of the most reliable NBA edges':g.cat==='nhl'?' \u2014 systematically underpriced in hockey':''}`)}
+    if(Math.abs(awOut-hmOut)>1){score+=(awOut-hmOut)*0.7;const h2=awOut>hmOut?g.hm:g.aw,b2=awOut>hmOut?g.aw:g.hm;
+      reasons.push(`${b2.nm} is missing ${Math.max(awOut,hmOut)} players (OUT), thinning their rotation against a healthier ${h2.nm}`)}
+    if(g.ha>0)reasons.push(`Home-court worth ~${g.ha}pts in ${spName} for ${g.hm.nm}`);
+    if(spEdges.length)reasons.push(`Sharp signal: ${spEdges[0].ep.toFixed(1)}% spread edge at ${spEdges[0].bb}`);
+    const side=score>=0?g.hm:g.aw,mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     const pickStr=spFav?`${spFav.name} ${spFav.point>0?'+':''}${spFav.point} (${fp(spFav.price)})`:side.nm+' to cover';
-    picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.'});
+    const pickSideName=spFav?spFav.name:side.nm;
+    picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+      evData:calcEV(g,'spreads',pickSideName),lineRange:getLineRange(g,'spreads'),sharp:getSharp(spEdges)});
   }
 
-  // ══════════════════════
-  // ── TOTAL ANALYSIS ──
-  // ══════════════════════
+  // ── TOTAL ──
   if((toOver||hmFor!==null)&&g.isTeam){
-    let tScore=0;
-    let reasons=[];
-    // Projected scoring
-    if(hmFor!==null&&awFor!==null){
-      const projTotal=((awFor+(hmAg||awFor))/2)+((hmFor+(awAg||hmFor))/2);
-      if(toOver){
-        const posted=toOver.point;
-        const diff=projTotal-posted;
-        tScore=diff*0.4;
-        if(Math.abs(diff)>3){
-          reasons.push(`Projected combined scoring of ${projTotal.toFixed(1)} ${diff>0?'runs '+diff.toFixed(1)+' points above':'falls '+Math.abs(diff).toFixed(1)+' points below'} the posted ${posted}, based on each team's recent offensive output and defensive surrender rate`);
-        } else {
-          reasons.push(`Projected total of ${projTotal.toFixed(1)} sits close to the posted ${posted} \u2014 this is a thin-edge spot where execution and pace will decide it`);
-        }
-      }
-      // Pace context
-      const combinedAvg=awFor+hmFor;
-      reasons.push(`${g.aw.nm} has been scoring ${awFor.toFixed(1)} per game while ${g.hm.nm} puts up ${hmFor.toFixed(1)}, combining for a ${combinedAvg.toFixed(1)}-point baseline`);
-    }
-    // Defense context
-    if(awAg!==null&&hmAg!==null){
-      const defAvg=(awAg+hmAg)/2;
-      if(defAvg>awFor||defAvg>hmFor){
-        reasons.push(`Defensive leakage is a factor \u2014 ${g.aw.nm} surrenders ${awAg.toFixed(1)} and ${g.hm.nm} gives up ${hmAg.toFixed(1)} per game, which could inflate the total`);
-        tScore+=0.5;
-      }
-    }
-    // Injuries impact on total
-    if(awOut+hmOut>=4){
-      reasons.push(`A combined ${awOut+hmOut} players out across both rosters could slow the pace and depress scoring as bench units absorb more minutes`);
-      tScore-=0.8;
-    }
-    // Rest impact
-    if(awR!==null&&hmR!==null&&(awR<=1||hmR<=1)){
-      reasons.push(`Short rest for ${awR<=1?g.aw.nm:g.hm.nm} typically correlates with sloppier offense and transition defense breakdowns`);
-    }
-    // Edge
-    if(toEdges.length){
-      const te=toEdges[0];
-      reasons.push(`${te.ep.toFixed(1)}% total edge at ${te.bb} on ${te.side} \u2014 the sharpest book disagrees with consensus here`);
-      tScore+=te.side.toLowerCase().includes('over')?1:-1;
-    }
-
-    const overUnder=tScore>=0?'OVER':'UNDER';
-    const mag=Math.abs(tScore);
-    const conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
-    const pickStr=toOver?`${overUnder} ${toOver.point} (${fp(overUnder==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:overUnder;
-    picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.'});
+    let ts2=0,reasons=[];
+    if(hmFor!==null&&awFor!==null){const proj=((awFor+(hmAg||awFor))/2)+((hmFor+(awAg||hmFor))/2);
+      if(toOver){const posted=toOver.point,diff=proj-posted;ts2=diff*0.4;
+        reasons.push(Math.abs(diff)>3?`Projected combined scoring of ${proj.toFixed(1)} ${diff>0?'runs '+diff.toFixed(1)+' above':'falls '+Math.abs(diff).toFixed(1)+' below'} the posted ${posted}`:
+          `Projected total of ${proj.toFixed(1)} sits close to the posted ${posted} \u2014 thin edge either way`)}
+      reasons.push(`${g.aw.nm} averaging ${awFor.toFixed(1)} pts and ${g.hm.nm} at ${hmFor.toFixed(1)}, combining for a ${(awFor+hmFor).toFixed(1)}-point baseline`)}
+    if(awAg!==null&&hmAg!==null&&(awAg+hmAg)/2>(awFor||0)){reasons.push(`Defensive leakage factor \u2014 ${g.aw.ab} surrenders ${awAg.toFixed(1)} and ${g.hm.ab} gives up ${hmAg.toFixed(1)} per game`);ts2+=0.5}
+    if(awOut+hmOut>=4){reasons.push(`${awOut+hmOut} combined players out could slow pace and depress scoring`);ts2-=0.8}
+    if(toEdges.length){reasons.push(`${toEdges[0].ep.toFixed(1)}% total edge at ${toEdges[0].bb} on ${toEdges[0].side}`);ts2+=toEdges[0].side.toLowerCase().includes('over')?1:-1}
+    const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
+    const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
+    picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+      evData:calcEV(g,'totals',ou==='OVER'?'Over':'Under'),lineRange:getLineRange(g,'totals'),sharp:getSharp(toEdges)});
   }
 
-  // ═══════════════════════════
-  // ── MONEYLINE ANALYSIS ──
-  // ═══════════════════════════
-  {
-    let score=g.ha;
-    let reasons=[];
-    // Combine all factors
-    if(af.length>=3&&hf.length>=3){
-      const fd=hmPct-awPct;
-      score+=fd*10;
-    }
+  // ── MONEYLINE ──
+  {let score=g.ha,reasons=[];
+    if(af.length>=3&&hf.length>=3)score+=(hmPct-awPct)*10;
     if(hmMarg&&awMarg)score+=(hmMarg-awMarg)*0.3;
     if(Math.abs(restDiff)>=2)score+=restDiff*0.5;
     if(Math.abs(awOut-hmOut)>1)score+=(awOut-hmOut)*0.7;
-
-    const side=score>=0?g.hm:g.aw;
-    const other=score>=0?g.aw:g.hm;
-    const mlO=score>=0?mlHm:mlAw;
-    const mag=Math.abs(score);
-    const conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
+    const side=score>=0?g.hm:g.aw,other=score>=0?g.aw:g.hm,mlO=score>=0?mlHm:mlAw;
+    const mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     let mlPrice=mlO?` (${fp(mlO.price)})`:'';
-
-    // Build ML reasoning
-    reasons.push(`${side.nm} is the straight-up play here, backed by the convergence of form, situational factors, and ${g.ha>0&&score>=0?'home-court advantage':'the overall matchup profile'}`);
-    if(af.length>=3&&hf.length>=3){
-      const sp=score>=0?hmPct:awPct,op=score>=0?awPct:hmPct;
-      if(Math.abs(sp-op)>.1)reasons.push(`The form gap (${(sp*100).toFixed(0)}% vs ${(op*100).toFixed(0)}% L10) translates directly to moneyline value`);
-    }
-    if(mlEdges.length){
-      reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge detected at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 the implied probability gap across books signals sharp-side value`);
-    }
-    if(mlO&&Math.abs(mlO.price)>=200){
-      reasons.push(`The price is steep at ${fp(mlO.price)}, so consider the spread as a safer vehicle unless you're building a parlay`);
-    } else if(mlO&&mlO.price>0){
-      reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup \u2014 this is a spot to play ML outright`);
-    } else if(mlO&&mlO.price>-150){
-      reasons.push(`Reasonable price at ${fp(mlO.price)} makes the moneyline viable as a standalone or parlay leg`);
-    }
-
+    reasons.push(`${side.nm} is the straight-up play, backed by convergence of form${g.ha>0&&score>=0?', home-court':''}, and matchup profile`);
+    if(af.length>=3&&hf.length>=3){const sp2=score>=0?hmPct:awPct,op2=score>=0?awPct:hmPct;
+      if(Math.abs(sp2-op2)>.1)reasons.push(`Form gap (${(sp2*100).toFixed(0)}% vs ${(op2*100).toFixed(0)}% L10) translates directly to ML value`)}
+    if(mlEdges.length)reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 implied probability gap signals sharp value`);
+    if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
+    else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
+    else if(mlO&&mlO.price>-150)reasons.push(`Reasonable juice at ${fp(mlO.price)} makes ML viable standalone or as parlay leg`);
     const pickStr=`${side.nm} ML${mlPrice}`;
-    if(reasons.length)picks.push({label:'MONEYLINE ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.'});
+    if(reasons.length)picks.push({label:'MONEYLINE ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+      evData:calcEV(g,'h2h',side.nm.split(' ').pop()),lineRange:null,sharp:getSharp(mlEdges)});
   }
-
   return picks;
 }
 
-// ── STATS & EDGES SIDEBAR ──
 function updateStats(){$('stG').textContent=allG.length;$('stE').textContent=allE.length;$('stS').textContent=new Set(allG.map(g=>g.cat)).size;let inj=0;allG.forEach(g=>{inj+=g.inj.aw.filter(i=>i.sc==='O').length+g.inj.hm.filter(i=>i.sc==='O').length});$('stI').textContent=inj}
-function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<div class="no-data" style="padding:20px">${AK?'No edges detected':'Add API key for edge detection'}</div>`;return}
-  el.innerHTML=allE.slice(0,15).map(e=>`<div class="edge-alert" onclick="jumpTo('${e.g.id}')"><div class="edge-top"><div class="edge-matchup">${e.g.aw.ab} @ ${e.g.hm.ab}</div><div class="edge-pct ${e.tier}">${e.ep.toFixed(1)}%</div></div><div class="edge-detail">${e.ml}: ${e.side} \u00B7 ${e.bb} \u00B7 ${fp(e.bp)}</div></div>`).join('')}
+function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<div class="no-data" style="padding:20px">${AK?'No edges detected':'Add API key for edges'}</div>`;return}
+  el.innerHTML=allE.slice(0,15).map(e=>`<div class="edge-alert" onclick="jumpTo('${e.g.id}')"><div class="edge-top"><div class="edge-matchup">${e.g.aw.ab} ${e.g.isTeam?'@':'vs'} ${e.g.hm.ab}</div><div class="edge-pct ${e.tier}">${e.ep.toFixed(1)}%</div></div><div class="edge-detail">${e.ml}: ${e.side} \u00B7 ${e.bb} \u00B7 ${fp(e.bp)}</div></div>`).join('')}
 function jumpTo(id){const i=fG.findIndex(g=>g.id===id);if(i>=0)selGame(i)}
 
-// ── KEYBOARD ──
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('setupModal').style.display='none';$('scOverlay').classList.remove('vis');return}if(e.target.tagName==='INPUT'){if(e.key==='Enter')connectApi();return}if($('scOverlay').classList.contains('vis')){$('scOverlay').classList.remove('vis');return}
   switch(e.key){case'r':case'R':refreshAll();break;case'?':toggleSC();break;case'k':case'K':showSetup();break;
     case'ArrowDown':e.preventDefault();if(fG.length){selIdx=Math.min(selIdx+1,fG.length-1);selGame(selIdx);scrSel()}break;
