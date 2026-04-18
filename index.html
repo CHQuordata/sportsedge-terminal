@@ -186,21 +186,23 @@ async function refreshAll(){
     });
   })));
 
-  // ── ESPN: Tennis (ATP + WTA) — each tournament event has multiple match competitions ──
+  // ── ESPN: Tennis (ATP + WTA) — structure: events > groupings > competitions ──
   await Promise.all(['atp','wta'].map(async lg=>{
     const c=E[lg];const d=await espnFetch(c.s,c.l);if(!d?.events)return;
     d.events.forEach(ev=>{
-      const evVenue=ev.competitions?.[0]?.venue?.fullName||'';
-      (ev.competitions||[]).forEach(cp=>{
-        const comps=cp.competitors;if(!comps||comps.length<2)return;
-        const mDate=new Date(cp.date||ev.date);const st=cp.status?.type?.name||ev.status?.type?.name;
-        if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
-        const mId=cp.id||`${lg}_${ev.id}_${cp.order||0}`;
-        if(seenIds.has(mId))return;seenIds.add(mId);
-        allG.push({id:mId,sp:lg,cat:'tennis',spL:c.lb,spI:c.ic,
-          aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
-          tm:mDate,st,stD:cp.status?.type?.shortDetail||ev.status?.type?.shortDetail||'',
-          ven:evVenue,bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+      const evVenue=ev.venue?.fullName||'';
+      (ev.groupings||[]).forEach(grp=>{
+        (grp.competitions||[]).forEach(cp=>{
+          const comps=cp.competitors;if(!comps||comps.length<2)return;
+          const mDate=new Date(cp.date||ev.date);const st=cp.status?.type?.name;
+          if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
+          const mId=cp.id||`${lg}_${ev.id}_${cp.order||0}`;
+          if(seenIds.has(mId))return;seenIds.add(mId);
+          allG.push({id:mId,sp:lg,cat:'tennis',spL:c.lb,spI:c.ic,
+            aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
+            tm:mDate,st,stD:cp.status?.type?.shortDetail||'',
+            ven:evVenue,bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+        });
       });
     });
   }));
