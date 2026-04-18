@@ -403,12 +403,35 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   const ts=g.tm.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' \u00B7 '+g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   h+=`<div class="det-header"><div class="det-teams">${g.aw.nm} ${g.isTeam?'@':'vs'} ${g.hm.nm}</div><div class="det-records">${g.aw.rec?g.aw.nm+' ('+g.aw.rec+')':g.aw.nm} vs ${g.hm.rec?g.hm.nm+' ('+g.hm.rec+')':g.hm.nm}</div><div class="det-meta"><span>${g.spI} ${g.spL}</span><span>${ts}</span>${g.ven?`<span>${g.ven}</span>`:''}${g.bc?`<span>${g.bc}</span>`:''}</div></div>`;
 
-  // PICKS with 4 metrics
+  // PICKS with grading for final games
   const picks=genPicks(g,af,hf);
+  const isFinal=g.st==='STATUS_FINAL';
+  if(isFinal&&(g.aw.sc!=null||g.hm.sc!=null)){
+    const awSc=g.aw.sc??'',hmSc=g.hm.sc??'';
+    const awWon=parseFloat(awSc)>parseFloat(hmSc),hmWon=parseFloat(hmSc)>parseFloat(awSc);
+    const grades=picks.map(pk=>gradeResult(pk,g));
+    const w=grades.filter(r=>r==='W').length,l=grades.filter(r=>r==='L').length,p=grades.filter(r=>r==='P').length;
+    const resultClr=w>l?'var(--grn)':l>w?'var(--red)':'var(--t2)';
+    h+=`<div class="sec" style="background:var(--bg0)"><div class="sec-title"><div class="ind" style="background:${resultClr}"></div>FINAL RESULT</div>`;
+    h+=`<div style="font-size:22px;font-weight:700;text-align:center;padding:10px 0;letter-spacing:1px">`;
+    h+=`<span style="color:${awWon?'var(--grn)':'var(--t2)'}">${g.aw.ab} ${awSc}</span>`;
+    h+=`<span style="color:var(--t4);font-size:14px;margin:0 10px">${g.isTeam?'@':'vs'}</span>`;
+    h+=`<span style="color:${hmWon?'var(--grn)':'var(--t2)'}">${hmSc} ${g.hm.ab}</span></div>`;
+    if(grades.some(r=>r)){h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 12px 10px">`;
+      picks.forEach((pk,i)=>{const r=grades[i];if(!r)return;
+        const lbl=pk.label==='MONEYLINE ANALYSIS'?'ML':pk.label==='SPREAD ANALYSIS'?'SPREAD':'TOTAL';
+        h+=`<span class="pib pib-${r}">${lbl}: ${r}</span>`;
+      });
+      if(w+l+p>0)h+=`<span style="margin-left:auto;font-size:10px;color:var(--t3)">${w}W ${l}L${p?' '+p+'P':''}</span>`;
+      h+=`</div>`;}
+    h+=`</div>`;
+  }
   if(picks.length){h+=`<div class="picks-section">`;
-    picks.forEach(pk=>{const cls=pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
+    picks.forEach((pk,i)=>{const cls=pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
       const hasMetrics=pk.evData||pk.lineRange||(pk.sharp&&pk.sharp.r>0);
-      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
+      const r=isFinal?gradeResult(pk,g):null;
+      const rBadge=r?`<span class="pib pib-${r}" style="float:right">${r==='W'?'\u2713 WIN':r==='L'?'\u2717 LOSS':'\u25CF PUSH'}</span>`:'';
+      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
     });h+=`</div>`;}
   else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">No Lines Available</div><div class="pick-reasoning" style="margin-top:6px">No odds found for this match. The Odds API may not have listed it yet \u2014 try refreshing closer to match time.</div></div>`;}
 
@@ -522,7 +545,8 @@ function genPicks(g,af,hf){
     const pickSideName=spSideOdds?spSideOdds.name:spFav?spFav.name:side.nm;
     if(!reasons.length)reasons.push(`${side.nm} (${side.rec||'no record'}) is the edge here based on available matchup data`);
     picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
-      evData:calcEV(g,'spreads',pickSideName),lineRange:getLineRange(g,'spreads'),sharp:getSharp(spEdges)});
+      evData:calcEV(g,'spreads',pickSideName),lineRange:getLineRange(g,'spreads'),sharp:getSharp(spEdges),
+      gradeData:{type:'spread',isHm:side===g.hm,spread:spSideOdds?.point??null}});
   }
 
   // ── TOTAL ──
@@ -539,7 +563,8 @@ function genPicks(g,af,hf){
     const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
     const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
     picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
-      evData:calcEV(g,'totals',ou==='OVER'?'Over':'Under'),lineRange:getLineRange(g,'totals'),sharp:getSharp(toEdges)});
+      evData:calcEV(g,'totals',ou==='OVER'?'Over':'Under'),lineRange:getLineRange(g,'totals'),sharp:getSharp(toEdges),
+      gradeData:{type:'total',side:ou,line:toOver?.point??null}});
   }
 
   // ── MONEYLINE ──
@@ -572,9 +597,32 @@ function genPicks(g,af,hf){
     else if(mlO&&mlO.price>-150)reasons.push(`Reasonable juice at ${fp(mlO.price)} makes ML viable standalone or as parlay leg`);
     const pickStr=`${side.nm} ML${mlPrice}`;
     if(reasons.length)picks.push({label:'MONEYLINE ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
-      evData:calcEV(g,'h2h',side.nm.split(' ').pop()),lineRange:null,sharp:getSharp(mlEdges)});
+      evData:calcEV(g,'h2h',side.nm.split(' ').pop()),lineRange:null,sharp:getSharp(mlEdges),
+      gradeData:{type:'ml',isHm:side===g.hm}});
   }
   return picks;
+}
+
+function gradeResult(pk,g){
+  if(g.st!=='STATUS_FINAL')return null;
+  const awSc=parseFloat(g.aw.sc),hmSc=parseFloat(g.hm.sc);
+  if(isNaN(awSc)||isNaN(hmSc))return null;
+  const gd=pk.gradeData;if(!gd)return null;
+  if(gd.type==='ml'){
+    if(awSc===hmSc)return'P';
+    return(gd.isHm?hmSc>awSc:awSc>hmSc)?'W':'L';
+  }
+  if(gd.type==='spread'){
+    if(gd.spread===null)return null;
+    const ps=gd.isHm?hmSc:awSc,os=gd.isHm?awSc:hmSc,m=ps+gd.spread-os;
+    return m===0?'P':m>0?'W':'L';
+  }
+  if(gd.type==='total'){
+    if(gd.line===null)return null;
+    const tot=awSc+hmSc;if(tot===gd.line)return'P';
+    return(gd.side==='OVER')===(tot>gd.line)?'W':'L';
+  }
+  return null;
 }
 
 function updateStats(){$('stG').textContent=allG.length;$('stE').textContent=allE.length;$('stS').textContent=new Set(allG.map(g=>g.cat)).size;let inj=0;allG.forEach(g=>{inj+=g.inj.aw.filter(i=>i.sc==='O').length+g.inj.hm.filter(i=>i.sc==='O').length});$('stI').textContent=inj}
