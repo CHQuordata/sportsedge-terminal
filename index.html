@@ -192,7 +192,7 @@ function aimp(p){return p>0?100/(p+100):Math.abs(p)/(Math.abs(p)+100)}
 function dfmt(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
 
 // Helper to parse athlete-based competitors (tennis/MMA)
-function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null}}
+function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null,seed:p.curatedRank?.current||null,country:p.athlete?.flag?.alt||null}}
 
 async function init(){
   $('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED';
@@ -257,7 +257,8 @@ async function refreshAll(){
           allG.push({id:mId,sp:lg,cat:'tennis',spL:c.lb,spI:c.ic,
             aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
             tm:mDate,st,stD:cp.status?.type?.shortDetail||'',
-            ven:evVenue,bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+            ven:evVenue||ev.name||'',tnName:ev.name||'',round:cp.round?.displayName||'',
+            bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
         });
       });
     });
@@ -483,20 +484,24 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
     });h+=`</div>`;}
   else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">No Lines Available</div><div class="pick-reasoning" style="margin-top:6px">No odds found for this match. The Odds API may not have listed it yet \u2014 try refreshing closer to match time.</div></div>`;}
 
-  // ── Tennis Player Stats ──
-  if(g.cat==='tennis'&&(awTn||hmTn)){const surf=getSurface(g.ven),surfTxt=surf==='clay'?'CLAY':surf==='grass'?'GRASS':surf==='indoor'?'INDOOR':'HARD';
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>PLAYER STATS <span class="surf-badge ${surf}">${surfTxt}</span></div><div class="tennis-grid">`;
+  // ── Tennis Player Profile ──
+  if(g.cat==='tennis'){const surf=getSurface(g.ven),surfTxt=surf==='clay'?'CLAY':surf==='grass'?'GRASS':surf==='indoor'?'INDOOR':'HARD';
+    const surfNotes={clay:'Baseline rallies dominate. Heavy topspin wins. Clay specialists have structural edge — check if either player is primarily a clay or hard-court player.',grass:'Serve dominance elevated. Tall big-servers gain significant advantage. Round 1 grass is volatile — surface-switch upsets are frequent.',hard:'Balanced surface. Best all-around player usually wins. First-strike tennis and baseline both viable.',indoor:'Fast indoor conditions. Serve hold rates elevated, tiebreaks more likely. Physical baseline grinders slightly disadvantaged.'};
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>PLAYER PROFILE`;
+    if(g.round)h+=` <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0"> — ${g.round}${g.tnName?' · '+g.tnName:''}</span>`;
+    h+=` <span class="surf-badge ${surf}">${surfTxt}</span></div><div class="tennis-grid">`;
     [[g.aw,awTn],[g.hm,hmTn]].forEach(([pl,st])=>{
-      h+=`<div class="tn-card"><div class="tn-nm">${pl.nm}${pl.rank?`<span class="tn-rank">#${pl.rank}</span>`:''}`;
-      if(pl.rec)h+=`<div class="tn-sub">${pl.rec}</div>`;
-      h+=`</div>`;
-      if(st){const stats=[[st.firstSrvPct,'1ST SRV%'],[st.firstSrvWon,'1ST WON%'],[st.bpConv,'BP CONV%'],[st.bpSaved,'BP SAVED%']].filter(([v])=>v!==null);
-        if(stats.length){h+=`<div class="tn-stats">`;stats.forEach(([v,l])=>{const pv=parseFloat(v);const vc=!isNaN(pv)?(pv>=68?'var(--grn)':pv<50?'var(--red)':'var(--cyn)'):'var(--cyn)';h+=`<div class="tn-stat"><div class="tn-sv" style="color:${vc}">${v}</div><div class="tn-sl">${l}</div></div>`});h+=`</div>`}
-        else h+=`<div style="font-size:9px;color:var(--t4);margin-top:4px">Stats loading...</div>`}
-      else h+=`<div style="font-size:9px;color:var(--t4);margin-top:4px">Stats unavailable</div>`;
-      h+=`</div>`;
+      const hand=st?.hand,country=st?.country||pl.country||'';
+      h+=`<div class="tn-card"><div class="tn-nm">${pl.nm}${pl.seed?`<span class="tn-rank"> [${pl.seed}]</span>`:''}</div>`;
+      h+=`<div class="tn-stats" style="margin-top:6px">`;
+      if(pl.rank)h+=`<div class="tn-stat"><div class="tn-sv" style="color:var(--grn)">#${pl.rank}</div><div class="tn-sl">RANK</div></div>`;
+      if(hand)h+=`<div class="tn-stat"><div class="tn-sv" style="color:${hand==='L'?'var(--amb)':'var(--cyn)'}">${hand==='L'?'LH':'RH'}</div><div class="tn-sl">HAND</div></div>`;
+      if(st?.age)h+=`<div class="tn-stat"><div class="tn-sv">${st.age}</div><div class="tn-sl">AGE</div></div>`;
+      if(country)h+=`<div class="tn-stat"><div class="tn-sv" style="font-size:10px;color:var(--t2)">${country.slice(0,3).toUpperCase()}</div><div class="tn-sl">CTY</div></div>`;
+      if(pl.rec)h+=`<div class="tn-stat"><div class="tn-sv" style="font-size:10px;color:var(--t2)">${pl.rec}</div><div class="tn-sl">REC</div></div>`;
+      h+=`</div></div>`;
     });
-    h+=`</div></div>`}
+    h+=`</div><div style="font-size:9px;color:var(--t3);padding:8px 0 2px;border-top:1px solid rgba(42,42,62,.3);margin-top:6px">${surfNotes[surf]||surfNotes.hard}</div></div>`}
   // ── SP Matchup (MLB) ──
   if(pitchers){const ap=pitchers.away,hp=pitchers.home;h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SP MATCHUP</div><div class="sp-matchup">`;
     [['away',ap,g.aw],[' home',hp,g.hm]].forEach(([side,p,tm])=>{if(!p)return;h+=`<div class="sp-card"><div class="sp-nm">${tm.ab}<span class="sp-hand">${p.hand}HP</span><div style="font-size:10px;color:var(--t2);margin-top:2px">${p.name}</div></div><div class="sp-stats"><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.era)<3.5?'var(--grn)':parseFloat(p.era)>4.5?'var(--red)':'var(--cyn)'}">${p.era}</div><div class="sp-sl">ERA</div></div><div class="sp-stat"><div class="sp-sv">${p.whip}</div><div class="sp-sl">WHIP</div></div><div class="sp-stat"><div class="sp-sv">${p.k9}</div><div class="sp-sl">K/9</div></div><div class="sp-stat"><div class="sp-sv" style="color:var(--t3)">${p.w}-${p.l}</div><div class="sp-sl">W-L</div></div></div></div>`});
@@ -545,8 +550,8 @@ async function fetchWeather(city){if(!city)return null;try{const r=await fetch(`
 function isOutdoor(venue,cat){if(!['mlb','nfl'].includes(cat))return false;if(cat==='nfl')return!/lucas oil|mercedes.benz|state farm|allegiant|ford field|caesars superdome|u\.s\. bank|nrg stadium|dome at|sofi|klimt|kia metlife|dome/i.test(venue||'');return!/tropicana|rogers centre|minute maid|chase field|loandepot|american family field/i.test(venue||'')}
 function cityFromTeam(nm){return(nm||'').split(' ').slice(0,-1).join(' ')||nm}
 function kellyPct(conf,pickStr){const m=(pickStr||'').match(/\(([+-]\d+)\)/);const amer=m?parseInt(m[1]):(conf==='HIGH'?-115:-110);const dec=amer>0?amer/100+1:100/Math.abs(amer)+1;const p=conf==='HIGH'?0.60:conf==='MEDIUM'?0.54:0.50;const k=(p*(dec-1)-(1-p))/(dec-1);return Math.max(0,k*100)}
-async function fetchTennisPlayerStats(lg,aid){if(!aid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${lg}/athletes/${aid}/statistics`);return r.ok?r.json():null}catch(e){return null}}
-function extractTennisStats(d){if(!d)return null;const all=[];(d.statistics?.splits?.categories||d.splits?.categories||[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));(d.statistics?.stats||[]).forEach(s=>all.push(s));const gs=(...ns)=>{for(const n of ns){const s=all.find(x=>x.name===n||x.abbreviation===n);if(s)return s}return null};const dv=(...ns)=>gs(...ns)?.displayValue||null;const nv=(...ns)=>gs(...ns)?.value??null;return{firstSrvPct:dv('firstServePercent','firstServePct'),firstSrvWon:dv('firstServePointsWonPercent','firstServePointsWon'),secondSrvWon:dv('secondServePointsWonPercent','secondServePointsWon'),aces:nv('aces'),dblFaults:nv('doubleFaults'),bpSaved:dv('breakPointsSavedPercent','breakPointsSaved'),bpConv:dv('breakPointsConvertedPercent','breakPointsConverted'),firstRetWon:dv('firstServeReturnPointsWonPercent'),matchWinPct:dv('matchWinPercent','winPercent'),mW:nv('matchesWon','wins'),mL:nv('matchesLost','losses')}}
+async function fetchTennisPlayerStats(lg,aid){if(!aid)return null;try{const r=await fetch(`https://sports.core.api.espn.com/v2/sports/tennis/leagues/${lg}/athletes/${aid}`);return r.ok?r.json():null}catch(e){return null}}
+function extractTennisStats(d){if(!d)return null;return{hand:d.hand?.abbreviation||null,handFull:d.hand?.displayValue||null,age:d.age||null,country:d.birthPlace?.country?.displayName||null}}
 async function fetchNBATeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${tid}/statistics`);return r.ok?r.json():null}catch(e){return null}}
 function extractNBAStats(d){if(!d)return null;const all=[];(d.results?.splits?.categories||d.splits?.categories||[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));(d.results?.stats||[]).forEach(s=>all.push(s));const gs=(...ns)=>{for(const n of ns){const s=all.find(x=>x.name===n||x.abbreviation===n);if(s)return s}return null};const dv=(...ns)=>gs(...ns)?.displayValue||null;return{offRtg:dv('offensiveRating','offRating'),defRtg:dv('defensiveRating','defRating'),netRtg:dv('netRating'),pace:dv('possessionsPerGame','pace'),ppg:dv('avgPoints','pointsPerGame'),papg:dv('avgPointsAllowed','opponentPointsPerGame')}}
 function isB2B(form,gameTm){return form.length>0&&Math.round((gameTm-form[0].dt)/864e5)<=1}
@@ -699,8 +704,8 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       else reasons.push(`Near-identical rankings on ${surfTxt} — ${side.nm} (#${sp2}) vs ${other.nm} (#${op2}); coin-flip territory, surface form and recent results should break the tie`)}
     else if(awRank!==null||hmRank!==null){const ranked=awRank?g.aw:g.hm,r=awRank||hmRank,unr=awRank?g.hm:g.aw;
       reasons.push(`${ranked.nm} (${rankTier(r)}) faces ${unr.nm} (unranked) — ranked player holds a structural edge in ${g.spL}`)}
-    if(g.cat==='tennis'&&awTn?.firstSrvWon&&hmTn?.firstSrvWon){const awFw=parseFloat(awTn.firstSrvWon),hmFw=parseFloat(hmTn.firstSrvWon);if(!isNaN(awFw)&&!isNaN(hmFw)){const sd=awFw-hmFw;if(Math.abs(sd)>=5){const b3=sd>0?g.aw:g.hm,w3=sd>0?g.hm:g.aw,bfw=Math.max(awFw,hmFw);score+=(sd>0?-1:1)*1.5;reasons.push(`Serve edge: ${b3.nm} winning ${bfw.toFixed(0)}% of first serve points \u2014 service dominance is a primary tennis ML signal`)}}}
-    if(g.cat==='tennis'&&awTn?.bpConv&&hmTn?.bpConv){const awBp=parseFloat(awTn.bpConv),hmBp=parseFloat(hmTn.bpConv);if(!isNaN(awBp)&&!isNaN(hmBp)){const bd=awBp-hmBp;if(Math.abs(bd)>=8){const b4=bd>0?g.aw:g.hm,bpc=Math.max(awBp,hmBp);reasons.push(`Break point conversion: ${b4.nm} at ${bpc.toFixed(0)}% \u2014 higher conversion rate is a strong predictor of match wins`)}}}
+    if(g.cat==='tennis'&&g.aw.seed&&g.hm.seed){const sd=g.hm.seed-g.aw.seed;if(Math.abs(sd)>=2){score+=sd*0.3;const bs=sd>0?g.aw:g.hm,ws=sd>0?g.hm:g.aw;reasons.push(`Tournament seeding edge: ${bs.nm} (seed ${bs.seed}) vs ${ws.nm} (seed ${ws.seed}) \u2014 lower seed = committee's form assessment, reliable late-round signal`)}}
+    if(g.cat==='tennis'&&awTn?.hand&&hmTn?.hand&&awTn.hand!==hmTn.hand){const surf=getSurface(g.ven);const lhPlayer=awTn.hand==='L'?g.aw:g.hm;if(surf==='clay')reasons.push(`Left-hander advantage: ${lhPlayer.nm} — LH spin kicks to opponent's backhand on clay, historically one of the strongest matchup edges in tennis`);else if(surf==='grass')reasons.push(`${lhPlayer.nm} (left-handed) — LH serve wide in the deuce court is uniquely effective on grass`)}
     if(mlEdges.length)reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 implied probability gap signals sharp value`);
     if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
@@ -903,7 +908,7 @@ function buildGamesContext(){
     ctx+=`[${g.spL}] ${g.aw.nm} @ ${g.hm.nm} — ${t}\n`;
     if(g.aw.rec||g.hm.rec)ctx+=`  Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
     if(g.aw.rank||g.hm.rank)ctx+=`  Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:'?'} vs ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:'?'}\n`;
-    if(g.cat==='tennis'&&g.ven){const surf=getSurface(g.ven);ctx+=`  Surface: ${surf.charAt(0).toUpperCase()+surf.slice(1)} — ${surf==='clay'?'clay specialist advantage matters most here':surf==='grass'?'grass is volatile — serve dominance elevated':surf==='indoor'?'indoor hard court — conditions neutral':'hard court baseline game'}\n`}
+    if(g.cat==='tennis'){const surf=getSurface(g.ven);if(g.round||g.tnName)ctx+=`  Tournament: ${g.tnName||''}${g.round?' — '+g.round:''}\n`;if(g.aw.seed||g.hm.seed)ctx+=`  Seeds: ${g.aw.nm}${g.aw.seed?' ['+g.aw.seed+']':''} vs ${g.hm.nm}${g.hm.seed?' ['+g.hm.seed+']':''}\n`;ctx+=`  Surface: ${surf} — ${surf==='clay'?'clay specialist/heavy topspin players have structural edge':surf==='grass'?'serve dominance elevated, LH advantage in deuce court':surf==='indoor'?'fast conditions, serve hold rates elevated':'balanced hard court'}\n`}
     if(g.odds?.bookmakers?.length){const bk=g.odds.bookmakers[0];
       const ml=bk.markets.find(m=>m.key==='h2h'),sp=bk.markets.find(m=>m.key==='spreads'),to=bk.markets.find(m=>m.key==='totals');
       if(ml)ctx+=`  ML: ${ml.outcomes.map(o=>o.name+' '+(o.price>0?'+':'')+o.price).join(' | ')}\n`;
