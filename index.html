@@ -703,11 +703,11 @@ function mobBack(){document.body.classList.remove('mob-detail-open')}
 async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$('detailPanel');
   if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
-  let af=[],hf=[],pitchers=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null,awNhl=null,hmNhl=null,tnSum=null,tnH2H=null,lwotArt=null,awTnApi=null,hmTnApi=null;
+  let af=[],hf=[],pitchers=null,goalies=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null,awNhl=null,hmNhl=null,tnSum=null,tnH2H=null,lwotArt=null,awTnApi=null,hmTnApi=null;
   const _ec=g.isTeam&&g.aw.id&&E[g.sp],_eo=g.st!=='STATUS_FINAL';
   const [_fr,_sm,_wx,_awt,_hmt,_awn,_hmn,_awnh,_hmnh,_tns,_h2h,_lwot,_tnp]=await Promise.all([
     _ec?(()=>{const c=E[g.sp],szn=sportSeason(g.cat);return Promise.all([espnSched(c.s,c.l,g.aw.id,szn),espnSched(c.s,c.l,g.hm.id,szn)])})():Promise.resolve(null),
-    _eo&&g.cat==='mlb'?fetchGameSummary(g.cat,g.id):Promise.resolve(null),
+    _eo&&(g.cat==='mlb'||g.cat==='nhl')?fetchGameSummary(g.cat,g.id):Promise.resolve(null),
     _eo&&isOutdoor(g.ven,g.cat)?fetchWeather(cityFromTeam(g.hm.nm)):Promise.resolve(null),
     _eo&&g.cat==='tennis'&&g.aw.id?fetchTennisPlayerStats(g.sp,g.aw.id):Promise.resolve(null),
     _eo&&g.cat==='tennis'&&g.hm.id?fetchTennisPlayerStats(g.sp,g.hm.id):Promise.resolve(null),
@@ -720,7 +720,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
     _eo&&g.cat==='tennis'?fetchLWOTArticle(g.aw.nm,g.hm.nm):Promise.resolve(null),
     g.cat==='tennis'&&TN_API_KEY?fetchTNPlayerPair(g.sp,g.aw.nm,g.hm.nm):Promise.resolve(null)]);
   if(_fr){af=xForm(_fr[0],g.aw.id);hf=xForm(_fr[1],g.hm.id)}
-  if(_sm)pitchers=extractPitchers(_sm);
+  if(_sm){if(g.cat==='mlb')pitchers=extractPitchers(_sm);if(g.cat==='nhl')goalies=extractGoalies(_sm)}
   if(_wx)weather=_wx;
   if(_awt)awTn=extractTennisStats(_awt);
   if(_hmt)hmTn=extractTennisStats(_hmt);
@@ -763,7 +763,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   }
 
   // PICKS with grading for final games
-  const picks=genPicks(g,af,hf,pitchers,weather,{awTn,hmTn,awNba,hmNba,tnH2H,lwotArt,awTnApi,hmTnApi});
+  const picks=genPicks(g,af,hf,pitchers,weather,{awTn,hmTn,awNba,hmNba,awNhl,hmNhl,goalies,tnH2H,lwotArt,awTnApi,hmTnApi});
   gamePicksCache.set(g.id,picks);
   const isFinal=g.st==='STATUS_FINAL';
   if(isFinal&&(g.aw.sc!=null||g.hm.sc!=null)){
@@ -962,11 +962,32 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${fatigue}</td><td>${st?.ppg||'--'}</td><td style="${oppClr}">${st?.oppPpg||'--'}</td><td style="${netClr};font-weight:700">${net!=null?(net>=0?'+':'')+net:'--'}</td><td>${st?.fgPct||'--'}</td><td>${st?.tpPct||'--'}</td><td>${st?.toPg||'--'}</td></tr>`});
     h+=`</tbody></table></div>`}
   if(g.cat==='nhl'&&(awNhl||hmNhl)){
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS</div><table class="dtable"><thead><tr><th>TEAM</th><th>GF/G</th><th>GA/G</th><th>SV%</th><th>SH%</th><th>SOG/G</th><th>FO%</th></tr></thead><tbody>`;
-    [[g.aw,awNhl],[g.hm,hmNhl]].forEach(([tm,st])=>{
+    const awB2nh=isB2B(af,g.tm),hmB2nh=isB2B(hf,g.tm);
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0">season averages</span></div><table class="dtable"><thead><tr><th>TEAM</th><th>GF/G</th><th>GA/G</th><th>NET</th><th>PP%</th><th>PK%</th><th>SV%</th></tr></thead><tbody>`;
+    [[g.aw,awNhl,awB2nh],[g.hm,hmNhl,hmB2nh]].forEach(([tm,st,b2b])=>{
+      const net=st?.net?parseFloat(st.net):null;
+      const netClr=net!=null?(net>=0.3?'color:var(--grn)':net<=-0.3?'color:var(--red)':'color:var(--t2)'):'';
+      const ppVal=st?.ppPct?parseFloat(st.ppPct):null;
+      const pkVal=st?.pkPct?parseFloat(st.pkPct):null;
+      const ppClr=ppVal!=null?(ppVal>=22?'color:var(--grn)':ppVal<15?'color:var(--red)':'color:var(--t2)'):'';
+      const pkClr=pkVal!=null?(pkVal>=82?'color:var(--grn)':pkVal<75?'color:var(--red)':'color:var(--t2)'):'';
       const svCl=st?.savePct&&parseFloat(st.savePct)>=.920?'color:var(--grn)':st?.savePct&&parseFloat(st.savePct)<.895?'color:var(--red)':'';
-      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}</td><td>${st?.gpg||'--'}</td><td>${st?.gaa||'--'}</td><td style="${svCl}">${st?.savePct||'--'}</td><td>${st?.shootPct||'--'}</td><td>${st?.shotsPg||'--'}</td><td>${st?.foPct||'--'}</td></tr>`});
+      const fatigue=b2b?`<span style="font-size:8px;font-weight:700;color:var(--red);background:rgba(255,71,87,.12);border-radius:2px;padding:1px 4px;margin-left:3px">B2B</span>`:'';
+      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${fatigue}</td><td>${st?.gpg||'--'}</td><td>${st?.gaa||'--'}</td><td style="${netClr};font-weight:700">${net!=null?(net>=0?'+':'')+net:'--'}</td><td style="${ppClr}">${st?.ppPct!=null?st.ppPct+'%':'--'}</td><td style="${pkClr}">${st?.pkPct!=null?st.pkPct+'%':'--'}</td><td style="${svCl}">${st?.savePct||'--'}</td></tr>`});
     h+=`</tbody></table></div>`}
+  if(g.cat==='nhl'&&goalies){const ag=goalies.away,hg=goalies.home;
+    const _glEdge=ag&&hg?(parseFloat(ag.savePct)<parseFloat(hg.savePct)&&hg.savePct!=='--'?g.hm:parseFloat(ag.savePct)>parseFloat(hg.savePct)&&ag.savePct!=='--'?g.aw:null):null;
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>GOALTENDER MATCHUP${_glEdge?` <span style="font-size:9px;color:var(--grn);font-weight:700;margin-left:6px">EDGE: ${_glEdge.ab}</span>`:''}</div><div class="sp-matchup">`;
+    [['away',ag,g.aw],['home',hg,g.hm]].forEach(([side,p,tm])=>{if(!p)return;
+      const sv=parseFloat(p.savePct)||0,gaa=parseFloat(p.gaa)||99;
+      const qlbl=p.savePct==='--'?'TBD':sv>=.930?'ELITE':sv>=.910?'SOLID':sv>=.895?'AVG':'WEAK';
+      const qclr=p.savePct==='--'?'var(--t4)':sv>=.930?'var(--grn)':sv>=.910?'var(--cyn)':sv>=.895?'var(--amb)':'var(--red)';
+      const svClr=p.savePct==='--'?'var(--t3)':sv>=.925?'var(--grn)':sv>=.905?'var(--cyn)':sv>=.895?'var(--amb)':'var(--red)';
+      const gaaClr=p.gaa==='--'?'var(--t3)':gaa<2.50?'var(--grn)':gaa<3.00?'var(--cyn)':gaa<3.50?'var(--amb)':'var(--red)';
+      const rec=`${p.w}-${p.l}-${p.ot}`;
+      h+=`<div class="sp-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div class="sp-nm">${tm.ab} <span style="font-size:9px;font-weight:700;color:${qclr}">[${qlbl}]</span></div></div><div style="font-size:11px;color:var(--t1);font-weight:500;margin-bottom:6px">${p.name}</div><div class="sp-stats"><div class="sp-stat"><div class="sp-sv" style="color:${svClr}">${p.savePct}</div><div class="sp-sl">SV%</div></div><div class="sp-stat"><div class="sp-sv" style="color:${gaaClr}">${p.gaa}</div><div class="sp-sl">GAA</div></div><div class="sp-stat"><div class="sp-sv" style="color:var(--t2)">${rec}</div><div class="sp-sl">W-L-OT</div></div></div></div>`;
+    });
+    h+=`</div></div>`}
   if(af.length&&hf.length){const ad=Math.round((g.tm-af[0].dt)/864e5),hd=Math.round((g.tm-hf[0].dt)/864e5),df=Math.abs(ad-hd),cls=d=>d<=1?'tired':d>=3?'fresh':'normal',et=ad>hd?g.aw.nm:hd>ad?g.hm.nm:null;
     h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>REST & SCHEDULE</div><div class="rest-bar"><div class="rest-team">${g.aw.nm}</div><div class="rest-days ${cls(ad)}">${ad}d</div></div><div class="rest-bar"><div class="rest-team">${g.hm.nm}</div><div class="rest-days ${cls(hd)}">${hd}d</div></div>${df>=2&&et?`<div class="rest-edge adv">REST EDGE: ${et} (+${df}d)</div>`:'<div class="rest-edge even">REST: Even</div>'}</div>`}
   if(g.inj.aw.length||g.inj.hm.length){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--red)"></div>INJURY REPORT</div>`;
@@ -987,8 +1008,9 @@ function formBar(nm,f){if(!f.length)return'';const w=f.filter(x=>x.r==='W').leng
   let h=`<div class="form-row"><div class="form-team">${nm}</div><div class="form-blocks">`;[...f].reverse().forEach((x,i)=>{const isRecent=i>=f.length-5;h+=`<div class="form-block ${x.r}" style="${isRecent?'opacity:1':'opacity:.55'}" title="${x.r} ${x.sc} ${x.hm?'vs':'@'} ${x.opp}">${x.r}</div>`});
   return h+`</div><div class="form-streak ${sc}">${sk}</div><div style="font-size:10px;color:var(--t3)">${w}-${f.length-w}</div><div style="font-size:9px;font-weight:600;color:${l5clr};margin-left:6px">L5:${l5w}-${5-l5w}</div></div>`}
 function streak(f){if(!f.length)return'';let c=1;for(let i=1;i<f.length;i++){if(f[i].r===f[0].r)c++;else break}return f[0].r+c}
-async function fetchGameSummary(cat,gid){const ep=cat==='mlb'?'baseball/mlb':cat==='nfl'?'football/nfl':null;if(!ep)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${ep}/summary?event=${gid}`);return r.ok?r.json():null}catch(e){return null}}
+async function fetchGameSummary(cat,gid){const ep=cat==='mlb'?'baseball/mlb':cat==='nfl'?'football/nfl':cat==='nhl'?'hockey/nhl':null;if(!ep)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${ep}/summary?event=${gid}`);return r.ok?r.json():null}catch(e){return null}}
 function extractPitchers(d){const comp=d?.header?.competitions?.[0];if(!comp)return null;const res={};(comp.competitors||[]).forEach(c=>{const p=c.probables?.[0];if(!p?.athlete)return;const cats=p.statistics?.splits?.categories||[];const sv=n=>cats.find(x=>x.name===n);const fi=sv('fullInnings')?.value||0,pi=sv('partInnings')?.value||0,ip=fi+pi/3,k=sv('strikeouts')?.value||0,bb=sv('baseOnBalls')?.value||sv('walks')?.value||0,hr=sv('homeRunsAllowed')?.value||sv('homeRuns')?.value||0;res[c.homeAway]={name:p.athlete.shortName||p.athlete.fullName,hand:p.athlete.throws?.abbreviation||'?',era:sv('ERA')?.displayValue||'--',whip:sv('WHIP')?.displayValue||'--',ip:ip.toFixed(1),k9:ip>1?(k/ip*9).toFixed(1):'--',bb9:ip>1?(bb/ip*9).toFixed(1):'--',hr9:ip>1?(hr/ip*9).toFixed(1):'--',w:sv('wins')?.value||0,l:sv('losses')?.value||0}});return Object.keys(res).length?res:null}
+function extractGoalies(d){const comp=d?.header?.competitions?.[0];if(!comp)return null;const res={};(comp.competitors||[]).forEach(c=>{const p=c.probables?.[0];if(!p?.athlete)return;const cats=p.statistics?.splits?.categories||[];const sv=n=>cats.find(x=>x.name===n);res[c.homeAway]={name:p.athlete.shortName||p.athlete.fullName,savePct:sv('savePct')?.displayValue||sv('savePercentage')?.displayValue||'--',gaa:sv('goalsAgainstAvg')?.displayValue||sv('GAA')?.displayValue||'--',w:sv('wins')?.value||0,l:sv('losses')?.value||0,ot:sv('overtimeLosses')?.value||0}});return Object.keys(res).length?res:null}
 async function fetchWeather(city){if(!city)return null;try{const r=await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);if(!r.ok)return null;const d=await r.json();const c=d.current_condition?.[0];if(!c)return null;return{temp:parseInt(c.temp_F),wind:parseInt(c.windspeedMiles),windDir:c.winddir16Point,desc:c.weatherDesc?.[0]?.value||''}}catch(e){return null}}
 function getMLBParkFactor(ven){const pf={'coors':1.15,'great american':1.09,'globe life':1.07,'citizens bank':1.06,'yankee':1.05,'fenway':1.04,'angel':1.03,'wrigley':1.03,'guaranteed rate':1.02,'oracle':0.93,'petco':0.92,'t-mobile':0.93,'dodger':0.95,'kauffman':0.96,'tropicana':0.93,'camden':0.96,'progressive':0.97,'marlins':0.94,'busch':0.97};const vl=(ven||'').toLowerCase();for(const[k,v]of Object.entries(pf)){if(vl.includes(k))return v}return 1.0}
 function isOutdoor(venue,cat){if(!['mlb','nfl'].includes(cat))return false;if(cat==='nfl')return!/lucas oil|mercedes.benz|state farm|allegiant|ford field|caesars superdome|u\.s\. bank|nrg stadium|dome at|sofi|klimt|kia metlife|dome/i.test(venue||'');return!/tropicana|rogers centre|minute maid|chase field|loandepot|american family field/i.test(venue||'')}
@@ -1008,7 +1030,7 @@ async function fetchTennisMatchSummary(sp,gid,awNm,hmNm,awId,hmId){try{const awL
 function extractTennisStats(d){if(!d)return null;return{hand:d.hand?.abbreviation||null,handFull:d.hand?.displayValue||null,age:d.age||null,country:d.birthPlace?.country?.displayName||null}}
 async function fetchNBATeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${tid}/statistics`);return r.ok?r.json():null}catch(e){return null}}
 async function fetchNHLTeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/${tid}/statistics?season=${sportSeason('nhl')}&seasontype=2`);return r.ok?r.json():null}catch(e){return null}}
-function extractNHLStats(d){if(!d)return null;const all=[];const cats=d.results?.stats?.categories||[];(Array.isArray(cats)?cats:[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));const dv=n=>{const s=all.find(x=>x.name===n);return s?.displayValue||null};const v=n=>{const s=all.find(x=>x.name===n);return s?.value??null};const gp=v('games')||1;return{gaa:dv('avgGoalsAgainst'),savePct:dv('savePct'),gpg:(v('goals')!=null?(v('goals')/gp).toFixed(2):null),shotsPg:(v('shotsTotal')!=null?(v('shotsTotal')/gp).toFixed(1):null),shootPct:dv('shootingPct'),foPct:dv('faceoffPercent'),ppg:v('powerPlayGoals')}}
+function extractNHLStats(d){if(!d)return null;const all=[];const cats=d.results?.stats?.categories||[];(Array.isArray(cats)?cats:[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));const dv=n=>{const s=all.find(x=>x.name===n);return s?.displayValue||null};const v=n=>{const s=all.find(x=>x.name===n);return s?.value??null};const gp=v('games')||1;const goals=v('goals'),goalsAg=v('goalsAgainst');const ppGoals=v('powerPlayGoals'),ppOpp=v('powerPlayOpportunities');const pkGoals=v('penaltyKillGoals'),pkOpp=v('penaltyKillOpportunities');const ppPct=dv('powerPlayPct')||dv('powerPlayPercentage')||(ppGoals!=null&&ppOpp>0?(ppGoals/ppOpp*100).toFixed(1):null);const pkPct=dv('penaltyKillPct')||dv('penaltyKillPercentage')||(pkGoals!=null&&pkOpp!=null&&pkOpp>0?((1-pkGoals/pkOpp)*100).toFixed(1):null);const net=goals!=null&&goalsAg!=null?((goals-goalsAg)/gp).toFixed(2):null;return{gaa:dv('avgGoalsAgainst'),savePct:dv('savePct'),gpg:goals!=null?(goals/gp).toFixed(2):null,shotsPg:v('shotsTotal')!=null?(v('shotsTotal')/gp).toFixed(1):null,shootPct:dv('shootingPct'),foPct:dv('faceoffPercent'),ppg:ppGoals,ppPct,pkPct,net}}
 async function fetchGameProps(sport_key,eventId){if(!AK||!sport_key||!eventId)return null;const mkts=PROP_MARKETS[sport_key];if(!mkts)return null;try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/${sport_key}/events/${eventId}/odds?apiKey=${AK}&markets=${mkts}&bookmakers=${PROP_BOOKS}&oddsFormat=american`);return r.ok?r.json():null}catch(e){return null}}
 function renderProps(data,cat){if(!data?.bookmakers?.length)return'';const all={};data.bookmakers.forEach(b=>b.markets.forEach(m=>m.outcomes.forEach(o=>{const k=`${m.key}::${o.description||o.name}`;if(!all[k])all[k]={mk:m.key,nm:o.description||o.name,lines:[]};all[k].lines.push({pt:o.point,pr:o.price,bk:b.title})})));
   const players={};Object.values(all).forEach(prop=>{const nm=prop.nm;if(!players[nm])players[nm]={};const mkt=prop.mk.replace('player_','').replace('pitcher_','').replace('batter_','');const best=prop.lines.reduce((b,x)=>!b||x.pr>b.pr?x:b,null);if(best?.pt!=null)players[nm][mkt]=`${best.pt} (${best.pr>0?'+':''}${best.pr})`;});
@@ -1036,8 +1058,8 @@ function getSurface(venue){const v=(venue||'').toLowerCase();if(/clay|terre batt
 function rankTier(r){if(!r)return'unranked';if(r<=10)return`#${r} (top 10)`;if(r<=20)return`#${r} (top 20)`;if(r<=50)return`#${r} (top 50)`;if(r<=100)return`#${r} (top 100)`;return`#${r}`}
 function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;const w=parseInt(m[1]),l=parseInt(m[2]);return w+l>0?w/(w+l):null}
 function genPicks(g,af,hf,pitchers,weather,ext={}){
-  const{awTn,hmTn,awNba,hmNba,tnH2H,lwotArt,awTnApi,hmTnApi}=ext;
-  const awB2B=g.cat==='nba'&&isB2B(af,g.tm),hmB2B=g.cat==='nba'&&isB2B(hf,g.tm);
+  const{awTn,hmTn,awNba,hmNba,awNhl,hmNhl,goalies,tnH2H,lwotArt,awTnApi,hmTnApi}=ext;
+  const awB2B=(g.cat==='nba'||g.cat==='nhl')&&isB2B(af,g.tm),hmB2B=(g.cat==='nba'||g.cat==='nhl')&&isB2B(hf,g.tm);
   const awF3=g.cat==='nba'&&is3in4(af,g.tm),hmF3=g.cat==='nba'&&is3in4(hf,g.tm);
   const awRecPct=parseRec(g.aw.rec),hmRecPct=parseRec(g.hm.rec);
   const awRank=g.aw.rank||null,hmRank=g.hm.rank||null;
@@ -1111,8 +1133,9 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(g.ha>0)reasons.push(`Home-court worth ~${g.ha}pts in ${spName} for ${g.hm.nm}`);
     if(spEdges.length)reasons.push(`Sharp signal: ${spEdges[0].ep.toFixed(1)}% spread edge at ${spEdges[0].bb}`);
     if(g.cat==='nba'&&awNba?.netPts!=null&&hmNba?.netPts!=null){const awNet=parseFloat(awNba.netPts),hmNet=parseFloat(hmNba.netPts);if(!isNaN(awNet)&&!isNaN(hmNet)){const nd=hmNet-awNet;if(Math.abs(nd)>=3){score+=nd*0.3;const b2=nd>0?g.hm:g.aw,w2=nd>0?g.aw:g.hm,bNet=Math.max(awNet,hmNet),wNet=Math.min(awNet,hmNet);reasons.push(`Net rating: ${b2.nm} ${bNet>=0?'+':''}${bNet.toFixed(1)} vs ${w2.nm} ${wNet>=0?'+':''}${wNet.toFixed(1)} — ${Math.abs(nd).toFixed(1)}-pt differential favors ${b2.ab} to cover`)}}}
+    if(g.cat==='nhl'&&(awNhl||hmNhl)){const awNet=awNhl?.net?parseFloat(awNhl.net):null,hmNet=hmNhl?.net?parseFloat(hmNhl.net):null;if(awNet!==null&&hmNet!==null&&!isNaN(awNet)&&!isNaN(hmNet)){const nd=hmNet-awNet;if(Math.abs(nd)>=0.4){score+=nd*2.5;const b2=nd>0?g.hm:g.aw,w2=nd>0?g.aw:g.hm;reasons.push(`Goal differential edge: ${b2.nm} ${(nd>0?hmNet:awNet)>=0?'+':''}${(nd>0?hmNet:awNet)} net G/gm vs ${w2.nm} ${(nd>0?awNet:hmNet)>=0?'+':''}${(nd>0?awNet:hmNet)} — meaningful season-long edge`)}}const awPP=awNhl?.ppPct?parseFloat(awNhl.ppPct):null,hmPP=hmNhl?.ppPct?parseFloat(hmNhl.ppPct):null;if(awPP!=null&&hmPP!=null&&!isNaN(awPP)&&!isNaN(hmPP)){const ppDiff=hmPP-awPP;if(Math.abs(ppDiff)>=5){score+=ppDiff*0.15;const bPP=ppDiff>0?g.hm:g.aw,bPct=Math.max(awPP,hmPP).toFixed(1),wPct=Math.min(awPP,hmPP).toFixed(1);reasons.push(`Special teams edge: ${bPP.nm} PP ${bPct}% vs opponent ${wPct}% — ${Math.abs(ppDiff).toFixed(1)}pp gap is a reliable ATS signal in hockey`)}}}
     if(g.cat==='nba'&&(awF3||hmF3)&&!(awF3&&hmF3)){score+=(awF3?-1:1)*3.5;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — covers only ~38% ATS on 3-in-4; ${awF3?g.hm.nm:g.aw.nm} has significant fatigue edge`)}
-    else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*2.5;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on a back-to-back — B2B teams cover only ~44% ATS; ${awB2B?g.hm.nm:g.aw.nm} has the fatigue edge`)}
+    if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*2.5;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on a back-to-back — B2B teams cover only ~44% ATS${g.cat==='nhl'?' in the NHL':''}`)}
     const side=score>=0?g.hm:g.aw,mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     const spSideOdds=spFav&&g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='spreads')?.outcomes?.find(o=>o.name===side.nm||side.nm.includes(o.name.split(' ').pop()));
     const spSideSpread=spSideOdds?.point??( spFav&&g.eOdds?.spread!==undefined?(side===g.hm?g.eOdds.spread:-g.eOdds.spread):null);
@@ -1163,6 +1186,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       // 3-in-4 fatigue
       const f3B2B=awF3||hmF3;if(f3B2B&&!(awF3&&hmF3)){ts2-=2;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — severe fatigue factor, strong UNDER lean`)}
       else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){ts2-=1.5;if(!reasons.find(r=>r.includes('back-to-back')))reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back — reduced output expected, UNDER lean`)}}
+    if(g.cat==='nhl'&&(awNhl||hmNhl)){const awGpg=awNhl?.gpg?parseFloat(awNhl.gpg):null,hmGpg=hmNhl?.gpg?parseFloat(hmNhl.gpg):null,awGaa=awNhl?.gaa?parseFloat(awNhl.gaa):null,hmGaa=hmNhl?.gaa?parseFloat(hmNhl.gaa):null;if(awGpg&&hmGpg&&awGaa&&hmGaa&&!isNaN(awGpg)&&!isNaN(hmGaa)){const proj=((awGpg+hmGaa)/2)+((hmGpg+awGaa)/2);if(toOver){const diff=proj-toOver.point;if(Math.abs(diff)>0.4){ts2+=diff*1.5;const dir=diff>0?'OVER':'UNDER';reasons.push(`Defense-adjusted projection: ${proj.toFixed(2)} goals vs posted ${toOver.point} — lean ${dir}`);}else reasons.push(`Projected ${proj.toFixed(2)} goals sits close to posted ${toOver.point} — thin edge`)}else reasons.push(`Goal model: ${awGpg}+${hmGpg} scoring vs ${awGaa}+${hmGaa} defense → projected ${proj.toFixed(2)}/gm`)}const awPP=awNhl?.ppPct?parseFloat(awNhl.ppPct):null,hmPP=hmNhl?.ppPct?parseFloat(hmNhl.ppPct):null,awPK=awNhl?.pkPct?parseFloat(awNhl.pkPct):null,hmPK=hmNhl?.pkPct?parseFloat(hmNhl.pkPct):null;if(awPP!=null&&hmPP!=null&&awPK!=null&&hmPK!=null){const ppMismatch=(awPP>21&&hmPK<78)||(hmPP>21&&awPK<78);if(ppMismatch){ts2+=0.8;reasons.push(`PP/PK mismatch: high power play vs weak penalty kill — expect above-average special teams goals, OVER lean`)}}if((awB2B||hmB2B)&&!(awB2B&&hmB2B)&&!reasons.find(r=>r.includes('back-to-back'))){ts2-=1.0;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back in NHL — fatigue suppresses scoring, UNDER lean`)}}
     const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
     const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
     picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
@@ -1553,7 +1577,7 @@ function buildGamesContext(){
     // Cached team stats
     const cached=gameStatsCache.get(g.id);
     if(cached?.cat==='nba'){const{awSt,hmSt}=cached;if(awSt||hmSt)ctx+=`  Team stats: ${g.aw.nm} PPG ${awSt?.ppg||'?'} FG% ${awSt?.fgPct||'?'} | ${g.hm.nm} PPG ${hmSt?.ppg||'?'} FG% ${hmSt?.fgPct||'?'}\n`}
-    if(cached?.cat==='nhl'){const{awSt,hmSt}=cached;if(awSt||hmSt)ctx+=`  Team stats: ${g.aw.nm} GF/G ${awSt?.gpg||'?'} SV% ${awSt?.savePct||'?'} | ${g.hm.nm} GF/G ${hmSt?.gpg||'?'} SV% ${hmSt?.savePct||'?'}\n`}
+    if(cached?.cat==='nhl'){const{awSt,hmSt}=cached;if(awSt||hmSt)ctx+=`  Team stats: ${g.aw.nm} GF/G ${awSt?.gpg||'?'} GAA ${awSt?.gaa||'?'} PP% ${awSt?.ppPct||'?'} PK% ${awSt?.pkPct||'?'} SV% ${awSt?.savePct||'?'} | ${g.hm.nm} GF/G ${hmSt?.gpg||'?'} GAA ${hmSt?.gaa||'?'} PP% ${hmSt?.ppPct||'?'} PK% ${hmSt?.pkPct||'?'} SV% ${hmSt?.savePct||'?'}\n`}
     const pitchers=gamePitcherCache.get(g.id);
     if(pitchers){const ap=pitchers.away,hp=pitchers.home;if(ap||hp)ctx+=`  SP: ${ap?g.aw.nm+' — '+ap.name+' '+ap.era+' ERA '+ap.k9+' K/9':'TBD'} | ${hp?g.hm.nm+' — '+hp.name+' '+hp.era+' ERA '+hp.k9+' K/9':'TBD'}\n`}
     ctx+='\n';
