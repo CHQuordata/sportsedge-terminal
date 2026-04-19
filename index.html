@@ -536,6 +536,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
 
   // PICKS with grading for final games
   const picks=genPicks(g,af,hf,pitchers,weather,{awTn,hmTn,awNba,hmNba,tnH2H,lwotArt});
+  gamePicksCache.set(g.id,picks);
   const isFinal=g.st==='STATUS_FINAL';
   if(isFinal&&(g.aw.sc!=null||g.hm.sc!=null)){
     const awSc=g.aw.sc??'',hmSc=g.hm.sc??'';
@@ -949,6 +950,7 @@ function toggleSC(){$('scOverlay').classList.toggle('vis')}
 let CLAUDE_KEY=localStorage.getItem('et_claude_key')||'',cView='slate',selPickIdx=-1,isGenerating=false,todayPicksData=null,cDateFilter='today';
 let BANKROLL=parseFloat(localStorage.getItem('bankroll'))||0;
 const aiAnalysisCache=new Map();
+const gamePicksCache=new Map();
 
 const DEFAULT_LEARNED_RULES=`1. Max 8 graded picks per slate. Pick #9 goes to leans.
 2. Max 4 MEDIUM-confidence picks. Demote weakest to leans if exceeded.
@@ -1273,6 +1275,8 @@ async function aiAnalyzeGame(idx){
   if(g.odds?.bookmakers?.length){const bk=g.odds.bookmakers[0];const ml=bk.markets.find(m=>m.key==='h2h'),sp=bk.markets.find(m=>m.key==='spreads'),to=bk.markets.find(m=>m.key==='totals');if(ml)ctx+=`ML: ${ml.outcomes.map(o=>o.name+' '+fp(o.price)).join(' / ')}\n`;if(sp)ctx+=`Spread: ${sp.outcomes.map(o=>o.name+' '+fp(o.point)+' ('+fp(o.price)+')').join(' / ')}\n`;if(to)ctx+=`Total: O/U ${to.outcomes.find(o=>o.name==='Over')?.point}\n`}
   const ge=allE.filter(e=>e.g.id===g.id);if(ge.length)ctx+=`Book edges: ${ge.map(e=>e.ml+' '+e.side+' '+e.ep.toFixed(1)+'% @ '+e.bb).join(', ')}\n`;
   if(g.lineMove){if(g.lineMove.spMv)ctx+=`Line moved: spread ${g.lineMove.spMv>0?'+':''}${g.lineMove.spMv} since last scan\n`}
+  const _gp=gamePicksCache.get(g.id)||[];
+  if(_gp.length){ctx+=`\nALGO PICKS (validate or challenge these):\n`;_gp.forEach(pk=>{ctx+=`  [${pk.label}] ${pk.pick} — ${pk.conf}${pk.score!=null?' (score:'+pk.score+')':''}\n  Reasoning: ${(pk.reasons||[]).join(' | ')}\n`})}
   const rules=localStorage.getItem('et_learned_rules')||'';
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
   const bySp=rec.by_sport?.[g.cat];
@@ -1280,8 +1284,8 @@ async function aiAnalyzeGame(idx){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:512,
-        system:`You are a sharp sports betting analyst. Give a focused, direct analysis of this specific matchup. Be concise and specific — no generic statements. Cite the actual data points.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
-        messages:[{role:'user',content:ctx+'\n\nProvide: 1) Best bet and why (2-3 sentences max), 2) Key risk factor, 3) Confidence (HIGH/MEDIUM/LOW) with score 1-10. Be direct.'}]})});
+        system:`You are a sharp sports betting analyst acting as a second opinion on algo-generated picks. If algo picks are provided, your job is to validate, challenge, or add nuance — not re-derive from scratch. Agree with specific reasons, flag what the algo missed, or flip the pick if the data warrants it. Be concise, cite actual numbers.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
+        messages:[{role:'user',content:ctx+'\n\nProvide: 1) Verdict on algo pick(s) — agree/challenge/flip and why (2-3 sentences), 2) What the algo likely missed, 3) Final confidence (HIGH/MEDIUM/LOW) with score 1-10.'}]})});
     if(!resp.ok)throw new Error('API error');
     const data=await resp.json();
     const txt=data.content[0].text;
