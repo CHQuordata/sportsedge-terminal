@@ -652,7 +652,9 @@ function setDateFilter(f){cDateFilter=f;['today','tomorrow','all'].forEach(k=>{c
 const US_MAJOR_BOOKS=['fanduel','draftkings','betmgm','caesars','pointsbetus','bet365'];
 function hasUsBookOdds(g){return g.odds?.bookmakers?.some(b=>US_MAJOR_BOOKS.some(k=>(b.key||'').includes(k)||(b.title||'').toLowerCase().includes(k)))}
 let cConfFilter='all';
+function _loadTodayPicks(){if(!todayPicksData){const sd=localStorage.getItem('et_picks_date');if(sd===new Date().toDateString()){try{todayPicksData=JSON.parse(localStorage.getItem('et_picks_today')||'null')}catch(e){}}}}
 function getGameAiConf(g){
+  _loadTodayPicks();
   if(!todayPicksData?.picks)return null;
   const _nm=s=>(s||'').toLowerCase().split(' ').pop();
   const an=_nm(g.aw.nm),hn=_nm(g.hm.nm);
@@ -662,7 +664,7 @@ function getGameAiConf(g){
 function setConfFilter(f){
   cConfFilter=f;
   ['all','HIGH','MEDIUM','picked'].forEach(k=>{const el=$(k==='all'?'cfAll':k==='HIGH'?'cfHigh':k==='MEDIUM'?'cfMed':'cfPicked');if(el)el.classList.toggle('active',k===f)});
-  applyFilters();
+  if(cView==='picks')renderPicksLeaderboard();else applyFilters();
 }
 function applyFilters(){if(cView==='picks')return;let g=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);if(cDateFilter!=='all'){const ref=new Date();if(cDateFilter==='tomorrow')ref.setDate(ref.getDate()+1);const ds=ref.toDateString();g=g.filter(x=>x.tm.toDateString()===ds)}
 // Strip tennis/MMA with no major US book odds — not bettable on FD/DK/BetMGM/Caesars
@@ -1464,11 +1466,8 @@ function renderPicksLeaderboard(){
   }
   const allGraded=todayPicksData.picks.filter(p=>!p.is_lean);
   const leans=todayPicksData.leans||[];
-  // Confidence filter for picks leaderboard
-  const _pConf=localStorage.getItem('et_picks_conf')||'all';
-  const graded=_pConf==='all'?allGraded:allGraded.filter(p=>p.confidence===_pConf);
-  const confBtns=['all','HIGH','MEDIUM'].map(c=>{const lbl=c==='all'?`ALL (${allGraded.length})`:c==='HIGH'?`HIGH (${allGraded.filter(p=>p.confidence==='HIGH').length})`:`MED (${allGraded.filter(p=>p.confidence==='MEDIUM').length})`;const clr=c==='HIGH'?'var(--grn)':c==='MEDIUM'?'var(--amb)':'var(--t2)';return`<button onclick="localStorage.setItem('et_picks_conf','${c}');renderPicksLeaderboard()" style="padding:2px 7px;font-family:var(--mono);font-size:9px;font-weight:600;color:${_pConf===c?clr:'var(--t4)'};background:${_pConf===c?'var(--bg3)':'transparent'};border:1px solid ${_pConf===c?'var(--bdr2)':'transparent'};border-radius:2px;cursor:pointer">${lbl}</button>`}).join('');
-  let h=`<div style="padding:5px 12px;border-bottom:1px solid var(--bdr);display:flex;gap:3px;align-items:center"><span style="font-size:9px;color:var(--t4);margin-right:2px">FILTER:</span>${confBtns}</div><div class="sport-group-hdr">⚡ PICKS (${graded.length}${_pConf!=='all'?' filtered':''})</div>`;
+  const graded=cConfFilter==='all'?allGraded:cConfFilter==='picked'?allGraded:allGraded.filter(p=>p.confidence===cConfFilter);
+  let h=`<div class="sport-group-hdr">⚡ PICKS (${graded.length}${cConfFilter!=='all'?' · '+cConfFilter:''})</div>`;
   graded.forEach((p,i)=>{
     const res=p.result;const sp=p.sport;
     const ic=sp==='tennis'?'🎾':sp==='nba'?'🏀':sp==='nhl'?'🏒':sp==='mlb'?'⚾':sp==='nfl'?'🏈':sp==='mma'?'🥊':'⚡';
