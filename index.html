@@ -108,7 +108,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 /* ── AI PICKS ENGINE ── */
 .picks-tab{color:var(--amb)!important}.picks-tab.active{color:var(--amb)!important;background:rgba(255,171,0,.1)!important;border-color:rgba(255,171,0,.25)!important}
 .pick-item{padding:8px 12px;border-bottom:1px solid rgba(42,42,62,.4);cursor:pointer;transition:background .1s}.pick-item:hover{background:var(--bg3)}.pick-item.sel{background:var(--bg4);border-left:2px solid var(--amb);padding-left:10px}
-.pick-item-top{display:flex;align-items:center;gap:8px;margin-bottom:3px}.pick-item-rank{font-size:9px;font-weight:700;color:var(--t4);min-width:20px}.pick-item-match{font-size:10px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pick-item-pick{font-size:11px;font-weight:600;color:var(--t1);margin-left:28px;margin-top:2px}
+.pick-item-top{display:flex;align-items:center;gap:8px;margin-bottom:3px}.pick-item-rank{font-size:10px;font-weight:700;color:var(--amb);min-width:20px}.pick-item-match{font-size:10px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pick-item-pick{font-size:11px;font-weight:600;color:var(--t1);margin-left:28px;margin-top:2px}
 .pib{padding:1px 5px;font-size:8px;font-weight:700;border-radius:2px;letter-spacing:.5px;white-space:nowrap}
 .pib-HIGH,.pib-W{color:var(--grn);background:var(--grn-bg)}.pib-MEDIUM{color:var(--amb);background:var(--amb-bg)}.pib-LOW{color:var(--t3);background:var(--bg3)}.pib-L{color:var(--red);background:var(--red-bg)}.pib-P,.pib-Q{color:var(--t2);background:var(--bg3)}
 .pick-gen-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;padding:24px;text-align:center}
@@ -552,7 +552,8 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       const hasMetrics=pk.evData||pk.lineRange||(pk.sharp&&pk.sharp.r>0)||kellyPct(pk.conf,pk.pick)>0;
       const r=isFinal?gradeResult(pk,g):null;
       const rBadge=r?`<span class="pib pib-${r}" style="float:right">${r==='W'?'\u2713 WIN':r==='L'?'\u2717 LOSS':'\u25CF PUSH'}</span>`:'';
-      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF Confidence: ${pk.conf}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
+      const scoreSub=pk.score!=null?`<span style="font-size:9px;opacity:.55;font-weight:500;margin-left:6px">${pk.score.toFixed(1)}</span>`:'';
+      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${pk.conf.toLowerCase()}">\u25CF ${pk.conf}${scoreSub}</div>${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;
     });h+=`</div>`;}
   else if(!g.isTeam){h+=`<div class="pick-card low" style="margin:6px 16px"><div class="pick-label">\u26A1 ANALYSIS</div><div class="pick-main" style="font-size:13px">No Lines Available</div><div class="pick-reasoning" style="margin-top:6px">No odds found for this match. The Odds API may not have listed it yet \u2014 try refreshing closer to match time.</div></div>`;}
 
@@ -792,7 +793,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     const pickStr=spSideOdds?`${spSideOdds.name} ${spSideOdds.point>0?'+':''}${spSideOdds.point} (${fp(spSideOdds.price)})`:spSideSpread!==null?`${side.nm} ${spSideSpread>0?'+':''}${spSideSpread}${spSidePrice?` (${fp(spSidePrice)})`:''}`:`${side.nm} to cover`;
     const pickSideName=spSideOdds?spSideOdds.name:spFav?spFav.name:side.nm;
     if(!reasons.length)reasons.push(`${side.nm} (${side.rec||'no record'}) is the edge here based on available matchup data`);
-    picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+    picks.push({label:'SPREAD ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
       evData:calcEV(g,'spreads',pickSideName),lineRange:getLineRange(g,'spreads'),sharp:getSharp(spEdges),
       gradeData:{type:'spread',isHm:side===g.hm,spread:spSideSpread}});
   }
@@ -815,7 +816,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(g.cat==='nba'){if(awNba?.pace&&hmNba?.pace){const awP=parseFloat(awNba.pace),hmP=parseFloat(hmNba.pace);if(!isNaN(awP)&&!isNaN(hmP)){const avgP=(awP+hmP)/2,padj=(avgP-100)*0.18;if(Math.abs(padj)>0.3){ts2+=padj;reasons.push(`${avgP.toFixed(1)} combined pace/game \u2014 ${padj>0?'fast pace pushes total up':'slow pace game, lean under'}`)}}};if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){ts2-=1.5;if(!reasons.find(r=>r.includes('back-to-back')))reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back \u2014 expect reduced output`)}}
     const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
     const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
-    picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+    picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
       evData:calcEV(g,'totals',ou==='OVER'?'Over':'Under'),lineRange:getLineRange(g,'totals'),sharp:getSharp(toEdges),
       gradeData:{type:'total',side:ou,line:toOver?.point??null}});
   }
@@ -885,7 +886,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
     else if(mlO&&mlO.price>-150)reasons.push(`Reasonable juice at ${fp(mlO.price)} makes ML viable standalone or as parlay leg`);
     const pickStr=`${side.nm} ML${mlPrice}`;
-    if(reasons.length)picks.push({label:'MONEYLINE ANALYSIS',pick:pickStr,conf,reasoning:reasons.slice(0,4).join('. ')+'.',
+    if(reasons.length)picks.push({label:'MONEYLINE ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
       evData:calcEV(g,'h2h',side.nm.split(' ').pop()),lineRange:null,sharp:getSharp(mlEdges),
       gradeData:{type:'ml',isHm:side===g.hm}});
   }
@@ -987,7 +988,7 @@ function renderPicksLeaderboard(){
         <span class="pick-item-rank">#${p.rank||i+1}</span>
         <span>${ic}</span>
         <span class="pick-item-match">${p.matchup}</span>
-        ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}</span>`}
+        ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}${p.score!=null?`<span style="opacity:.55;font-weight:500;margin-left:4px">${parseFloat(p.score).toFixed(1)}</span>`:''}</span>`}
       </div>
       <div class="pick-item-pick">${p.pick}</div>
     </div>`;
@@ -1184,7 +1185,7 @@ Tennis: ≥1 of — surface form, H2H on surface, tournament momentum, fatigue/l
   "date":"YYYY-MM-DD",
   "grading":[{"pick":"exact pick text","sport":"sport","result":"W|L|P|?","note":"brief reason"}],
   "learned_rules_update":"Full updated rules list — keep valid existing rules, add new lessons",
-  "picks":[{"rank":1,"sport":"tennis","matchup":"Player A vs Player B","pick":"Player A ML (-130)","confidence":"HIGH","odds":-130,"reasoning":"Multi-sentence analysis covering key edges","filters":["surface_form"],"is_lean":false}],
+  "picks":[{"rank":1,"sport":"tennis","matchup":"Player A vs Player B","pick":"Player A ML (-130)","confidence":"HIGH","score":8.2,"odds":-130,"reasoning":"Multi-sentence analysis covering key edges","filters":["surface_form"],"is_lean":false}],
   "parlays":[{"type":"2-Leg Conservative","legs":["leg1","leg2"],"note":"why these combine"}],
   "leans":[{"matchup":"...","lean":"side and why","trigger":"what would promote to graded pick"}],
   "inactive_sports":[{"sport":"NFL","status":"Offseason — returns September 2026"}],
