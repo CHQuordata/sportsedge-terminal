@@ -649,7 +649,12 @@ function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-ta
   const lbls=['GAMES','EDGES','SPORTS','INJURIES'];document.querySelectorAll('.stat-lbl').forEach((el,i)=>{if(lbls[i])el.textContent=lbls[i]});
   applyFilters()}
 function setDateFilter(f){cDateFilter=f;['today','tomorrow','all'].forEach(k=>{const el=$('dt'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.classList.toggle('active',k===f)});const titles={today:"Today's Slate",tomorrow:"Tomorrow's Slate",all:"All Games"};$('panelHdrTitle').textContent=titles[f];applyFilters()}
-function applyFilters(){if(cView==='picks')return;let g=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);if(cDateFilter!=='all'){const ref=new Date();if(cDateFilter==='tomorrow')ref.setDate(ref.getDate()+1);const ds=ref.toDateString();g=g.filter(x=>x.tm.toDateString()===ds)}fG=g;renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
+const US_MAJOR_BOOKS=['fanduel','draftkings','betmgm','caesars','pointsbetus','bet365'];
+function hasUsBookOdds(g){return g.odds?.bookmakers?.some(b=>US_MAJOR_BOOKS.some(k=>(b.key||'').includes(k)||(b.title||'').toLowerCase().includes(k)))}
+function applyFilters(){if(cView==='picks')return;let g=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);if(cDateFilter!=='all'){const ref=new Date();if(cDateFilter==='tomorrow')ref.setDate(ref.getDate()+1);const ds=ref.toDateString();g=g.filter(x=>x.tm.toDateString()===ds)}
+// Strip tennis/MMA with no major US book odds — not bettable on FD/DK/BetMGM/Caesars
+if(AK)g=g.filter(gm=>gm.cat!=='tennis'&&gm.cat!=='mma'||hasUsBookOdds(gm));
+fG=g;renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
 
 function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div class="no-data">No games found<div style="font-size:10px;margin-top:8px">Hit SCAN to refresh or check another sport tab</div></div>';return}
   const grp={};fG.forEach((g,i)=>{const lb=g.spL;if(!grp[lb])grp[lb]=[];grp[lb].push({...g,_i:i})});
@@ -750,8 +755,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
    const aiPk=todayPicksData?.picks?.find(_match);
    const aiLn=!aiPk&&todayPicksData?.leans?.find(_match);
    const aiPrs=(todayPicksData?.parlays||[]).filter(par=>par.legs?.some(leg=>leg.toLowerCase().includes(_an)&&leg.toLowerCase().includes(_hn)));
-   const US_BOOK_KEYS_CHK=['fanduel','draftkings','betmgm','caesars','pointsbetus','bet365'];
-   const _hasOdds=g.odds?.bookmakers?.some(b=>US_BOOK_KEYS_CHK.some(k=>(b.key||'').includes(k)||(b.title||'').toLowerCase().includes(k)));
+   const _hasOdds=hasUsBookOdds(g);
    if(aiPk){const cc=aiPk.confidence==='HIGH'?'var(--grn)':aiPk.confidence==='MEDIUM'?'var(--amb)':'var(--t3)';
      const rk=aiPk.rank?` · RANK #${aiPk.rank}`:'';
      const filH=aiPk.filters?.length?`<div class="ftags">${aiPk.filters.map(f=>`<span class="ft">${f.replace(/_/g,' ').toUpperCase()}</span>`).join('')}</div>`:'';
@@ -1556,10 +1560,7 @@ function buildGamesContext(){
   allG.forEach(g=>{
     const t=g.st==='STATUS_IN_PROGRESS'?`LIVE ${g.stD}`:g.st==='STATUS_FINAL'?`FINAL${g.aw.sc!=null?' '+g.aw.sc+'-'+g.hm.sc:''}`:g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'});
     const playoffTag=g.playoff?` [PLAYOFFS${g.serSum?' — '+g.serSum:''}]`:'';
-    // Check specifically for major US books — Pinnacle/betonlineag/lowvig are offshore and not on BetMGM
-    const US_BOOK_KEYS=['fanduel','draftkings','betmgm','caesars','pointsbetus','bet365'];
-    const hasUsOdds=g.odds?.bookmakers?.some(b=>US_BOOK_KEYS.some(k=>(b.key||'').includes(k)||(b.title||'').toLowerCase().includes(k)));
-    // Only block on missing US book odds for tennis/MMA — NBA/NHL/MLB don't need live odds to pick
+    const hasUsOdds=hasUsBookOdds(g);
     const noOddsBlock=!hasUsOdds&&(g.cat==='tennis'||g.cat==='mma');
     ctx+=`[${g.spL}] ${g.aw.nm} @ ${g.hm.nm} — ${t}${playoffTag}${noOddsBlock?' [NO US BOOK ODDS — DO NOT PICK]':!hasUsOdds?' [ODDS LOADING — USE STATS]':''}\n`;
     if(g.aw.rec||g.hm.rec)ctx+=`  Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
