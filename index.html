@@ -191,7 +191,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 let AK=localStorage.getItem('odds_api_key')||'',cSport='all',selIdx=-1,allG=[],fG=[],allE=[],tennisForm=new Map();
 const _oddsCache=new Map(),ODDS_TTL=5*60*1000;
 const ODDS_BOOKS='fanduel,draftkings,betmgm,caesars,betonlineag,mybookieag,lowvig,pinnacle,pointsbet';
-const SPORT_MARKETS={basketball_nba:'h2h,spreads,totals,alternate_spreads,alternate_totals',icehockey_nhl:'h2h,spreads,totals,alternate_spreads,alternate_totals',baseball_mlb:'h2h,spreads,totals,alternate_spreads,alternate_totals,h2h_1st_5_innings,totals_1st_5_innings',american_football_nfl:'h2h,spreads,totals,alternate_spreads,alternate_totals'};
+const SPORT_MARKETS={basketball_nba:'h2h,spreads,totals,alternate_spreads,alternate_totals',icehockey_nhl:'h2h,spreads,totals,alternate_spreads,alternate_totals',baseball_mlb:'h2h,spreads,totals,alternate_spreads,alternate_totals,h2h_1st_5_innings,totals_1st_5_innings',american_football_nfl:'h2h,spreads,totals,alternate_spreads,alternate_totals',_tennis:'h2h,spreads,totals'};
+function getSportMarkets(sk){if(SPORT_MARKETS[sk])return SPORT_MARKETS[sk];if(sk.startsWith('tennis_'))return SPORT_MARKETS._tennis;return'h2h'}
 const PROP_MARKETS={basketball_nba:'player_points,player_rebounds,player_assists,player_threes',baseball_mlb:'pitcher_strikeouts,batter_home_runs,batter_hits_recorded'};
 const PROP_BOOKS='fanduel,draftkings,betmgm,pointsbet';
 let _tennisKeys=null,_tennisKeysTs=0;
@@ -234,7 +235,7 @@ async function oddsFetch(sk,force=false){
   if(!force&&cached&&(Date.now()-cached.ts)<ODDS_TTL)return cached.data;
   const now=new Date(),tmrw=new Date(now);tmrw.setDate(now.getDate()+2);
   const tf=now.toISOString().split('T')[0]+'T00:00:00Z',tt=tmrw.toISOString().split('T')[0]+'T23:59:59Z';
-  const mkts=SPORT_MARKETS[sk]||'h2h';
+  const mkts=getSportMarkets(sk);
   try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/${sk}/odds/?apiKey=${AK}&bookmakers=${ODDS_BOOKS}&markets=${mkts}&oddsFormat=american&commenceTimeFrom=${tf}&commenceTimeTo=${tt}`);
   if(!r.ok){const msg=r.status===401?'Invalid key':r.status===429?'Rate limited':`Odds ${r.status}`;$('apiDot').classList.remove('ok');$('apiSt').textContent=msg;return cached?.data||[];}
   const rem=r.headers.get('x-requests-remaining');if(rem!=null)$('apiCalls').textContent=`${parseInt(rem).toLocaleString()} calls left`;
