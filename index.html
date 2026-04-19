@@ -148,38 +148,217 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .pick-reasoning{font-size:11px;color:var(--t2);line-height:1.7}
 .det-header{padding:16px;border-bottom:1px solid var(--bdr);background:var(--bg2);border-top:2px solid var(--bdr)}
 .sec-title{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--t4);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+/* ── Mobile back button (hidden on desktop) ── */
+.mob-back-btn{display:none}
+/* ── Topbar rows: transparent on desktop, used only for mobile layout ── */
+.topbar-row1,.topbar-row2{display:contents}
+
+/* ══════════════════════════════════════════
+   MOBILE — ≤768px
+   ══════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Prevent body scroll; panels handle their own scroll */
+  html,body{overflow:hidden;height:100%}
+
+  /* ── Topbar: two-row layout ── */
+  .topbar{
+    height:auto;
+    flex-wrap:wrap;
+    padding:0;
+    gap:0;
+    align-items:stretch
+  }
+  /* Row 1: logo + sport tabs */
+  .topbar-row1{
+    display:flex;
+    align-items:center;
+    width:100%;
+    padding:4px 8px;
+    gap:6px;
+    border-bottom:1px solid var(--bdr);
+    min-height:34px
+  }
+  /* Row 2: status dots + action buttons — horizontally scrollable */
+  .topbar-row2{
+    display:flex;
+    align-items:center;
+    width:100%;
+    padding:3px 8px;
+    gap:6px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    min-height:30px
+  }
+  .topbar-row2::-webkit-scrollbar{display:none}
+
+  /* Logo smaller on mobile */
+  .logo{font-size:11px;letter-spacing:1px;white-space:nowrap}
+  .logo span{display:none}
+
+  /* Sport tabs: horizontally scrollable single row */
+  .sport-tabs{
+    display:flex;
+    flex:1;
+    overflow-x:auto;
+    scrollbar-width:none;
+    gap:2px;
+    flex-wrap:nowrap
+  }
+  .sport-tabs::-webkit-scrollbar{display:none}
+  .sport-tab{
+    padding:3px 8px;
+    font-size:9px;
+    min-height:26px;
+    white-space:nowrap;
+    flex-shrink:0
+  }
+
+  /* Hide separators in row 2 */
+  .topbar-div{display:none}
+  /* topbar-sp spacer not needed on mobile */
+  .topbar-sp{display:none}
+
+  /* Status dots: compact */
+  .api-st{font-size:9px;gap:4px;white-space:nowrap;flex-shrink:0}
+  .api-dot{width:5px;height:5px}
+
+  /* Action buttons */
+  .tb-btn{
+    padding:3px 7px;
+    font-size:9px;
+    min-height:26px;
+    flex-shrink:0;
+    white-space:nowrap
+  }
+  .kbd{display:none}
+
+  /* ── Main layout: full-width sliding panels ── */
+  .main{
+    display:block;
+    position:relative;
+    width:100%;
+    height:calc(100svh - 64px - 24px); /* topbar(~64px) + bottombar(24px) */
+    overflow:hidden
+  }
+
+  /* Slate panel fills full width by default */
+  .slatePanel{
+    position:absolute;
+    inset:0;
+    width:100%;
+    transform:translateX(0);
+    transition:transform .25s ease;
+    will-change:transform;
+    z-index:2
+  }
+  /* Detail panel starts off-screen to the right */
+  .detailPanel-wrap{
+    position:absolute;
+    inset:0;
+    width:100%;
+    transform:translateX(100%);
+    transition:transform .25s ease;
+    will-change:transform;
+    z-index:2
+  }
+
+  /* When mob-detail-open is on body, slide slate out left, detail in */
+  body.mob-detail-open .slatePanel{transform:translateX(-100%)}
+  body.mob-detail-open .detailPanel-wrap{transform:translateX(0)}
+
+  /* Hide the dashboard panel on mobile entirely */
+  .dashPanel{display:none}
+
+  /* Make each panel fill its wrapper fully */
+  .slatePanel.panel,
+  .detailPanel-wrap.panel{
+    height:100%;
+    overflow:hidden
+  }
+
+  /* Detail panel body must scroll independently */
+  #detailPanel{
+    -webkit-overflow-scrolling:touch
+  }
+
+  /* ── Back button (mobile only) ── */
+  .mob-back-btn{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 12px;
+    font-family:var(--mono);
+    font-size:10px;
+    font-weight:600;
+    color:var(--grn);
+    background:var(--bg0);
+    border:none;
+    border-bottom:1px solid var(--bdr);
+    cursor:pointer;
+    width:100%;
+    text-align:left;
+    letter-spacing:.5px
+  }
+  .mob-back-btn:active{background:var(--bg3)}
+
+  /* ── Game list items: larger touch targets ── */
+  .game-row{min-height:52px;padding:10px 12px}
+  .game-teams{font-size:12px}
+
+  /* ── Detail header ── */
+  .det-teams{font-size:16px}
+  .det-header{padding:12px}
+
+  /* ── Pick cards ── */
+  .pick-card{padding:10px;margin:4px 10px}
+
+  /* ── Tennis grid: single column on mobile ── */
+  .tennis-grid{grid-template-columns:1fr}
+
+  /* ── Font minimums ── */
+  .tn-nm{font-size:12px}
+  .tn-sv{font-size:11px}
+  .sec-title{font-size:9px}
+
+  /* ── Bottombar: compact ── */
+  .bottombar{font-size:9px;padding:0 8px;gap:8px}
+}
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="logo">SPORTSEDGE<span>TERMINAL v2.8</span></div><div class="topbar-div"></div>
-  <div class="sport-tabs" id="sportTabs">
-    <button class="sport-tab active" data-sport="all" onclick="setSport('all')">ALL</button>
-    <button class="sport-tab" data-sport="nba" onclick="setSport('nba')">NBA</button>
-    <button class="sport-tab" data-sport="nhl" onclick="setSport('nhl')">NHL</button>
-    <button class="sport-tab" data-sport="mlb" onclick="setSport('mlb')">MLB</button>
-    <button class="sport-tab" data-sport="nfl" onclick="setSport('nfl')">NFL</button>
-    <button class="sport-tab" data-sport="tennis" onclick="setSport('tennis')">TENNIS</button>
-    <button class="sport-tab picks-tab" data-sport="picks" onclick="switchToPicksView()">⚡ PICKS</button>
+  <div class="topbar-row1">
+    <div class="logo">SPORTSEDGE<span>TERMINAL v2.8</span></div><div class="topbar-div"></div>
+    <div class="sport-tabs" id="sportTabs">
+      <button class="sport-tab active" data-sport="all" onclick="setSport('all')">ALL</button>
+      <button class="sport-tab" data-sport="nba" onclick="setSport('nba')">NBA</button>
+      <button class="sport-tab" data-sport="nhl" onclick="setSport('nhl')">NHL</button>
+      <button class="sport-tab" data-sport="mlb" onclick="setSport('mlb')">MLB</button>
+      <button class="sport-tab" data-sport="nfl" onclick="setSport('nfl')">NFL</button>
+      <button class="sport-tab" data-sport="tennis" onclick="setSport('tennis')">TENNIS</button>
+      <button class="sport-tab picks-tab" data-sport="picks" onclick="switchToPicksView()">⚡ PICKS</button>
+    </div>
+    <div class="topbar-sp"></div>
   </div>
-  <div class="topbar-sp"></div>
-  <div class="api-st"><div class="api-dot" id="apiDot"></div><span id="apiSt">NO KEY</span></div>
-  <button class="tb-btn" onclick="showSetup()">API KEY <span class="kbd">K</span></button>
-  <div class="topbar-div"></div>
-  <div class="api-st"><div class="api-dot" id="aiDot"></div><span id="aiSt">NO AI</span></div>
-  <button class="tb-btn" onclick="showPicksSetup()">AI KEY <span class="kbd">A</span></button>
-  <div class="topbar-div"></div>
-  <div class="api-st"><div class="api-dot" id="tnDot"></div><span id="tnSt">NO TN</span></div>
-  <button class="tb-btn" onclick="showTNSetup()" style="color:var(--cyn)">TN API</button>
-  <button class="tb-btn" onclick="refreshAll()">SCAN <span class="kbd">R</span></button>
-  <button class="tb-btn" onclick="refreshAll(true)" style="color:var(--amb)">ODDS ↻</button>
-  <button class="tb-btn" onclick="toggleSC()">?</button>
-  <div class="topbar-div"></div><button class="tb-btn" id="bankrollBtn" onclick="showBankroll()" style="color:var(--amb)">BANKROLL</button>
+  <div class="topbar-row2">
+    <div class="api-st"><div class="api-dot" id="apiDot"></div><span id="apiSt">NO KEY</span></div>
+    <button class="tb-btn" onclick="showSetup()">API KEY <span class="kbd">K</span></button>
+    <div class="topbar-div"></div>
+    <div class="api-st"><div class="api-dot" id="aiDot"></div><span id="aiSt">NO AI</span></div>
+    <button class="tb-btn" onclick="showPicksSetup()">AI KEY <span class="kbd">A</span></button>
+    <div class="topbar-div"></div>
+    <div class="api-st"><div class="api-dot" id="tnDot"></div><span id="tnSt">NO TN</span></div>
+    <button class="tb-btn" onclick="showTNSetup()" style="color:var(--cyn)">TN API</button>
+    <button class="tb-btn" onclick="refreshAll()">SCAN <span class="kbd">R</span></button>
+    <button class="tb-btn" onclick="refreshAll(true)" style="color:var(--amb)">ODDS ↻</button>
+    <button class="tb-btn" onclick="toggleSC()">?</button>
+    <div class="topbar-div"></div><button class="tb-btn" id="bankrollBtn" onclick="showBankroll()" style="color:var(--amb)">BANKROLL</button>
+  </div>
 </div>
 <div class="main">
-  <div class="panel"><div class="panel-hdr"><span class="panel-title" id="panelHdrTitle">Today's Slate</span><div style="display:flex;align-items:center;gap:6px"><div class="date-toggle"><button class="dt-btn active" id="dtToday" onclick="setDateFilter('today')">TODAY</button><button class="dt-btn" id="dtTomorrow" onclick="setDateFilter('tomorrow')">TMW</button><button class="dt-btn" id="dtAll" onclick="setDateFilter('all')">ALL</button></div><span class="badge a" id="slateCount">LOADING</span></div></div><div class="panel-body" id="slateList"></div></div>
-  <div class="panel" style="background:var(--bg0)"><div class="panel-body" id="detailPanel" style="background:var(--bg1)"><div class="detail-empty"><div class="detail-empty-icon">&#9672;</div><div class="detail-empty-text">SELECT A MATCHUP TO RESEARCH</div><div style="font-size:10px;color:var(--t4);margin-top:8px">Use <span class="kbd">&#8593;</span><span class="kbd">&#8595;</span> to navigate</div></div></div></div>
-  <div class="panel"><div class="panel-hdr"><span class="panel-title">Dashboard</span></div>
+  <div class="panel slatePanel"><div class="panel-hdr"><span class="panel-title" id="panelHdrTitle">Today's Slate</span><div style="display:flex;align-items:center;gap:6px"><div class="date-toggle"><button class="dt-btn active" id="dtToday" onclick="setDateFilter('today')">TODAY</button><button class="dt-btn" id="dtTomorrow" onclick="setDateFilter('tomorrow')">TMW</button><button class="dt-btn" id="dtAll" onclick="setDateFilter('all')">ALL</button></div><span class="badge a" id="slateCount">LOADING</span></div></div><div class="panel-body" id="slateList"></div></div>
+  <div class="panel detailPanel-wrap" style="background:var(--bg0)"><button class="mob-back-btn" onclick="mobBack()">&#8592; BACK TO SLATE</button><div class="panel-body" id="detailPanel" style="background:var(--bg1)"><div class="detail-empty"><div class="detail-empty-icon">&#9672;</div><div class="detail-empty-text">SELECT A MATCHUP TO RESEARCH</div><div style="font-size:10px;color:var(--t4);margin-top:8px">Use <span class="kbd">&#8593;</span><span class="kbd">&#8595;</span> to navigate</div></div></div></div>
+  <div class="panel dashPanel"><div class="panel-hdr"><span class="panel-title">Dashboard</span></div>
     <div class="stat-grid"><div class="stat-cell"><div class="stat-lbl">GAMES</div><div class="stat-val" id="stG">-</div></div><div class="stat-cell"><div class="stat-lbl">EDGES</div><div class="stat-val g" id="stE">-</div></div><div class="stat-cell"><div class="stat-lbl">SPORTS</div><div class="stat-val a" id="stS">-</div></div><div class="stat-cell"><div class="stat-lbl">INJURIES</div><div class="stat-val r" id="stI">-</div></div></div>
     <div class="panel-hdr"><span class="panel-title">Top Edges</span></div><div class="panel-body" id="edgeAlerts"><div class="no-data" style="padding:20px">Scan to populate</div></div>
   </div>
@@ -465,7 +644,7 @@ function renderMetrics(pk){
 // ══════════════════════════════
 // ── FILTERING & RENDERING
 // ══════════════════════════════
-function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;$('panelHdrTitle').textContent="Today's Slate";
+function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));document.querySelector(`.sport-tab[data-sport="${s}"]`).classList.add('active');selIdx=-1;$('panelHdrTitle').textContent="Today's Slate";document.body.classList.remove('mob-detail-open');
   // Restore slate stat labels
   const lbls=['GAMES','EDGES','SPORTS','INJURIES'];document.querySelectorAll('.stat-lbl').forEach((el,i)=>{if(lbls[i])el.textContent=lbls[i]});
   applyFilters()}
@@ -519,7 +698,10 @@ async function fetchLWOTArticle(awNm,hmNm){
   }catch(e){return null}
 }
 
+function mobBack(){document.body.classList.remove('mob-detail-open')}
+
 async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$('detailPanel');
+  if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
   let af=[],hf=[],pitchers=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null,awNhl=null,hmNhl=null,tnSum=null,tnH2H=null,lwotArt=null,awTnApi=null,hmTnApi=null;
   const _ec=g.isTeam&&g.aw.id&&E[g.sp],_eo=g.st!=='STATUS_FINAL';
