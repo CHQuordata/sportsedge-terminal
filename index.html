@@ -942,10 +942,15 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   if(af.length||hf.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>RECENT FORM (L10)</div>${formBar(g.aw.nm,af)}${formBar(g.hm.nm,hf)}</div>`;
   if(af.length>=3&&hf.length>=3){const awF=avgSc(af,'f'),awA=avgSc(af,'a'),hmF=avgSc(hf,'f'),hmA=avgSc(hf,'a');
     if(awF!==null&&hmF!==null){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SCORING AVERAGES (L${Math.min(af.length,10)})</div><table class="dtable"><thead><tr><th>TEAM</th><th>FOR</th><th>AG</th><th>MARGIN</th></tr></thead><tbody><tr><td style="color:var(--cyn)">${g.aw.ab}</td><td>${awF.toFixed(1)}</td><td>${awA.toFixed(1)}</td><td class="${awF-awA>0?'best':''}" style="${awF-awA<0?'color:var(--red)':''}">${awF-awA>0?'+':''}${(awF-awA).toFixed(1)}</td></tr><tr><td style="color:var(--cyn)">${g.hm.ab}</td><td>${hmF.toFixed(1)}</td><td>${hmA.toFixed(1)}</td><td class="${hmF-hmA>0?'best':''}" style="${hmF-hmA<0?'color:var(--red)':''}">${hmF-hmA>0?'+':''}${(hmF-hmA).toFixed(1)}</td></tr></tbody></table></div>`}}
-  if(g.cat==='nba'&&(awNba||hmNba)){const awB2=isB2B(af,g.tm),hmB2=isB2B(hf,g.tm);
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS</div><table class="dtable"><thead><tr><th>TEAM</th><th>PPG</th><th>FG%</th><th>3P%</th><th>SC-EFF</th><th>AST</th><th>REB</th></tr></thead><tbody>`;
-    [[g.aw,awNba,awB2],[g.hm,hmNba,hmB2]].forEach(([tm,st,b2b])=>{
-      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${b2b?'<span class="b2b-badge">B2B</span>':''}</td><td>${st?.ppg||'--'}</td><td>${st?.fgPct||'--'}</td><td>${st?.tpPct||'--'}</td><td>${st?.scEff||'--'}</td><td>${st?.ast||'--'}</td><td>${st?.reb||'--'}</td></tr>`});
+  if(g.cat==='nba'&&(awNba||hmNba)){const awB2=isB2B(af,g.tm),hmB2=isB2B(hf,g.tm);const awF3=is3in4(af,g.tm),hmF3=is3in4(hf,g.tm);
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0">season averages</span></div><table class="dtable"><thead><tr><th>TEAM</th><th>PPG</th><th>OPP</th><th>NET</th><th>FG%</th><th>3P%</th><th>TO/G</th></tr></thead><tbody>`;
+    [[g.aw,awNba,awB2,awF3],[g.hm,hmNba,hmB2,hmF3]].forEach(([tm,st,b2b,f3])=>{
+      const net=st?.netPts?parseFloat(st.netPts):null;
+      const netClr=net!=null?(net>=3?'color:var(--grn)':net<=-3?'color:var(--red)':'color:var(--t2)'):'';
+      const opp=st?.oppPpg?parseFloat(st.oppPpg):null;
+      const oppClr=opp!=null?(opp<=108?'color:var(--grn)':opp>=115?'color:var(--red)':'color:var(--t2)'):'';
+      const fatigue=f3?'<span style="font-size:8px;font-weight:700;color:var(--red);background:rgba(255,71,87,.12);border-radius:2px;padding:1px 4px;margin-left:3px">3in4</span>':b2b?'<span class="b2b-badge">B2B</span>':'';
+      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${fatigue}</td><td>${st?.ppg||'--'}</td><td style="${oppClr}">${st?.oppPpg||'--'}</td><td style="${netClr};font-weight:700">${net!=null?(net>=0?'+':'')+net:'--'}</td><td>${st?.fgPct||'--'}</td><td>${st?.tpPct||'--'}</td><td>${st?.toPg||'--'}</td></tr>`});
     h+=`</tbody></table></div>`}
   if(g.cat==='nhl'&&(awNhl||hmNhl)){
     h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS</div><table class="dtable"><thead><tr><th>TEAM</th><th>GF/G</th><th>GA/G</th><th>SV%</th><th>SH%</th><th>SOG/G</th><th>FO%</th></tr></thead><tbody>`;
@@ -969,8 +974,9 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
 function xForm(d,tid){if(!d?.events)return[];const sc=v=>typeof v==='object'?v?.value??0:v??0;return d.events.filter(e=>e.competitions?.[0]?.status?.type?.completed).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).map(e=>{const c=e.competitions[0],t=c.competitors.find(x=>x.id===tid||x.team?.id==tid),o=c.competitors.find(x=>x!==t);return{dt:new Date(e.date),r:t?.winner?'W':'L',sc:`${sc(t?.score)}-${sc(o?.score)}`,opp:o?.team?.abbreviation||'?',hm:t?.homeAway==='home'}})}
 function avgSc(f,type){if(!f.length)return null;return f.reduce((s,x)=>{const p=x.sc.split('-');return s+(type==='f'?parseInt(p[0])||0:parseInt(p[1])||0)},0)/f.length}
 function formBar(nm,f){if(!f.length)return'';const w=f.filter(x=>x.r==='W').length,sk=streak(f),sc=sk[0]==='W'?'hot':sk[0]==='L'?'cold':'neutral';
-  let h=`<div class="form-row"><div class="form-team">${nm}</div><div class="form-blocks">`;[...f].reverse().forEach(x=>{h+=`<div class="form-block ${x.r}" title="${x.r} ${x.sc} ${x.hm?'vs':'@'} ${x.opp}">${x.r}</div>`});
-  return h+`</div><div class="form-streak ${sc}">${sk}</div><div style="font-size:10px;color:var(--t3)">${w}-${f.length-w}</div></div>`}
+  const l5=f.slice(0,5),l5w=l5.filter(x=>x.r==='W').length,l5clr=l5w>=4?'var(--grn)':l5w<=1?'var(--red)':'var(--t3)';
+  let h=`<div class="form-row"><div class="form-team">${nm}</div><div class="form-blocks">`;[...f].reverse().forEach((x,i)=>{const isRecent=i>=f.length-5;h+=`<div class="form-block ${x.r}" style="${isRecent?'opacity:1':'opacity:.55'}" title="${x.r} ${x.sc} ${x.hm?'vs':'@'} ${x.opp}">${x.r}</div>`});
+  return h+`</div><div class="form-streak ${sc}">${sk}</div><div style="font-size:10px;color:var(--t3)">${w}-${f.length-w}</div><div style="font-size:9px;font-weight:600;color:${l5clr};margin-left:6px">L5:${l5w}-${5-l5w}</div></div>`}
 function streak(f){if(!f.length)return'';let c=1;for(let i=1;i<f.length;i++){if(f[i].r===f[0].r)c++;else break}return f[0].r+c}
 async function fetchGameSummary(cat,gid){const ep=cat==='mlb'?'baseball/mlb':cat==='nfl'?'football/nfl':null;if(!ep)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${ep}/summary?event=${gid}`);return r.ok?r.json():null}catch(e){return null}}
 function extractPitchers(d){const comp=d?.header?.competitions?.[0];if(!comp)return null;const res={};(comp.competitors||[]).forEach(c=>{const p=c.probables?.[0];if(!p?.athlete)return;const cats=p.statistics?.splits?.categories||[];const sv=n=>cats.find(x=>x.name===n);const fi=sv('fullInnings')?.value||0,pi=sv('partInnings')?.value||0,ip=fi+pi/3,k=sv('strikeouts')?.value||0;res[c.homeAway]={name:p.athlete.shortName||p.athlete.fullName,hand:p.athlete.throws?.abbreviation||'?',era:sv('ERA')?.displayValue||'--',whip:sv('WHIP')?.displayValue||'--',ip:ip.toFixed(1),k9:ip>1?(k/ip*9).toFixed(1):'--',w:sv('wins')?.value||0,l:sv('losses')?.value||0}});return Object.keys(res).length?res:null}
@@ -999,8 +1005,9 @@ function renderProps(data,cat){if(!data?.bookmakers?.length)return'';const all={
   const rows=Object.entries(players).slice(0,12).map(([nm,stats])=>`<tr><td style="color:var(--cyn);font-weight:500;white-space:nowrap">${nm}</td>${Object.entries(stats).map(([k,v])=>`<td>${v}</td>`).join('')}</tr>`);
   if(!rows.length)return'';const hdrs=Object.keys(Object.values(players)[0]||{});
   return`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>PLAYER PROPS</div><table class="dtable"><thead><tr><th>PLAYER</th>${hdrs.map(h=>`<th>${h.toUpperCase().replace(/_/g,' ')}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;}
-function extractNBAStats(d){if(!d)return null;const all=[];const cats=d.results?.stats?.categories||d.results?.splits?.categories||d.splits?.categories||[];(Array.isArray(cats)?cats:[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));const dv=n=>{const s=all.find(x=>x.name===n);return s?.displayValue||null};return{ppg:dv('avgPoints'),fgPct:dv('fieldGoalPct'),tpPct:dv('threePointPct'),ftPct:dv('freeThrowPct'),scEff:dv('scoringEfficiency'),shEff:dv('shootingEfficiency'),ast:dv('avgAssists'),reb:dv('avgRebounds'),blk:dv('avgBlocks'),stl:dv('avgSteals')}}
+function extractNBAStats(d){if(!d)return null;const all=[];const cats=d.results?.stats?.categories||d.results?.splits?.categories||d.splits?.categories||[];(Array.isArray(cats)?cats:[]).forEach(c=>(c.stats||[]).forEach(s=>all.push(s)));const dv=n=>{const s=all.find(x=>x.name===n);return s?.displayValue||null};const nv=n=>{const s=all.find(x=>x.name===n);return s?.value??null};const ppg=dv('avgPoints'),oppPpg=dv('avgPointsAllowed');const netPts=(ppg&&oppPpg)?((parseFloat(ppg)-parseFloat(oppPpg)).toFixed(1)):null;return{ppg,fgPct:dv('fieldGoalPct'),tpPct:dv('threePointPct'),ftPct:dv('freeThrowPct'),scEff:dv('scoringEfficiency'),shEff:dv('shootingEfficiency'),ast:dv('avgAssists'),reb:dv('avgRebounds'),blk:dv('avgBlocks'),stl:dv('avgSteals'),oppPpg,netPts,toPg:dv('avgTurnovers')}}
 function isB2B(form,gameTm){return form.length>0&&Math.round((gameTm-form[0].dt)/864e5)<=1}
+function is3in4(form,gameTm){if(form.length<2)return false;const d1=Math.round((gameTm-form[0].dt)/864e5),d2=Math.round((gameTm-form[1].dt)/864e5);return d1<=2&&d2<=3}
 
 function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--blu)"></div>LINES (${bks.length} BOOKS)</div>`;
   ['h2h','spreads','totals'].forEach(mk=>{const lb=mk==='h2h'?'MONEYLINE':mk==='spreads'?'SPREAD':'TOTAL';const R={};
@@ -1019,6 +1026,7 @@ function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;
 function genPicks(g,af,hf,pitchers,weather,ext={}){
   const{awTn,hmTn,awNba,hmNba,tnH2H,lwotArt,awTnApi,hmTnApi}=ext;
   const awB2B=g.cat==='nba'&&isB2B(af,g.tm),hmB2B=g.cat==='nba'&&isB2B(hf,g.tm);
+  const awF3=g.cat==='nba'&&is3in4(af,g.tm),hmF3=g.cat==='nba'&&is3in4(hf,g.tm);
   const awRecPct=parseRec(g.aw.rec),hmRecPct=parseRec(g.hm.rec);
   const awRank=g.aw.rank||null,hmRank=g.hm.rank||null;
   const hasRecord=awRecPct!==null||hmRecPct!==null;
@@ -1090,8 +1098,9 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       reasons.push(`${b2.nm} is missing ${Math.max(awOut,hmOut)} players (OUT), thinning their rotation against a healthier ${h2.nm}`)}
     if(g.ha>0)reasons.push(`Home-court worth ~${g.ha}pts in ${spName} for ${g.hm.nm}`);
     if(spEdges.length)reasons.push(`Sharp signal: ${spEdges[0].ep.toFixed(1)}% spread edge at ${spEdges[0].bb}`);
-    if(g.cat==='nba'&&awNba?.scEff!=null&&hmNba?.scEff!=null){const aw2=parseFloat(awNba.scEff),hm2=parseFloat(hmNba.scEff);if(!isNaN(aw2)&&!isNaN(hm2)){const nd=hm2-aw2;if(Math.abs(nd)>=2){score+=nd*0.2;const b2=nd>0?g.hm:g.aw,w2=nd>0?g.aw:g.hm;reasons.push(`Scoring efficiency edge: ${b2.nm} (${(nd>0?hm2:aw2).toFixed(1)}) vs ${w2.nm} (${(nd>0?aw2:hm2).toFixed(1)}) \u2014 efficiency gap favors the spread`)}}}
-    if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*2.5;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on a back-to-back \u2014 B2B teams cover only ~44% ATS; ${awB2B?g.hm.nm:g.aw.nm} has the fatigue edge`)}
+    if(g.cat==='nba'&&awNba?.netPts!=null&&hmNba?.netPts!=null){const awNet=parseFloat(awNba.netPts),hmNet=parseFloat(hmNba.netPts);if(!isNaN(awNet)&&!isNaN(hmNet)){const nd=hmNet-awNet;if(Math.abs(nd)>=3){score+=nd*0.3;const b2=nd>0?g.hm:g.aw,w2=nd>0?g.aw:g.hm,bNet=Math.max(awNet,hmNet),wNet=Math.min(awNet,hmNet);reasons.push(`Net rating: ${b2.nm} ${bNet>=0?'+':''}${bNet.toFixed(1)} vs ${w2.nm} ${wNet>=0?'+':''}${wNet.toFixed(1)} — ${Math.abs(nd).toFixed(1)}-pt differential favors ${b2.ab} to cover`)}}}
+    if(g.cat==='nba'&&(awF3||hmF3)&&!(awF3&&hmF3)){score+=(awF3?-1:1)*3.5;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — covers only ~38% ATS on 3-in-4; ${awF3?g.hm.nm:g.aw.nm} has significant fatigue edge`)}
+    else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*2.5;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on a back-to-back — B2B teams cover only ~44% ATS; ${awB2B?g.hm.nm:g.aw.nm} has the fatigue edge`)}
     const side=score>=0?g.hm:g.aw,mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     const spSideOdds=spFav&&g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='spreads')?.outcomes?.find(o=>o.name===side.nm||side.nm.includes(o.name.split(' ').pop()));
     const spSideSpread=spSideOdds?.point??( spFav&&g.eOdds?.spread!==undefined?(side===g.hm?g.eOdds.spread:-g.eOdds.spread):null);
@@ -1109,8 +1118,8 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     let ts2=0,reasons=[];
     if(hmFor!==null&&awFor!==null){const proj=((awFor+(hmAg||awFor))/2)+((hmFor+(awAg||hmFor))/2);
       if(toOver){const posted=toOver.point,diff=proj-posted;ts2=diff*0.4;
-        reasons.push(Math.abs(diff)>3?`Projected combined scoring of ${proj.toFixed(1)} ${diff>0?'runs '+diff.toFixed(1)+' above':'falls '+Math.abs(diff).toFixed(1)+' below'} the posted ${posted}`:
-          `Projected total of ${proj.toFixed(1)} sits close to the posted ${posted} \u2014 thin edge either way`)}
+        reasons.push(Math.abs(diff)>3?`Projected total ${proj.toFixed(1)} ${diff>0?'+'+diff.toFixed(1)+' above':'−'+Math.abs(diff).toFixed(1)+' below'} posted ${posted}${g.cat==='mlb'?' (run-scored model)':g.cat==='nba'?' (form-based, see defense-adj below)':''}`:
+          `Projected ${proj.toFixed(1)} sits close to posted ${posted} — thin edge either way`)}
       reasons.push(`${g.aw.nm} averaging ${awFor.toFixed(1)} pts and ${g.hm.nm} at ${hmFor.toFixed(1)}, combining for a ${(awFor+hmFor).toFixed(1)}-point baseline`)}
     if(awAg!==null&&hmAg!==null&&(awAg+hmAg)/2>(awFor||0)){reasons.push(`Defensive leakage factor \u2014 ${g.aw.ab} surrenders ${awAg.toFixed(1)} and ${g.hm.ab} gives up ${hmAg.toFixed(1)} per game`);ts2+=0.5}
     if(awOut+hmOut>=4){reasons.push(`${awOut+hmOut} combined players out could slow pace and depress scoring`);ts2-=0.8}
@@ -1119,7 +1128,22 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(pitchers&&g.cat==='mlb'){const ap=pitchers.away,hp=pitchers.home;if(ap||hp){const aEra=parseFloat(ap?.era)||4.0,hEra=parseFloat(hp?.era)||4.0;const combined=aEra+hEra;const adj=(combined-8.2)*0.3;ts2+=adj;const aStr=ap?`${ap.name} (${ap.era} ERA, ${ap.k9} K/9, ${ap.w}-${ap.l})`:'TBD';const hStr=hp?`${hp.name} (${hp.era} ERA, ${hp.k9} K/9, ${hp.w}-${hp.l})`:'TBD';reasons.unshift(`SP matchup: ${g.aw.ab} sends ${aStr} vs ${g.hm.ab} with ${hStr}`)}}
     // ── Weather (MLB/NFL outdoor) ──
     if(weather){if(weather.wind>15){const suppressing=weather.wind>20;ts2+=suppressing?-1.5:-0.8;reasons.push(`Wind ${weather.wind} mph ${weather.windDir} — ${suppressing?'strong':'moderate'} wind suppresses scoring, lean UNDER`)}if(weather.temp<45){ts2-=0.8;reasons.push(`Cold weather (${weather.temp}°F) historically depresses MLB run scoring by 5-10%`)}if(weather.temp>90){ts2+=0.5;reasons.push(`Heat (${weather.temp}°F) can cause ball to carry and pitchers to fatigue faster`)}}
-    if(g.cat==='nba'){if(awNba?.ppg&&hmNba?.ppg){const awP=parseFloat(awNba.ppg),hmP=parseFloat(hmNba.ppg);if(!isNaN(awP)&&!isNaN(hmP)){const combined=awP+hmP;if(toOver&&Math.abs(combined-toOver.point)>6){const dir=combined>toOver.point?'OVER':'UNDER';ts2+=(combined>toOver.point?1.2:-1.2);reasons.push(`Combined PPG ${combined.toFixed(1)} ${dir==='OVER'?'above':'below'} total ${toOver.point} — pace-adjusted lean ${dir}`)}}};if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){ts2-=1.5;if(!reasons.find(r=>r.includes('back-to-back')))reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back \u2014 expect reduced output`)}}
+    if(g.cat==='nba'){
+      const awPpg=awNba?.ppg?parseFloat(awNba.ppg):null,hmPpg=hmNba?.ppg?parseFloat(hmNba.ppg):null;
+      const awOpp=awNba?.oppPpg?parseFloat(awNba.oppPpg):null,hmOpp=hmNba?.oppPpg?parseFloat(hmNba.oppPpg):null;
+      const awNet=awNba?.netPts?parseFloat(awNba.netPts):null,hmNet=hmNba?.netPts?parseFloat(hmNba.netPts):null;
+      if(awPpg&&hmPpg){
+        // Defense-adjusted projection: avg of (aw offense vs hm defense) + (hm offense vs aw defense)
+        const proj=awOpp&&hmOpp?((awPpg+hmOpp)/2)+((hmPpg+awOpp)/2):(awPpg+hmPpg);
+        const defAdj=!!(awOpp&&hmOpp);
+        if(toOver&&Math.abs(proj-toOver.point)>5){const dir=proj>toOver.point?'OVER':'UNDER';ts2+=(proj>toOver.point?1.5:-1.5);reasons.push(`Projected ${proj.toFixed(1)} pts${defAdj?' (defense-adjusted)':''} vs posted ${toOver.point} — ${Math.abs(proj-toOver.point).toFixed(1)} pts ${dir==='OVER'?'over':'under'} line, lean ${dir}`);}
+        else if(toOver)reasons.push(`Projected ${proj.toFixed(1)} pts${defAdj?' (defense-adjusted)':''} vs posted ${toOver.point} — within margin, thin edge`);
+        // Net rating combined signal
+        if(awNet!==null&&hmNet!==null){const combNet=(awNet+hmNet)/2;if(Math.abs(combNet)>=3){const dir2=combNet>0?'OVER':'UNDER';ts2+=(combNet>0?0.8:-0.8);reasons.push(`Avg net rating ${combNet>=0?'+':''}${combNet.toFixed(1)} — both teams ${combNet>0?'scoring above their defensive allow rate':'allowing more than they score'}, lean ${dir2}`)}}
+      }
+      // 3-in-4 fatigue
+      const f3B2B=awF3||hmF3;if(f3B2B&&!(awF3&&hmF3)){ts2-=2;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — severe fatigue factor, strong UNDER lean`)}
+      else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){ts2-=1.5;if(!reasons.find(r=>r.includes('back-to-back')))reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back — reduced output expected, UNDER lean`)}}
     const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
     const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
     picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
@@ -1178,6 +1202,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       if(awF2||hmF2)reasons.push(`Tournament form: ${[awF2,hmF2].filter(Boolean).join(' · ')}`);
     } else {
       reasons.push(`${side.nm} is the straight-up play${g.ha>0&&score>=0?', backed by home-court advantage':''}${mlEdges.length?', with sharp book edge':''}`);
+      if(g.cat==='nba'&&awNba?.netPts!=null&&hmNba?.netPts!=null){const awN=parseFloat(awNba.netPts),hmN=parseFloat(hmNba.netPts);if(!isNaN(awN)&&!isNaN(hmN)&&Math.abs(hmN-awN)>=3){const b=hmN>awN?g.hm:g.aw,w=hmN>awN?g.aw:g.hm,bn=Math.max(awN,hmN),wn=Math.min(awN,hmN);reasons.push(`Net rating: ${b.nm} ${bn>=0?'+':''}${bn.toFixed(1)} vs ${w.nm} ${wn>=0?'+':''}${wn.toFixed(1)} — ${Math.abs(hmN-awN).toFixed(1)}-pt season differential`)}}
     }
     if(af.length>=3&&hf.length>=3){const sp2=score>=0?hmPct:awPct,op2=score>=0?awPct:hmPct;
       if(Math.abs(sp2-op2)>.1)reasons.push(`Form gap (${(sp2*100).toFixed(0)}% vs ${(op2*100).toFixed(0)}% L10) translates directly to ML value`)}
