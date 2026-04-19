@@ -1424,7 +1424,7 @@ const DEFAULT_LEARNED_RULES=`1. Max 8 graded picks per slate. Pick #9 goes to le
 5. MLB SP edge alone is not enough. Require offensive or bullpen advantage on top.
 6. H2H records are supporting factors, never primary edges. Rosters turn over.
 7. Contextualize tennis W-L records — check opposition quality, surface splits, and trajectory.
-8. Tennis only when bettable on a major US book (FanDuel/DraftKings/BetMGM). No picks on unbettable matches.
+8. Tennis only when bettable on a major US book (FanDuel/DraftKings/BetMGM). No picks OR leans on unbettable matches. analyst_note must be 1-2 sentences max — no system alerts or grading complaints.
 9. NBA/NHL/MLB picks do not require live odds — use stats, form, and situational edges from context.
 10. NHL motivation plays are high-signal. Desperate playoff teams vs eliminated opponents.
 11. Shootout/OT losses are variance, not process errors. Do not over-correct after bad beats.`;
@@ -1479,9 +1479,12 @@ function renderPicksLeaderboard(){
       <div class="pick-item-pick">${p.pick}</div>
     </div>`;
   });
-  if(leans.length){
-    h+=`<div class="sport-group-hdr">👁 LEANS (${leans.length})</div>`;
-    leans.forEach((l,i)=>{
+  // Filter tennis leans for unbettable matches (same rule as slate)
+  const _isTnLean=l=>l.sport==='tennis'||/WTA|ATP|\bClay\b|\bHard\b|\bGrass\b/i.test(l.matchup||'');
+  const visLeans=leans.filter(l=>{if(!_isTnLean(l))return true;const mu=(l.matchup||'').toLowerCase();return allG.some(g=>g.cat==='tennis'&&hasUsBookOdds(g)&&((g.aw.nm||'').toLowerCase().split(/\s+/).some(t=>t.length>=3&&mu.includes(t))||(g.hm.nm||'').toLowerCase().split(/\s+/).some(t=>t.length>=3&&mu.includes(t))))});
+  if(visLeans.length){
+    h+=`<div class="sport-group-hdr">👁 LEANS (${visLeans.length})</div>`;
+    visLeans.forEach((l,i)=>{
       h+=`<div class="pick-item" onclick="selLean(${i})" style="opacity:.65">
         <div class="pick-item-top"><span class="pick-item-rank" style="color:var(--t4)">L</span><span class="pick-item-match">${l.matchup}</span></div>
         <div class="pick-item-pick" style="color:var(--t3)">${l.lean}</div>
@@ -1505,7 +1508,7 @@ function renderPicksOverview(){
   const ov=rec.overall||{w:0,l:0,p:0};const total=ov.w+ov.l+(ov.p||0);
   const hr=total?((ov.w/total)*100).toFixed(1)+'%':'—';
   let h='';
-  if(todayPicksData.analyst_note)h+=`<div class="analyst-note">📊 ${todayPicksData.analyst_note}</div>`;
+  if(todayPicksData.analyst_note){const note=todayPicksData.analyst_note.replace(/systemic.*?alert[^\n.]*/gi,'').trim();if(note)h+=`<div class="analyst-note">📊 ${note.slice(0,220)}</div>`;}
   // Record strip
   h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>RECORD</div>
     <div class="rec-stat"><span class="rec-lbl">OVERALL</span><span class="rec-val ${ov.w>ov.l?'rv-pos':ov.w<ov.l?'rv-neg':'rv-neu'}">${ov.w}-${ov.l}${ov.p?' ('+ov.p+'P)':''}</span></div>
@@ -1704,7 +1707,7 @@ Playoffs (NBA/NHL): Series context is primary — series score, elimination game
   "parlays":[{"type":"2-Leg Conservative","legs":["leg1","leg2"],"note":"why these combine"}],
   "leans":[{"matchup":"...","lean":"side and why","trigger":"what would promote to graded pick"}],
   "inactive_sports":[{"sport":"NFL","status":"Offseason — returns September 2026"}],
-  "analyst_note":"1-2 sentence slate summary"
+  "analyst_note":"1-2 sentence slate quality note only — NO system alerts, grading complaints, or data warnings"
 }
 \`\`\``;
 }
