@@ -1347,8 +1347,8 @@ async function generatePicks(){
     const text=data.content[0].text;
     const m=text.match(/```json\s*([\s\S]+?)\s*```/)||text.match(/(\{[\s\S]+\})/);
     if(!m)throw new Error('No JSON in response');
-    const cleaned=m[1].replace(/:(\s*)\+(\d)/g,':$1$2').replace(/,(\s*)\+(\d)/g,',$1$2').replace(/\[(\s*)\+(\d)/g,'[$1$2').replace(/\n(\s*)\+(\d)/g,'\n$1$2');
-    const result=JSON.parse(cleaned);
+    const cleaned=m[1].replace(/\+(\d)/g,'$1').replace(/,\s*([}\]])/g,'$1');
+    let result;try{result=JSON.parse(cleaned)}catch(pe){const snip=cleaned.slice(Math.max(0,pe.message.match(/position (\d+)/)?.[1]-50|0),+(pe.message.match(/position (\d+)/)?.[1]||0)+80);throw new Error(`JSON: ${pe.message} — near: ...${snip}...`)}
     todayPicksData=result;
     localStorage.setItem('et_picks_today',JSON.stringify(result));
     localStorage.setItem('et_picks_date',new Date().toDateString());
