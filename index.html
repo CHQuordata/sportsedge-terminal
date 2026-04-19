@@ -322,6 +322,18 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 
   /* ── Bottombar: compact ── */
   .bottombar{font-size:9px;padding:0 8px;gap:8px}
+
+  /* ── Section / table padding: undo desktop scale-up ── */
+  .sec{padding:12px 14px}
+  .dtable th{padding:4px 6px;font-size:9px}
+  .dtable td{padding:5px 7px;font-size:11px}
+
+  /* ── Modal / scorecard panel: fit narrow screens ── */
+  .modal{width:calc(100vw - 24px);max-width:none;padding:20px}
+  .sc-panel{min-width:unset;width:92vw;max-width:360px;padding:16px 20px}
+
+  /* ── Confidence filter row: tighter on mobile ── */
+  #confFilterRow{padding:3px 6px;gap:2px}
 }
 </style>
 </head>
@@ -1556,6 +1568,7 @@ function selPick(idx){
   const picks=todayPicksData?.picks?.filter(p=>!p.is_lean)||[];
   const p=picks[idx];if(!p)return;
   const el=$('detailPanel');
+  if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   const cc=p.confidence==='HIGH'?'var(--grn)':p.confidence==='MEDIUM'?'var(--amb)':'var(--t3)';
   let h=`<div class="pick-det-hdr"><div class="pick-det-match">${p.matchup}</div><div class="pick-det-pick">${p.pick}</div>
     <div style="font-size:10px;color:${cc};font-weight:600">● ${p.confidence} CONFIDENCE${p.odds?' · '+(p.odds>0?'+':'')+p.odds:''}</div>
@@ -1573,6 +1586,7 @@ function selPick(idx){
 function selLean(idx){
   selPickIdx=-1;renderPicksLeaderboard();
   const l=todayPicksData?.leans?.[idx];if(!l)return;
+  if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   $('detailPanel').innerHTML=`<div class="pick-det-hdr"><div class="pick-det-match">${l.matchup}</div><div style="font-size:11px;color:var(--t3);margin-top:4px">LEAN — monitoring, not a graded pick</div></div>
     <div class="sec"><div class="sec-title"><div class="ind" style="background:var(--t3)"></div>LEAN</div><div style="font-size:11px;color:var(--t2);line-height:1.7">${l.lean}</div></div>
     ${l.trigger?`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>PROMOTION TRIGGER</div><div style="font-size:11px;color:var(--t2)">${l.trigger}</div></div>`:''}`;
