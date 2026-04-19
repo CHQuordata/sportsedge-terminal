@@ -461,7 +461,7 @@ async function refreshAll(forceOdds=false){
       const cp=ev.competitions?.[0];if(!cp)return;
       const aw=cp.competitors?.find(x=>x.homeAway==='away'),hm=cp.competitors?.find(x=>x.homeAway==='home');
       if(!aw||!hm)return;
-      const _isPlayoff=ev.season?.type?.id==3||ev.season?.type?.type==3;
+      const _isPlayoff=ev.season?.type==3||ev.season?.type?.id==3||ev.season?.type?.type==3||ev.season?.slug==='post-season'||/playoff|postseason/i.test(ev.season?.type?.name||'');
       const _ser=cp.series;const _serAw=_ser?.competitors?.find(x=>x.id==aw.team.id);const _serHm=_ser?.competitors?.find(x=>x.id==hm.team.id);
       const seriesStr=_ser?.summary||(_serAw&&_serHm?`${aw.team.abbreviation} leads ${_serAw.wins}-${_serHm.wins}`:null);
       allG.push({id:ev.id,sp:k,cat:c.cat,spL:c.lb,spI:c.ic,
@@ -1816,7 +1816,14 @@ async function aiAnalyzeGame(idx){
   const btn=$('aiAnalyzeBtn');if(btn){btn.disabled=true;btn.textContent='ANALYZING...'}
   let ctx=`Analyze this specific matchup for betting value:\n\n`;
   ctx+=`[${g.spL}] ${g.aw.nm} @ ${g.hm.nm}\n`;
-  if(g.playoff){ctx+=`CONTEXT: NBA/NHL PLAYOFFS — best-of-7 series. Series stakes and elimination pressure matter more than regular season signals.\n`;if(g.serSum)ctx+=`Series status: ${g.serSum}\n`;}
+  if(g.playoff){
+    const gameNum=(g.aw.serW!=null&&g.hm.serW!=null)?(g.aw.serW+g.hm.serW+1):null;
+    ctx+=`⚠️ THIS IS A ${g.cat==='nhl'?'NHL':'NBA'} PLAYOFF GAME`;
+    if(gameNum)ctx+=` — ROUND 1, GAME ${gameNum}`;
+    ctx+=`.\nDO NOT apply any regular-season reasoning. Seeding is locked, load management does not exist in playoffs, pace tendencies shift, rest patterns change. Focus ONLY on: series momentum (if not Game 1), matchup adjustments, playoff intensity, home-court/ice advantage, and which team's style wins in a 7-game series.\n`;
+    if(g.serSum)ctx+=`Series status: ${g.serSum}\n`;
+    if(g.aw.serW!=null&&g.hm.serW!=null)ctx+=`Series score: ${g.aw.nm} ${g.aw.serW} — ${g.hm.serW} ${g.hm.nm}\n`;
+  }
   if(g.aw.rec||g.hm.rec)ctx+=`Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
   if(g.aw.rank||g.hm.rank)ctx+=`Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:''} ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:''}\n`;
   if(g.cat==='tennis'){const surf=getSurface(g.ven);ctx+=`Surface: ${surf}\n`;if(g.round)ctx+=`Round: ${g.round}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(fm.length){const w=fm.filter(m=>m.W).length;ctx+=`${pl.nm} L5: ${w}-${fm.length-w} — ${fm.map(m=>(m.W?'W':'L')+' vs '+m.opp+(m.round?' ('+m.round+')':'')).join(', ')}\n`}})}
@@ -1832,7 +1839,7 @@ async function aiAnalyzeGame(idx){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:512,
-        system:`You are a sharp sports betting analyst acting as a second opinion on algo-generated picks. ALL data provided in the user message (records, odds, stats, line moves) is live current-season data pulled directly from ESPN and sportsbooks — treat it as ground truth. NEVER question, caveat, or second-guess the provided records or stats based on your training data; your training cutoff means you do not know this season's standings. Your job: validate, challenge, or add nuance to algo picks using only the numbers given. Agree with specific reasons, flag what the algo missed, or flip the pick if the data warrants it. Be concise, cite actual numbers.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
+        system:`You are a sharp sports betting analyst acting as a second opinion on algo-generated picks. ALL data provided in the user message (records, odds, stats, line moves) is live current-season data pulled directly from ESPN and sportsbooks — treat it as ground truth. NEVER question, caveat, or second-guess the provided records or stats based on your training data; your training cutoff means you do not know this season's standings. If the game is marked as a PLAYOFF GAME, apply playoff-specific reasoning only — seeding is irrelevant, load management does not exist, ignore pace and rest signals that apply in regular season. Your job: validate, challenge, or add nuance to algo picks using only the numbers given. Agree with specific reasons, flag what the algo missed, or flip the pick if the data warrants it. Be concise, cite actual numbers.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
         messages:[{role:'user',content:ctx+'\n\nProvide: 1) Verdict on algo pick(s) — agree/challenge/flip and why (2-3 sentences), 2) What the algo likely missed, 3) Final confidence (HIGH/MEDIUM/LOW) with score 1-10.'}]})});
     if(!resp.ok)throw new Error('API error');
     const data=await resp.json();
