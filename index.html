@@ -429,6 +429,8 @@ function dfmt(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+S
 function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null,seed:p.curatedRank?.current||null,country:p.athlete?.flag?.alt||null}}
 
 async function init(){
+  // Migrate stale rules if version outdated
+  const RULES_V='v3';if(localStorage.getItem('et_rules_version')!==RULES_V){localStorage.removeItem('et_learned_rules');localStorage.setItem('et_rules_version',RULES_V)}
   if(AK){$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   if(CLAUDE_KEY){$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY'}
   if(TN_API_KEY){$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY'}
@@ -1525,22 +1527,14 @@ let BANKROLL=parseFloat(localStorage.getItem('bankroll'))||0;
 const aiAnalysisCache=new Map();
 const gamePicksCache=new Map();
 
-const DEFAULT_LEARNED_RULES=`1. Max 8 graded picks per slate. Pick #9 goes to leans.
-2. Max 4 MEDIUM-confidence picks. Demote weakest to leans if exceeded.
-3. Never 2+ graded picks on the same game/match. One pick per event.
-4. No MLB totals until pitchers have 30+ IP. Early-season ERA is noise — use K/9, xERA, park factors.
-5. MLB SP edge alone is not enough. Require offensive or bullpen advantage on top.
-6. H2H records are supporting factors, never primary edges. Rosters turn over.
-7. Contextualize tennis W-L records — check opposition quality, surface splits, and trajectory.
-8. Tennis only when bettable on a major US book (FanDuel/DraftKings/BetMGM). No picks OR leans on unbettable matches. analyst_note must be 1-2 sentences max — no system alerts or grading complaints.
-9. NBA/NHL/MLB picks do not require live odds — use stats, form, and situational edges from context.
-10. NHL motivation plays are high-signal. Desperate playoff teams vs eliminated opponents.
-11. Shootout/OT losses are variance, not process errors. Do not over-correct after bad beats.
-12. NBA FATIGUE: BACK-TO-BACK teams cover at ~44% ATS and undershoots total by avg 4.5 pts. Lean under and fade them against rested opponents. 3-IN-4 NIGHTS is even stronger — treat as major fade signal.
-13. NBA PLAYOFFS: ignore regular season ATS trends entirely. Focus on: series score/momentum, home-court patterns in THIS series, coaching adjustments, desperation factor (must-win Game X). Spread is secondary to series context.
-14. TENNIS SERVE EDGE: when BP save% ≥65% vs opponent ≤55%, the stronger server holds with high frequency — lean on that player ML. First serve % in (≥68%) + first serve won% (≥78%) on surface is elite tier.
-15. TENNIS SURFACE FORM: 2025 surface W-L% from live data (matchstat.com) outweighs ATP ranking when divergence is ≥15%. A #40 with 85% clay win rate beats a #12 with 55% clay record.
-16. NHL SPECIAL TEAMS: PP% gap ≥5 points is a genuine edge for puck line. PK% ≥82% AND opponent PP% ≥22% = team likely wins special teams battle. Weight this heavily in close line matchups.`;
+const DEFAULT_LEARNED_RULES=`1. PICK LIMITS: Max 8 graded picks per slate. Max 4 MEDIUM confidence. One pick per game. Surplus goes to leans.
+2. RECORDS AS CONTEXT: Season records, H2H, and opponent quality are supporting signals only — never the primary edge. Rosters turn over. Contextualize all W-L before weighting.
+3. MLB: No totals until SP has 30+ IP (early ERA is noise — use K/9, xFIP, park factor). SP ERA edge alone is insufficient — require an offensive or bullpen angle on top.
+4. NBA FATIGUE: B2B teams cover ~44% ATS and undershoot total by avg 4.5 pts vs rested opponents. 3-in-4 nights is stronger — treat as a primary fade signal on both spread and total.
+5. NBA/NHL PLAYOFFS: Ignore regular-season ATS trends. Focus on series score, home-court/ice patterns in THIS series, desperation factor, and coaching adjustments game-to-game. Spread is secondary to series momentum.
+6. NHL SPECIAL TEAMS: PP% gap ≥5pts is a puck-line edge. PK% ≥82% vs opponent PP% ≥22% wins the special teams battle. OT/shootout losses are variance — do not over-correct after them.
+7. TENNIS EDGES: Surface 2025 W-L% (matchstat.com) outweighs ATP ranking when divergence ≥15%. BP save% ≥65% vs opponent ≤55% is a serve-hold edge — lean that player ML. Only pick when odds are live on FanDuel/DraftKings/BetMGM.
+8. TENNIS LIMITS: No graded picks or leans on any match tagged [NO US BOOK ODDS]. analyst_note is 1-2 sentences max — no system alerts, grading complaints, or data warnings.`;
 
 function resetLearnedRules(){localStorage.removeItem('et_learned_rules');renderPicksOverview()}
 function showPicksSetup(){$('claudeModal').style.display='flex';$('claudeKeyInput').focus()}
