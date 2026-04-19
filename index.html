@@ -811,6 +811,17 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
   // PICKS with grading for final games
   const picks=genPicks(g,af,hf,pitchers,weather,{awTn,hmTn,awNba,hmNba,awNhl,hmNhl,goalies,tnH2H,lwotArt,awTnApi,hmTnApi});
   gamePicksCache.set(g.id,picks);
+  const isLive=g.st==='STATUS_IN_PROGRESS';
+  if(isLive&&(g.aw.sc!=null||g.hm.sc!=null)){
+    const awSc=g.aw.sc??'',hmSc=g.hm.sc??'';
+    const awLd=parseFloat(awSc)>parseFloat(hmSc),hmLd=parseFloat(hmSc)>parseFloat(awSc);
+    h+=`<div class="sec" style="background:var(--bg0);border-left:3px solid var(--grn)"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div><span style="color:var(--grn)">● LIVE</span>${g.stD?`<span style="font-size:10px;color:var(--t3);margin-left:4px">${g.stD}</span>`:''}</div>`;
+    h+=`<div style="font-size:26px;font-weight:700;text-align:center;padding:8px 0;letter-spacing:1px">`;
+    h+=`<span style="color:${awLd?'var(--grn)':'var(--t1)'}">${g.aw.ab} ${awSc}</span>`;
+    h+=`<span style="color:var(--t4);font-size:14px;margin:0 12px">${g.isTeam?'@':'vs'}</span>`;
+    h+=`<span style="color:${hmLd?'var(--grn)':'var(--t1)'}">${hmSc} ${g.hm.ab}</span></div>`;
+    h+=`</div>`;
+  }
   const isFinal=g.st==='STATUS_FINAL';
   if(isFinal&&(g.aw.sc!=null||g.hm.sc!=null)){
     const awSc=g.aw.sc??'',hmSc=g.hm.sc??'';
