@@ -356,7 +356,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
   </div>
 </div>
 <div class="main">
-  <div class="panel slatePanel"><div class="panel-hdr"><span class="panel-title" id="panelHdrTitle">Today's Slate</span><div style="display:flex;align-items:center;gap:6px"><div class="date-toggle"><button class="dt-btn active" id="dtToday" onclick="setDateFilter('today')">TODAY</button><button class="dt-btn" id="dtTomorrow" onclick="setDateFilter('tomorrow')">TMW</button><button class="dt-btn" id="dtAll" onclick="setDateFilter('all')">ALL</button></div><span class="badge a" id="slateCount">LOADING</span></div></div><div class="panel-body" id="slateList"></div></div>
+  <div class="panel slatePanel"><div class="panel-hdr"><span class="panel-title" id="panelHdrTitle">Today's Slate</span><div style="display:flex;align-items:center;gap:6px"><div class="date-toggle"><button class="dt-btn active" id="dtToday" onclick="setDateFilter('today')">TODAY</button><button class="dt-btn" id="dtTomorrow" onclick="setDateFilter('tomorrow')">TMW</button><button class="dt-btn" id="dtAll" onclick="setDateFilter('all')">ALL</button></div><span class="badge a" id="slateCount">LOADING</span></div></div><div style="padding:5px 12px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:4px" id="confFilterRow"><span style="font-size:9px;color:var(--t4);letter-spacing:.5px;margin-right:2px">AI:</span><button class="dt-btn active" id="cfAll" onclick="setConfFilter('all')">ALL</button><button class="dt-btn" id="cfHigh" onclick="setConfFilter('HIGH')" style="color:var(--grn)">HIGH</button><button class="dt-btn" id="cfMed" onclick="setConfFilter('MEDIUM')" style="color:var(--amb)">MED</button><button class="dt-btn" id="cfPicked" onclick="setConfFilter('picked')" style="color:var(--cyn)">PICKED</button></div><div class="panel-body" id="slateList"></div></div>
   <div class="panel detailPanel-wrap" style="background:var(--bg0)"><button class="mob-back-btn" onclick="mobBack()">&#8592; BACK TO SLATE</button><div class="panel-body" id="detailPanel" style="background:var(--bg1)"><div class="detail-empty"><div class="detail-empty-icon">&#9672;</div><div class="detail-empty-text">SELECT A MATCHUP TO RESEARCH</div><div style="font-size:10px;color:var(--t4);margin-top:8px">Use <span class="kbd">&#8593;</span><span class="kbd">&#8595;</span> to navigate</div></div></div></div>
   <div class="panel dashPanel"><div class="panel-hdr"><span class="panel-title">Dashboard</span></div>
     <div class="stat-grid"><div class="stat-cell"><div class="stat-lbl">GAMES</div><div class="stat-val" id="stG">-</div></div><div class="stat-cell"><div class="stat-lbl">EDGES</div><div class="stat-val g" id="stE">-</div></div><div class="stat-cell"><div class="stat-lbl">SPORTS</div><div class="stat-val a" id="stS">-</div></div><div class="stat-cell"><div class="stat-lbl">INJURIES</div><div class="stat-val r" id="stI">-</div></div></div>
@@ -651,9 +651,27 @@ function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-ta
 function setDateFilter(f){cDateFilter=f;['today','tomorrow','all'].forEach(k=>{const el=$('dt'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.classList.toggle('active',k===f)});const titles={today:"Today's Slate",tomorrow:"Tomorrow's Slate",all:"All Games"};$('panelHdrTitle').textContent=titles[f];applyFilters()}
 const US_MAJOR_BOOKS=['fanduel','draftkings','betmgm','caesars','pointsbetus','bet365'];
 function hasUsBookOdds(g){return g.odds?.bookmakers?.some(b=>US_MAJOR_BOOKS.some(k=>(b.key||'').includes(k)||(b.title||'').toLowerCase().includes(k)))}
+let cConfFilter='all';
+function getGameAiConf(g){
+  if(!todayPicksData?.picks)return null;
+  const _nm=s=>(s||'').toLowerCase().split(' ').pop();
+  const an=_nm(g.aw.nm),hn=_nm(g.hm.nm);
+  const pk=todayPicksData.picks.find(p=>!p.is_lean&&(!p.sport||p.sport===g.cat)&&((p.matchup||'').toLowerCase().includes(an)||(p.matchup||'').toLowerCase().includes(hn)));
+  return pk?.confidence||null;
+}
+function setConfFilter(f){
+  cConfFilter=f;
+  ['all','HIGH','MEDIUM','picked'].forEach(k=>{const el=$(k==='all'?'cfAll':k==='HIGH'?'cfHigh':k==='MEDIUM'?'cfMed':'cfPicked');if(el)el.classList.toggle('active',k===f)});
+  applyFilters();
+}
 function applyFilters(){if(cView==='picks')return;let g=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);if(cDateFilter!=='all'){const ref=new Date();if(cDateFilter==='tomorrow')ref.setDate(ref.getDate()+1);const ds=ref.toDateString();g=g.filter(x=>x.tm.toDateString()===ds)}
 // Strip tennis/MMA with no major US book odds — not bettable on FD/DK/BetMGM/Caesars
 if(AK)g=g.filter(gm=>gm.cat!=='tennis'&&gm.cat!=='mma'||hasUsBookOdds(gm));
+// Confidence filter — only applies when AI picks have been generated
+if(cConfFilter!=='all'&&todayPicksData?.picks){
+  if(cConfFilter==='picked')g=g.filter(gm=>getGameAiConf(gm)!==null);
+  else g=g.filter(gm=>getGameAiConf(gm)===cConfFilter);
+}
 fG=g;renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
 
 function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div class="no-data">No games found<div style="font-size:10px;margin-top:8px">Hit SCAN to refresh or check another sport tab</div></div>';return}
@@ -671,7 +689,9 @@ function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div
         :done?`<span class="final-lbl">FINAL${scoreStr}</span>`
         :`${g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}${dateStr}`;
       const serTag=g.playoff&&g.serSum?`<span style="font-size:8px;color:var(--amb);opacity:.8">${g.serSum}</span>`:'';
-      h+=`<div class="game-row ${rowCls}" onclick="selGame(${g._i})" data-i="${g._i}"><div class="game-teams">${g.aw.ab} ${live&&g.aw.sc!=null?g.aw.sc:''} ${g.isTeam?'@':'vs'} ${g.hm.ab} ${live&&g.hm.sc!=null?g.hm.sc:''}${g.playoff?` <span style="font-size:8px;color:var(--amb);font-weight:700">PO</span>`:''}${serTag}</div><div class="game-meta"><span>${statusEl}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}${g.lineMove&&(Math.abs(g.lineMove.spMv||0)>=0.5||Math.abs(g.lineMove.toMv||0)>=0.5)?`<span style="color:var(--amb);font-weight:700">↕</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`})});
+      const aiConf=getGameAiConf(g);
+      const confBadge=aiConf?`<span style="font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;margin-left:4px;${aiConf==='HIGH'?'color:var(--grn);background:var(--grn-bg)':aiConf==='MEDIUM'?'color:var(--amb);background:var(--amb-bg)':'color:var(--t3);background:var(--bg3)'}">⚡${aiConf[0]}</span>`:'';
+      h+=`<div class="game-row ${rowCls}" onclick="selGame(${g._i})" data-i="${g._i}"><div class="game-teams">${g.aw.ab} ${live&&g.aw.sc!=null?g.aw.sc:''} ${g.isTeam?'@':'vs'} ${g.hm.ab} ${live&&g.hm.sc!=null?g.hm.sc:''}${g.playoff?` <span style="font-size:8px;color:var(--amb);font-weight:700">PO</span>`:''}${serTag}${confBadge}</div><div class="game-meta"><span>${statusEl}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}${g.lineMove&&(Math.abs(g.lineMove.spMv||0)>=0.5||Math.abs(g.lineMove.toMv||0)>=0.5)?`<span style="color:var(--amb);font-weight:700">↕</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`})});
   el.innerHTML=h}
 
 // ══════════════════════════════
@@ -1442,9 +1462,13 @@ function renderPicksLeaderboard(){
     el.innerHTML='<div class="pick-gen-state" style="height:200px"><div style="font-size:28px;opacity:.25">⚡</div><div style="font-size:10px;letter-spacing:1px;color:var(--t4)">NO PICKS YET</div><div style="font-size:9px;color:var(--t4);margin-top:4px">Press GENERATE in the main panel</div></div>';
     return;
   }
-  const graded=todayPicksData.picks.filter(p=>!p.is_lean);
+  const allGraded=todayPicksData.picks.filter(p=>!p.is_lean);
   const leans=todayPicksData.leans||[];
-  let h=`<div class="sport-group-hdr">⚡ PICKS (${graded.length})</div>`;
+  // Confidence filter for picks leaderboard
+  const _pConf=localStorage.getItem('et_picks_conf')||'all';
+  const graded=_pConf==='all'?allGraded:allGraded.filter(p=>p.confidence===_pConf);
+  const confBtns=['all','HIGH','MEDIUM'].map(c=>{const lbl=c==='all'?`ALL (${allGraded.length})`:c==='HIGH'?`HIGH (${allGraded.filter(p=>p.confidence==='HIGH').length})`:`MED (${allGraded.filter(p=>p.confidence==='MEDIUM').length})`;const clr=c==='HIGH'?'var(--grn)':c==='MEDIUM'?'var(--amb)':'var(--t2)';return`<button onclick="localStorage.setItem('et_picks_conf','${c}');renderPicksLeaderboard()" style="padding:2px 7px;font-family:var(--mono);font-size:9px;font-weight:600;color:${_pConf===c?clr:'var(--t4)'};background:${_pConf===c?'var(--bg3)':'transparent'};border:1px solid ${_pConf===c?'var(--bdr2)':'transparent'};border-radius:2px;cursor:pointer">${lbl}</button>`}).join('');
+  let h=`<div style="padding:5px 12px;border-bottom:1px solid var(--bdr);display:flex;gap:3px;align-items:center"><span style="font-size:9px;color:var(--t4);margin-right:2px">FILTER:</span>${confBtns}</div><div class="sport-group-hdr">⚡ PICKS (${graded.length}${_pConf!=='all'?' filtered':''})</div>`;
   graded.forEach((p,i)=>{
     const res=p.result;const sp=p.sport;
     const ic=sp==='tennis'?'🎾':sp==='nba'?'🏀':sp==='nhl'?'🏒':sp==='mlb'?'⚾':sp==='nfl'?'🏈':sp==='mma'?'🥊':'⚡';
