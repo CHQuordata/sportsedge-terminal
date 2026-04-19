@@ -880,7 +880,6 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       if(pl.rank)h+=`<div class="tn-stat"><div class="tn-sv" style="color:var(--grn)">#${pl.rank}</div><div class="tn-sl">RANK</div></div>`;
       if(hand)h+=`<div class="tn-stat"><div class="tn-sv" style="color:${hand==='L'?'var(--amb)':'var(--cyn)'}">${hand==='L'?'LH':'RH'}</div><div class="tn-sl">HAND</div></div>`;
       if(st?.age)h+=`<div class="tn-stat"><div class="tn-sv">${st.age}</div><div class="tn-sl">AGE</div></div>`;
-      if(country)h+=`<div class="tn-stat"><div class="tn-sv" style="font-size:10px;color:var(--t2)">${country.slice(0,3).toUpperCase()}</div><div class="tn-sl">CTY</div></div>`;
       if(pl.rec)h+=`<div class="tn-stat"><div class="tn-sv" style="font-size:10px;color:var(--t2)">${pl.rec}</div><div class="tn-sl">REC</div></div>`;
       h+=`</div>`;
       const isAw2=pl===g.aw;const tnD=isAw2?awTnApi:hmTnApi;
@@ -986,7 +985,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       const qclr=p.era==='--'?'var(--t4)':era<3.00?'var(--grn)':era<3.80?'var(--cyn)':era<4.50?'var(--amb)':'var(--red)';
       const eraClr=era<3.00?'var(--grn)':era<3.80?'var(--cyn)':era<4.50?'var(--amb)':'var(--red)';
       const bbClr=p.bb9==='--'?'var(--t3)':parseFloat(p.bb9)<2.5?'var(--grn)':parseFloat(p.bb9)>4.0?'var(--red)':'var(--t2)';
-      h+=`<div class="sp-card"><div class="sp-nm">${tm.ab}<span class="sp-hand">${p.hand}HP</span><span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;color:${qclr};background:var(--bg3);margin-left:5px">${qlbl}</span><div style="font-size:10px;color:var(--t2);margin-top:2px">${p.name}</div></div><div class="sp-stats"><div class="sp-stat"><div class="sp-sv" style="color:${eraClr}">${p.era}</div><div class="sp-sl">ERA</div></div><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.whip)<1.1?'var(--grn)':parseFloat(p.whip)>1.4?'var(--red)':'var(--t2)'}">${p.whip}</div><div class="sp-sl">WHIP</div></div><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.k9)>=9?'var(--grn)':parseFloat(p.k9)<6?'var(--red)':'var(--cyn)'}">${p.k9}</div><div class="sp-sl">K/9</div></div><div class="sp-stat"><div class="sp-sv" style="color:${bbClr}">${p.bb9||'--'}</div><div class="sp-sl">BB/9</div></div><div class="sp-stat"><div class="sp-sv" style="color:var(--t3)">${p.w}-${p.l}</div><div class="sp-sl">W-L</div></div></div></div>`;
+      h+=`<div class="sp-card"><div class="sp-nm">${tm.ab}<span class="sp-hand">${p.hand}HP</span><span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;color:${qclr};background:var(--bg3);margin-left:5px">${qlbl}</span><div style="font-size:10px;color:var(--t2);margin-top:2px">${p.name}</div></div><div class="sp-stats"><div class="sp-stat"><div class="sp-sv" style="color:${eraClr}">${p.era}</div><div class="sp-sl">ERA</div></div><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.whip)<1.1?'var(--grn)':parseFloat(p.whip)>1.4?'var(--red)':'var(--t2)'}">${p.whip}</div><div class="sp-sl">WHIP</div></div><div class="sp-stat"><div class="sp-sv" style="color:${parseFloat(p.k9)>=9?'var(--grn)':parseFloat(p.k9)<6?'var(--red)':'var(--cyn)'}">${p.k9}</div><div class="sp-sl">K/9</div></div><div class="sp-stat"><div class="sp-sv" style="color:${bbClr}">${p.bb9||'--'}</div><div class="sp-sl">BB/9</div></div></div></div>`;
     });
     h+=`</div></div>`}
   // ── Weather (outdoor MLB/NFL) ──
@@ -1007,7 +1006,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
 
   if(af.length||hf.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>RECENT FORM (L10)</div>${formBar(g.aw.nm,af)}${formBar(g.hm.nm,hf)}</div>`;
   if(af.length>=3&&hf.length>=3){const awF=avgSc(af,'f'),awA=avgSc(af,'a'),hmF=avgSc(hf,'f'),hmA=avgSc(hf,'a');
-    if(awF!==null&&hmF!==null){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SCORING AVERAGES (L${Math.min(af.length,10)})</div><table class="dtable"><thead><tr><th>TEAM</th><th>FOR</th><th>AG</th><th>MARGIN</th></tr></thead><tbody><tr><td style="color:var(--cyn)">${g.aw.ab}</td><td>${awF.toFixed(1)}</td><td>${awA.toFixed(1)}</td><td class="${awF-awA>0?'best':''}" style="${awF-awA<0?'color:var(--red)':''}">${awF-awA>0?'+':''}${(awF-awA).toFixed(1)}</td></tr><tr><td style="color:var(--cyn)">${g.hm.ab}</td><td>${hmF.toFixed(1)}</td><td>${hmA.toFixed(1)}</td><td class="${hmF-hmA>0?'best':''}" style="${hmF-hmA<0?'color:var(--red)':''}">${hmF-hmA>0?'+':''}${(hmF-hmA).toFixed(1)}</td></tr></tbody></table></div>`}}
+    if(awF!==null&&hmF!==null){h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>SCORING AVERAGES (L${Math.min(af.length,10)})</div><table class="dtable"><thead><tr><th>TEAM</th><th>FOR</th><th>AG</th></tr></thead><tbody><tr><td style="color:var(--cyn)">${g.aw.ab}</td><td>${awF.toFixed(1)}</td><td>${awA.toFixed(1)}</td></tr><tr><td style="color:var(--cyn)">${g.hm.ab}</td><td>${hmF.toFixed(1)}</td><td>${hmA.toFixed(1)}</td></tr></tbody></table></div>`}}
   if(g.cat==='nba'&&(awNba||hmNba)){const awB2=isB2B(af,g.tm),hmB2=isB2B(hf,g.tm);const awF3=is3in4(af,g.tm),hmF3=is3in4(hf,g.tm);
     h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0">season averages</span></div><table class="dtable"><thead><tr><th>TEAM</th><th>PPG</th><th>REB</th><th>AST</th><th>FG%</th><th>3P%</th><th>TO/G</th></tr></thead><tbody>`;
     [[g.aw,awNba,awB2,awF3],[g.hm,hmNba,hmB2,hmF3]].forEach(([tm,st,b2b,f3])=>{
@@ -1016,7 +1015,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
     h+=`</tbody></table></div>`}
   if(g.cat==='nhl'&&(awNhl||hmNhl)){
     const awB2nh=isB2B(af,g.tm),hmB2nh=isB2B(hf,g.tm);
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0">season averages</span></div><table class="dtable"><thead><tr><th>TEAM</th><th>GF/G</th><th>GA/G</th><th>NET</th><th>PP%</th><th>PK%</th><th>SV%</th></tr></thead><tbody>`;
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>TEAM STATS <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0">season averages</span></div><table class="dtable"><thead><tr><th>TEAM</th><th>GF/G</th><th>GA/G</th><th>NET</th><th>PP%</th><th>PK%</th><th>SH%</th></tr></thead><tbody>`;
     [[g.aw,awNhl,awB2nh],[g.hm,hmNhl,hmB2nh]].forEach(([tm,st,b2b])=>{
       const net=st?.net?parseFloat(st.net):null;
       const netClr=net!=null?(net>=0.3?'color:var(--grn)':net<=-0.3?'color:var(--red)':'color:var(--t2)'):'';
@@ -1024,9 +1023,10 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       const pkVal=st?.pkPct?parseFloat(st.pkPct):null;
       const ppClr=ppVal!=null?(ppVal>=22?'color:var(--grn)':ppVal<15?'color:var(--red)':'color:var(--t2)'):'';
       const pkClr=pkVal!=null?(pkVal>=82?'color:var(--grn)':pkVal<75?'color:var(--red)':'color:var(--t2)'):'';
-      const svCl=st?.savePct&&parseFloat(st.savePct)>=.920?'color:var(--grn)':st?.savePct&&parseFloat(st.savePct)<.895?'color:var(--red)':'';
+      const shVal=st?.shootPct?parseFloat(st.shootPct):null;
+      const shCl=shVal!=null?(shVal>=10?'color:var(--grn)':shVal<8?'color:var(--red)':'color:var(--t2)'):'';
       const fatigue=b2b?`<span style="font-size:8px;font-weight:700;color:var(--red);background:rgba(255,71,87,.12);border-radius:2px;padding:1px 4px;margin-left:3px">B2B</span>`:'';
-      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${fatigue}</td><td>${st?.gpg||'--'}</td><td>${st?.gaa||'--'}</td><td style="${netClr};font-weight:700">${net!=null?(net>=0?'+':'')+net:'--'}</td><td style="${ppClr}">${st?.ppPct!=null?st.ppPct+'%':'--'}</td><td style="${pkClr}">${st?.pkPct!=null?st.pkPct+'%':'--'}</td><td style="${svCl}">${st?.savePct||'--'}</td></tr>`});
+      h+=`<tr><td style="color:var(--cyn);font-weight:500">${tm.ab}${fatigue}</td><td>${st?.gpg||'--'}</td><td>${st?.gaa||'--'}</td><td style="${netClr};font-weight:700">${net!=null?(net>=0?'+':'')+net:'--'}</td><td style="${ppClr}">${st?.ppPct!=null?st.ppPct+'%':'--'}</td><td style="${pkClr}">${st?.pkPct!=null?st.pkPct+'%':'--'}</td><td style="${shCl}">${shVal!=null?shVal+'%':'--'}</td></tr>`);
     h+=`</tbody></table></div>`}
   if(g.cat==='nhl'&&goalies){const ag=goalies.away,hg=goalies.home;
     const _glEdge=ag&&hg?(parseFloat(ag.savePct)<parseFloat(hg.savePct)&&hg.savePct!=='--'?g.hm:parseFloat(ag.savePct)>parseFloat(hg.savePct)&&ag.savePct!=='--'?g.aw:null):null;
@@ -1047,7 +1047,6 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
     if(g.inj.aw.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin-bottom:6px">${g.aw.nm.toUpperCase()}</div>`;g.inj.aw.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
     if(g.inj.hm.length){h+=`<div style="font-size:9px;font-weight:600;color:var(--t3);letter-spacing:1px;margin:12px 0 6px">${g.hm.nm.toUpperCase()}</div>`;g.inj.hm.forEach(i=>{h+=`<div class="inj-item"><span class="inj-status ${i.sc}">${i.sc}</span><span class="inj-name">${i.nm}</span><span class="inj-pos">${i.pos}</span><span class="inj-desc">${i.desc}</span></div>`})}
     h+='</div>'}
-  h+=`<div class="note"><strong>NOTE:</strong> EV% derived from no-vig consensus across books. Sharp signal = edge magnitude. No lines = The Odds API has no market for this match yet.</div>`;
   el.innerHTML=h;el.scrollTop=0;
   if(aiAnalysisCache.has(g.id)){const cd=document.createElement('div');cd.id='aiGameAnalysis';cd.className='sec';cd.style.borderLeft='3px solid var(--amb)';cd.style.background='var(--bg0)';cd.innerHTML=aiAnalysisCache.get(g.id);const firstSec=el.querySelector('.sec,.picks-section');if(firstSec)el.insertBefore(cd,firstSec);else el.appendChild(cd)}
   // Async player props — non-blocking
