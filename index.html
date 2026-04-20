@@ -462,7 +462,7 @@ const PROP_MARKETS={basketball_nba:'player_points,player_rebounds,player_assists
 const PROP_BOOKS='fanduel,draftkings,betmgm,pointsbet';
 let _tennisKeys=null,_tennisKeysTs=0;
 let TN_API_KEY=localStorage.getItem('tn_api_key')||'';
-const tnPlayerCache=new Map(),tnGameCache=new Map();
+const tnPlayerCache=new Map(),tnGameCache=new Map(),_tnFixCache=new Map();
 const gameStatsCache=new Map(),gamePitcherCache=new Map(),tennisCache=new Map(),gameFormCache=new Map();
 const E={
   nba:{s:'basketball',l:'nba',lb:'NBA',ic:'\u{1F3C0}',ok:'basketball_nba',ha:3,cat:'nba',isTeam:true},
@@ -856,6 +856,7 @@ async function selGame(idx){
   const g=fG[idx];const el=$('detailPanel');
   if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
+  try{
   let af=[],hf=[],pitchers=null,goalies=null,weather=null,awTn=null,hmTn=null,awNba=null,hmNba=null,awNhl=null,hmNhl=null,tnSum=null,tnH2H=null,lwotArt=null,awTnApi=null,hmTnApi=null;
   const _ec=g.isTeam&&g.aw.id&&E[g.sp],_eo=g.st!=='STATUS_FINAL';
   const [_fr,_sm,_wx,_awt,_hmt,_awn,_hmn,_awnh,_hmnh,_tns,_h2h,_lwot,_tnp]=await Promise.all([
@@ -1212,6 +1213,7 @@ async function selGame(idx){
   if(aiAnalysisCache.has(g.id)){const cd=document.createElement('div');cd.id='aiGameAnalysis';cd.className='sec';cd.style.borderLeft='3px solid var(--amb)';cd.style.background='var(--bg0)';cd.innerHTML=aiAnalysisCache.get(g.id);const firstSec=el.querySelector('.sec,.picks-section');if(firstSec)el.insertBefore(cd,firstSec);else el.appendChild(cd)}
   // Async player props — non-blocking
   if(AK&&g.odds?.id&&PROP_MARKETS[g.odds.sport_key||'']){fetchGameProps(g.odds.sport_key,g.odds.id).then(pd=>{if(!pd||selIdx!==idx)return;const ph=renderProps(pd,g.cat);if(ph){const dp=$('detailPanel');const inj=dp.querySelector('.sec:last-of-type');const pdiv=document.createElement('div');pdiv.innerHTML=ph;if(inj)dp.insertBefore(pdiv.firstChild,inj);else dp.appendChild(pdiv.firstChild)}});}
+  }catch(e){el.innerHTML=`<div class="detail-empty" style="color:var(--red)">Error loading matchup. Try clicking again.</div>`;}
 }
 
 function xForm(d,tid){if(!d?.events)return[];const sc=v=>typeof v==='object'?v?.value??0:v??0;return d.events.filter(e=>e.competitions?.[0]?.status?.type?.completed).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10).map(e=>{const c=e.competitions[0],t=c.competitors.find(x=>x.id===tid||x.team?.id==tid),o=c.competitors.find(x=>x!==t);return{dt:new Date(e.date),r:t?.winner?'W':'L',sc:`${sc(t?.score)}-${sc(o?.score)}`,opp:o?.team?.abbreviation||'?',hm:t?.homeAway==='home'}})}
