@@ -434,6 +434,10 @@ let _oddsEverOk=false; // true once any successful API call confirms the key wor
 const _oddsCache=new Map(),ODDS_TTL=5*60*1000;
 const ODDS_BOOKS='fanduel,draftkings,betmgm,caesars,betonlineag,mybookieag,lowvig,pinnacle,pointsbet';
 const SPORT_MARKETS={basketball_nba:'h2h,spreads,totals',icehockey_nhl:'h2h,spreads,totals',baseball_mlb:'h2h,spreads,totals,h2h_1st_5_innings,totals_1st_5_innings',american_football_nfl:'h2h,spreads,totals',_tennis:'h2h'};
+// ── Book tiers: SHARP = line-setting sharp-money books; LOWVIG = structurally cheap, not directional
+const SHARP_BOOKS=['Pinnacle','Circa Sports','BetOnline.ag','Bookmaker','BookiePro'];
+const LOWVIG_BOOKS=['LowVig.ag','PropSwap','Unibet'];
+function getBookTier(b){return SHARP_BOOKS.some(s=>b.includes(s))?'sharp':LOWVIG_BOOKS.some(s=>b.includes(s))?'lowvig':'square'}
 function getSportMarkets(sk){if(SPORT_MARKETS[sk])return SPORT_MARKETS[sk];if(sk.startsWith('tennis_'))return SPORT_MARKETS._tennis;return'h2h'}
 const PROP_MARKETS={basketball_nba:'player_points,player_rebounds,player_assists,player_threes',baseball_mlb:'pitcher_strikeouts,batter_home_runs,batter_hits_recorded'};
 const PROP_BOOKS='fanduel,draftkings,betmgm,pointsbet';
@@ -646,8 +650,9 @@ async function refreshAll(forceOdds=false){
 function detectEdges(games){const edges=[];games.forEach(g=>{if(!g.odds?.bookmakers)return;const M={};g.odds.bookmakers.forEach(b=>{b.markets.forEach(m=>{if(!M[m.key])M[m.key]=[];m.outcomes.forEach(o=>{M[m.key].push({bk:b.title,nm:o.name,pr:o.price,pt:o.point})})})});
   Object.keys(M).forEach(mk=>{const S={};M[mk].forEach(o=>{const k=o.pt!==undefined?`${o.nm} ${o.pt}`:o.nm;if(!S[k])S[k]=[];S[k].push(o)});
     Object.keys(S).forEach(sk=>{const of2=S[sk];if(of2.length<2)return;const P=of2.map(o=>({...o,ip:aimp(o.pr)}));const con=P.reduce((s,p)=>s+p.ip,0)/P.length;const best=P.reduce((b,p)=>p.ip<b.ip?p:b,P[0]);const edge=((con-best.ip)/con)*100;
-      if(edge>3)edges.push({g,mk,ml:mk==='h2h'?'ML':mk==='spreads'?'SPREAD':'TOTAL',side:sk,bb:best.bk,bp:best.pr,bi:best.ip,con,ep:edge,nb:of2.length,tier:edge>=8?'high':edge>=5?'med':'low'})})})});
-  return edges.sort((a,b)=>b.ep-a.ep)}
+      if(edge>3){const bt=getBookTier(best.bk);edges.push({g,mk,ml:mk==='h2h'?'ML':mk==='spreads'?'SPREAD':'TOTAL',side:sk,bb:best.bk,bp:best.pr,bi:best.ip,con,ep:edge,nb:of2.length,tier:edge>=8?'high':edge>=5?'med':'low',bookTier:bt,sharp:bt==='sharp',lowvig:bt==='lowvig'})}})})});
+  // Sort: sharp-book edges first (Pinnacle etc. = real signal), then by ep desc within tier; low-vig last
+  return edges.sort((a,b)=>{const ta=a.sharp?0:a.lowvig?2:1,tb=b.sharp?0:b.lowvig?2:1;return ta!==tb?ta-tb:b.ep-a.ep})}
 
 // ══════════════════════════════
 // ── EV / LINE RANGE / SHARP
@@ -687,8 +692,11 @@ function getLineRange(g, market){
 
 function getSharp(edges){
   if(!edges.length)return{r:0,n:'No data',bars:''};
-  const e=edges[0];const r=e.ep>=10?5:e.ep>=7?4:e.ep>=5?3:e.ep>=3?2:1;
-  return{r,n:`${e.ep.toFixed(1)}% @ ${e.bb}`,bars:Array(5).fill(0).map((_,i)=>`<div class="sb${i<r?' on':''}"></div>`).join('')};
+  // Prefer Pinnacle/sharp-book edge as the signal — it represents real sharp action, not pricing margin
+  const e=edges.find(e=>e.sharp)||edges[0];
+  const r=e.ep>=10?5:e.ep>=7?4:e.ep>=5?3:e.ep>=3?2:1;
+  const suffix=e.sharp?' ⚡':e.lowvig?' ◎':'';
+  return{r,n:`${e.ep.toFixed(1)}% @ ${e.bb}${suffix}`,bars:Array(5).fill(0).map((_,i)=>`<div class="sb${i<r?' on':''}"></div>`).join('')};
 }
 
 function renderMetrics(pk){
@@ -959,13 +967,19 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
           const edgeHm=es.includes(hmLast)||es.includes(g.hm.nm.toLowerCase());
           aligned=pickHm?edgeHm:!edgeHm;
         }
-        return{aligned,ep:te.ep,tier:te.tier,side:te.side,bb:te.bb,mk};
+        return{aligned,ep:te.ep,tier:te.tier,side:te.side,bb:te.bb,mk,sharp:te.sharp,lowvig:te.lowvig};
       })();
-      const _edgeTag=_eAlign&&!_eAlign?.noEdge
-        ?(_eAlign.aligned
-          ?`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.22);border-radius:3px;font-size:9px;font-weight:700;color:var(--grn);letter-spacing:.5px">✓ EDGE CONFIRMED &nbsp;+${_eAlign.ep.toFixed(1)}% @ ${_eAlign.bb}</div>`
-          :`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.2);border-radius:3px;font-size:9px;font-weight:700;color:var(--red);letter-spacing:.5px">⚡ CONFLICTS WITH EDGE &nbsp;·&nbsp; ${_eAlign.ep.toFixed(1)}% favors ${_eAlign.side.split(' ').slice(0,-1).pop()||_eAlign.side}</div>`)
-        :'';
+      const _edgeTag=(()=>{
+        if(!_eAlign||_eAlign.noEdge)return'';
+        if(_eAlign.aligned){
+          const lbl=_eAlign.sharp?`✓ SHARP CONFIRMED — Pinnacle agrees`:_eAlign.lowvig?`✓ EDGE CONFIRMED — pricing gap`:` ✓ EDGE CONFIRMED`;
+          return`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.22);border-radius:3px;font-size:9px;font-weight:700;color:var(--grn);letter-spacing:.5px">${lbl} &nbsp;+${_eAlign.ep.toFixed(1)}%</div>`;
+        } else {
+          if(_eAlign.lowvig)return`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(96,96,120,.12);border:1px solid rgba(96,96,120,.25);border-radius:3px;font-size:9px;font-weight:700;color:var(--t3);letter-spacing:.5px">◎ PRICING GAP — ${_eAlign.bb} structural discount, not sharp signal</div>`;
+          const lbl=_eAlign.sharp?`⚡ SHARP CONFLICT — Pinnacle favors`:`⚡ CONFLICTS WITH EDGE —`;
+          return`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.2);border-radius:3px;font-size:9px;font-weight:700;color:var(--red);letter-spacing:.5px">${lbl} ${_eAlign.side.split(' ').slice(0,-1).pop()||_eAlign.side} &nbsp;${_eAlign.ep.toFixed(1)}%</div>`;
+        }
+      })();
       h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${noOdds&&!hasTnData?'low':pk.conf.toLowerCase()}">\u25CF ${noOdds&&!hasTnData?'LEAN':pk.conf}${scoreSub}${confTxt}</div>${_edgeTag}${tnTagsH}${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;  
     });h+=`</div>`;}
   else if(_renderPicks.length===0&&picks.length>0){h+=`<div style="margin:6px 12px 8px;font-size:10px;color:var(--t4);padding:7px 10px;border:1px solid var(--bdr);border-radius:3px">No edges strong enough to display (all picks scored below 2.5/10). Await odds to establish real signals.</div>`;}
@@ -1606,7 +1620,10 @@ function renderTracked(){
 
 function updateStats(){$('stG').textContent=allG.length;$('stE').textContent=allE.length;$('stS').textContent=new Set(allG.map(g=>g.cat)).size;let inj=0;allG.forEach(g=>{inj+=g.inj.aw.filter(i=>i.sc==='O').length+g.inj.hm.filter(i=>i.sc==='O').length});$('stI').textContent=inj}
 function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<div class="no-data" style="padding:20px">No edges detected</div>`;return}
-  el.innerHTML=allE.slice(0,15).map(e=>`<div class="edge-alert" onclick="jumpTo('${e.g.id}')"><div class="edge-top"><div class="edge-matchup">${e.g.aw.ab} ${e.g.isTeam?'@':'vs'} ${e.g.hm.ab}</div><div class="edge-pct ${e.tier}">${e.ep.toFixed(1)}%</div></div><div class="edge-detail">${e.ml}: ${e.side} \u00B7 ${e.bb} \u00B7 ${fp(e.bp)}</div></div>`).join('')}
+  el.innerHTML=allE.slice(0,15).map(e=>{
+    const bTag=e.sharp?`<span style="font-size:8px;font-weight:700;color:var(--grn);letter-spacing:.3px;margin-right:4px">⚡SHARP</span>`:e.lowvig?`<span style="font-size:8px;font-weight:600;color:var(--t3);margin-right:4px">◎LOW-VIG</span>`:'';
+    return`<div class="edge-alert" onclick="jumpTo('${e.g.id}')"><div class="edge-top"><div class="edge-matchup">${e.g.aw.ab} ${e.g.isTeam?'@':'vs'} ${e.g.hm.ab}</div><div class="edge-pct ${e.tier}">${e.ep.toFixed(1)}%</div></div><div class="edge-detail">${bTag}${e.ml}: ${e.side} \u00B7 ${e.bb} \u00B7 ${fp(e.bp)}</div></div>`
+  }).join('')}
 function jumpTo(id){const i=fG.findIndex(g=>g.id===id);if(i>=0)selGame(i)}
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('setupModal').style.display='none';$('claudeModal').style.display='none';$('bankrollModal').style.display='none';$('tnModal').style.display='none';$('scOverlay').classList.remove('vis');return}if(e.target.tagName==='INPUT'){if(e.key==='Enter')connectApi();return}if($('scOverlay').classList.contains('vis')){$('scOverlay').classList.remove('vis');return}
@@ -1696,7 +1713,12 @@ function renderPicksLeaderboard(){
         let aligned;
         if(mk==='totals'){aligned=(pt.includes('over')&&es.startsWith('over'))||(pt.includes('under')&&es.startsWith('under'));}
         else{const hmL=_lg.hm.nm.toLowerCase().split(' ').pop();const hmA=(_lg.hm.ab||'').toLowerCase();const pH=pt.includes(hmL)||pt.includes(hmA);const eH=es.includes(hmL)||es.includes(_lg.hm.nm.toLowerCase());aligned=pH?eH:!eH;}
-        if(aligned!==undefined)_aTag=`<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;color:${aligned?'var(--grn)':'var(--red)'};background:${aligned?'rgba(0,230,118,.1)':'rgba(255,71,87,.1)'};">${aligned?'✓ EDGE':'⚡ CONFLICT'}</span>`;
+        if(aligned!==undefined){
+          const isSharp=te.sharp,isLowVig=te.lowvig;
+          if(aligned) _aTag=`<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;color:var(--grn);background:rgba(0,230,118,.1)">${isSharp?'✓ SHARP':'✓ EDGE'}</span>`;
+          else if(isLowVig) _aTag=`<span style="font-size:8px;font-weight:600;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;color:var(--t3);background:rgba(96,96,120,.15)">◎ PRICING</span>`;
+          else _aTag=`<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;color:var(--red);background:rgba(255,71,87,.1)">${isSharp?'⚡ SHARP CONFLICT':'⚡ CONFLICT'}</span>`;
+        }
       }
     }
     h+=`<div class="pick-item${selPickIdx===i?' sel':''}" onclick="selPick(${i})">
@@ -1806,8 +1828,19 @@ function selPick(idx){
      let aligned;
      if(mk==='totals'){aligned=(pt.includes('over')&&es.startsWith('over'))||(pt.includes('under')&&es.startsWith('under'));}
      else{const hmL=g.hm.nm.toLowerCase().split(' ').pop();const hmA=(g.hm.ab||'').toLowerCase();const pH=pt.includes(hmL)||pt.includes(hmA);const eH=es.includes(hmL)||es.includes(g.hm.nm.toLowerCase());aligned=pH?eH:!eH;}
-     if(aligned===true)h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--grn);letter-spacing:.5px;margin-bottom:2px">✓ EDGE CONFIRMED — sharp money agrees</div><div style="font-size:9px;color:var(--t2)">+${te.ep.toFixed(1)}% pricing edge detected @ ${te.bb} · High-conviction signal</div></div>`;
-     else if(aligned===false)h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--red);letter-spacing:.5px;margin-bottom:2px">⚡ EDGE CONFLICT — sharp money disagrees</div><div style="font-size:9px;color:var(--t2)">${te.ep.toFixed(1)}% edge favors <strong>${te.side}</strong> @ ${te.bb} · Reduce position size or skip</div></div>`;
+     if(aligned===true){
+       const ttl=te.sharp?'✓ SHARP CONFIRMED — Pinnacle agrees with this pick':'✓ EDGE CONFIRMED — market pricing agrees';
+       const sub=te.sharp?`Pinnacle (sharp-money book) has the best price here: +${te.ep.toFixed(1)}% edge. Strong signal.`:te.lowvig?`${te.bb} (low-vig book) offers better pricing — structural discount, moderate conviction.`:`+${te.ep.toFixed(1)}% edge @ ${te.bb} · Books are aligned with this pick.`;
+       h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--grn);letter-spacing:.5px;margin-bottom:2px">${ttl}</div><div style="font-size:9px;color:var(--t2)">${sub}</div></div>`;
+     } else if(aligned===false){
+       if(te.lowvig){
+         h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(96,96,120,.1);border:1px solid rgba(96,96,120,.2);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--t2);letter-spacing:.5px;margin-bottom:2px">◎ PRICING GAP — not a sharp signal</div><div style="font-size:9px;color:var(--t3)">${te.bb} is a low-vig book with systematically better underdog prices. This ${te.ep.toFixed(1)}% gap is structural margin, not directional sharp action — don't treat as a conflict.</div></div>`;
+       } else {
+         const ttl=te.sharp?'⚡ SHARP CONFLICT — Pinnacle disagrees with this pick':'⚡ EDGE CONFLICT — market pricing disagrees';
+         const sub=te.sharp?`Pinnacle (the sharpest book in the world) has a ${te.ep.toFixed(1)}% edge on <strong>${te.side}</strong>. Pinnacle moves = sharp money. Reduce position size or trust the spread over the ML.`:`${te.ep.toFixed(1)}% edge favors <strong>${te.side}</strong> @ ${te.bb} · Reduce position size or skip.`;
+         h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--red);letter-spacing:.5px;margin-bottom:2px">${ttl}</div><div style="font-size:9px;color:var(--t2)">${sub}</div></div>`;
+       }
+     }
    } else if(!ge.length&&!p.result){
      h+=`<div style="margin:0 12px 8px;padding:6px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;font-size:9px;color:var(--t4)">⬜ No edge data — AI pick only · Treat as soft signal</div>`;
    }
