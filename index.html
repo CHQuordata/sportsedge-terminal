@@ -2104,6 +2104,13 @@ Playoffs (NBA/NHL): Series context is primary — series score, elimination game
 - List every inactive sport explicitly with reason.
 - Grade all yesterday picks. Use "?" only if truly no result found.
 
+## JSON OUTPUT RULES — MUST FOLLOW OR RESPONSE FAILS TO PARSE
+- Return ONLY the JSON block below — no prose, no commentary outside it
+- ALL string values must be single-line — never put a literal newline/tab inside a string value
+- Never use unescaped double-quote characters inside string values (use apostrophe instead, or omit)
+- reasoning, analyst_note, learned_rules_update, note, lean, trigger — all must be single-line strings
+- filters array: short identifier strings only, no spaces, no punctuation
+
 ## RESPONSE FORMAT — JSON ONLY, no other text:
 \`\`\`json
 {
@@ -2165,6 +2172,11 @@ async function prefetchStatsForPicks(){
 
 // Robust JSON repair: tracks string state char-by-char so literal control
 // chars inside values are always caught, regex can't handle nested edge cases.
+// Robust JSON repair — handles two common LLM output defects:
+// 1. Literal control chars (newline/CR/tab) inside string values
+// 2. Unescaped double-quotes inside string values (e.g. in reasoning/rules fields)
+//    Detected via peek-ahead: if the char after " is not a valid JSON continuation
+//    (,  }  ]  :  or end-of-input) it must be an inner quote and gets escaped.
 function _repairJSON(raw){
   let s=raw.replace(/\+(\d)/g,'$1').replace(/,\s*([}\]])/g,'$1');
   let out='',inStr=false,esc=false;
@@ -2172,7 +2184,20 @@ function _repairJSON(raw){
     const c=s[i];
     if(esc){out+=c;esc=false;continue}
     if(c==='\\'&&inStr){out+=c;esc=true;continue}
-    if(c==='"'){out+=c;inStr=!inStr;continue}
+    if(c==='"'){
+      if(inStr){
+        // Peek past whitespace to decide: is this closing the string or an inner quote?
+        let j=i+1;
+        while(j<s.length&&(s[j]===' '||s[j]==='\n'||s[j]==='\r'||s[j]==='\t'))j++;
+        const nxt=j<s.length?s[j]:'';
+        if(nxt===''||nxt===','||nxt==='}'||nxt===']'||nxt===':'){
+          out+=c;inStr=false; // real string end
+        } else {
+          out+='\\"'; // unescaped inner quote — escape it
+        }
+      } else {out+=c;inStr=true;}
+      continue;
+    }
     if(inStr&&(c==='\n'||c==='\r'||c==='\t')){out+=c==='\n'?'\\n':c==='\r'?'\\r':'\\t';continue}
     out+=c;
   }
