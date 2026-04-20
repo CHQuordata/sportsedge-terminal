@@ -934,7 +934,8 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
    }
   }
   // Filter sub-2.5 score picks (LOW confidence) — too weak to show as cards
-  const _renderPicks=picks.filter(pk=>(pk.score??0)>=2.5||pk.tnSigs?.length>0);
+  // Always show a card if it has live odds attached (evData/lineRange) — score floor only applies when there's no odds data
+  const _renderPicks=picks.filter(pk=>(pk.score??0)>=2.5||pk.tnSigs?.length>0||pk.evData!=null||pk.lineRange!=null);
   if(_renderPicks.length){h+=`<div class="picks-section">`;
     _renderPicks.forEach((pk,i)=>{const noOdds=!pk.evData&&!pk.lineRange;
       const hasTnData=pk.tnSigs?.length>0;
@@ -983,7 +984,7 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       })();
       h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${noOdds&&!hasTnData?'low':pk.conf.toLowerCase()}">\u25CF ${noOdds&&!hasTnData?'LEAN':pk.conf}${scoreSub}${confTxt}</div>${_edgeTag}${tnTagsH}${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;  
     });h+=`</div>`;}
-  else if(_renderPicks.length===0&&picks.length>0){h+=`<div style="margin:6px 12px 8px;font-size:10px;color:var(--t4);padding:7px 10px;border:1px solid var(--bdr);border-radius:3px">No edges strong enough to display (all picks scored below 2.5/10). Await odds to establish real signals.</div>`;}
+  else if(_renderPicks.length===0&&picks.length>0){h+=`<div style="margin:6px 12px 8px;font-size:10px;color:var(--t4);padding:7px 10px;border:1px solid var(--bdr);border-radius:3px">No analysis available — odds and stats not yet loaded for this game.</div>`;}
   else if(!g.isTeam){h+=`<div style="margin:2px 16px 8px;font-size:9px;color:var(--t4);padding:6px 10px;border:1px solid var(--bdr);border-radius:3px">No odds found — ${g.spL} market may not be covered by Odds API. Rankings + form signals still applied above.</div>`;}
 
   // ── LWOT Expert Analysis ──
@@ -1368,6 +1369,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       const f3B2B=awF3||hmF3;if(f3B2B&&!(awF3&&hmF3)){ts2-=2;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — severe fatigue factor, strong UNDER lean`)}
       else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){ts2-=1.5;if(!reasons.find(r=>r.includes('back-to-back')))reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back — reduced output expected, UNDER lean`)}}
     if(g.cat==='nhl'&&(awNhl||hmNhl)){const awGpg=awNhl?.gpg?parseFloat(awNhl.gpg):null,hmGpg=hmNhl?.gpg?parseFloat(hmNhl.gpg):null,awGaa=awNhl?.gaa?parseFloat(awNhl.gaa):null,hmGaa=hmNhl?.gaa?parseFloat(hmNhl.gaa):null;if(awGpg&&hmGpg&&awGaa&&hmGaa&&!isNaN(awGpg)&&!isNaN(hmGaa)){const proj=((awGpg+hmGaa)/2)+((hmGpg+awGaa)/2);if(toOver){const diff=proj-toOver.point;if(Math.abs(diff)>0.4){ts2+=diff*1.5;const dir=diff>0?'OVER':'UNDER';reasons.push(`Defense-adjusted projection: ${proj.toFixed(2)} goals vs posted ${toOver.point} — lean ${dir}`);}else reasons.push(`Projected ${proj.toFixed(2)} goals sits close to posted ${toOver.point} — thin edge`)}else reasons.push(`Goal model: ${awGpg}+${hmGpg} scoring vs ${awGaa}+${hmGaa} defense → projected ${proj.toFixed(2)}/gm`)}const awPP=awNhl?.ppPct?parseFloat(awNhl.ppPct):null,hmPP=hmNhl?.ppPct?parseFloat(hmNhl.ppPct):null,awPK=awNhl?.pkPct?parseFloat(awNhl.pkPct):null,hmPK=hmNhl?.pkPct?parseFloat(hmNhl.pkPct):null;if(awPP!=null&&hmPP!=null&&awPK!=null&&hmPK!=null){const ppMismatch=(awPP>21&&hmPK<78)||(hmPP>21&&awPK<78);if(ppMismatch){ts2+=0.8;reasons.push(`PP/PK mismatch: high power play vs weak penalty kill — expect above-average special teams goals, OVER lean`)}}if((awB2B||hmB2B)&&!(awB2B&&hmB2B)&&!reasons.find(r=>r.includes('back-to-back'))){ts2-=1.0;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on back-to-back in NHL — fatigue suppresses scoring, UNDER lean`)}}
+    if(!reasons.length&&toOver)reasons.push(`Scoring stats not yet loaded — line posted at ${toOver.point}. EV and line range below reflect current book pricing only`);
     const ou=ts2>=0?'OVER':'UNDER',mag=Math.abs(ts2),conf=mag>=3?'HIGH':mag>=1.5?'MEDIUM':'LOW';
     const pickStr=toOver?`${ou} ${toOver.point} (${fp(ou==='OVER'?toOver.price:toUnder?.price||toOver.price)})`:ou;
     picks.push({label:'TOTAL ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,4).join('. ')+'.',
@@ -1513,6 +1515,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
     else if(mlO&&mlO.price>-150)reasons.push(`Reasonable juice at ${fp(mlO.price)} makes ML viable standalone or as parlay leg`);
+    if(reasons.length<=1&&mag<1&&mlO)reasons.push(`Form and fatigue data not yet loaded — analysis based on season record and line pricing only. Re-analyze after odds refresh for full confidence`);
     const pickStr=`${side.nm} ML${mlPrice}`;
     if(reasons.length)picks.push({label:g.cat==='tennis'?'TENNIS ANALYSIS':'MONEYLINE ANALYSIS',pick:pickStr,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,5).join('. ')+'.',
       evData:calcEV(g,'h2h',side.nm.split(' ').pop()),lineRange:null,sharp:getSharp(mlEdges),
@@ -2220,7 +2223,7 @@ async function aiAnalyzeGame(idx){
   {const _missFrm=!_cf&&(g.cat==='nba'||g.cat==='nhl');const _missInj=!g.inj?.aw?.length&&!g.inj?.hm?.length;const _missOdds=!g.odds?.bookmakers?.length;
    if(_missFrm||_missInj||_missOdds){const gaps=[];if(_missFrm)gaps.push('recent form/fatigue');if(_missInj)gaps.push('injury reports');if(_missOdds)gaps.push('live odds');
    ctx+=`\n⚠️ MISSING DATA: ${gaps.join(', ')}. Your analysis MUST flag these gaps. Do not manufacture confidence from missing inputs.\n`;}}
-  const _gp=(gamePicksCache.get(g.id)||[]).filter(pk=>(pk.score??0)>=2.5);
+  const _gp=(gamePicksCache.get(g.id)||[]).filter(pk=>(pk.score??0)>=2.5||pk.evData!=null||pk.lineRange!=null);
   if(_gp.length){ctx+=`\nALGO PICKS (validate or challenge these — ignore any with score below 2.5):\n`;_gp.forEach(pk=>{ctx+=`  [${pk.label}] ${pk.pick} — ${pk.conf}${pk.score!=null?' (score:'+pk.score+')':''}\n  Reasoning: ${(pk.reasons||[]).join(' | ')}\n`})}
   const rules=localStorage.getItem('et_learned_rules')||'';
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
