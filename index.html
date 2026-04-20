@@ -369,6 +369,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 
   /* ── Modal / scorecard panel: fit narrow screens ── */
   .modal{width:calc(100vw - 24px);max-width:none;padding:20px}
+  #parlayModal{align-items:flex-start;padding:0}
+  #parlayModal .modal{width:100%;max-width:100%;border-radius:0;max-height:100svh}
   .sc-panel{min-width:unset;width:92vw;max-width:360px;padding:16px 20px}
 
   /* ── Confidence filter row: tighter on mobile ── */
@@ -441,7 +443,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     <div id="edgesMobList" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
   </div>
 </div>
-<div class="modal-ov" id="parlayModal" style="display:none"><div class="modal" style="max-width:500px;padding:24px"><div class="modal-title" style="color:var(--grn)">⚡ SHARP PARLAY BUILDER</div><div class="modal-sub" style="margin-bottom:0">Pinnacle-only legs · today's games · one leg per matchup</div><div id="parlayContent" style="margin-top:16px"></div><button class="modal-btn" style="margin-top:8px" onclick="$('parlayModal').style.display='none'">CLOSE</button></div></div>
+<div class="modal-ov" id="parlayModal" style="display:none"><div class="modal" style="max-width:500px;padding:0;display:flex;flex-direction:column;max-height:90vh"><div style="padding:20px 24px 12px;flex-shrink:0"><div class="modal-title" style="color:var(--grn)">⚡ SHARP PARLAY BUILDER</div><div class="modal-sub" style="margin-bottom:0">Pinnacle-only legs · today's games · one leg per matchup</div></div><div id="parlayContent" style="margin-top:0;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 24px"></div><div style="padding:12px 24px 20px;flex-shrink:0;border-top:1px solid var(--bdr)"><button class="modal-btn" style="margin-top:0" onclick="$('parlayModal').style.display='none'">CLOSE</button></div></div></div>
 <div class="modal-ov" id="bankrollModal" style="display:none"><div class="modal"><div class="modal-title" style="color:var(--amb)">BANKROLL SIZING</div><div class="modal-sub">Set your total bankroll for Kelly criterion bet sizing. This is stored locally and never shared.</div><input class="modal-input" id="bankrollInput" type="number" placeholder="e.g. 50000" autocomplete="off"><button class="modal-btn" style="background:var(--amb)" onclick="saveBankroll()">SAVE BANKROLL</button><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('bankrollModal').style.display='none'">Cancel</div></div></div>
 <div class="sc-ov" id="scOverlay"><div class="sc-panel"><div class="sc-title">KEYBOARD SHORTCUTS</div><div class="sc-row"><div><span class="kbd">R</span></div><div class="sc-desc">Refresh ESPN (cached odds)</div></div><div class="sc-row"><div><span class="kbd">⇧R</span></div><div class="sc-desc">Force-refresh odds from API</div></div><div class="sc-row"><div><span class="kbd">&#8593;</span><span class="kbd">&#8595;</span></div><div class="sc-desc">Navigate slate</div></div><div class="sc-row"><div><span class="kbd">Enter</span></div><div class="sc-desc">Select matchup</div></div><div class="sc-row"><div><span class="kbd">1-7</span></div><div class="sc-desc">Sport tabs</div></div><div class="sc-row"><div><span class="kbd">K</span></div><div class="sc-desc">API key setup</div></div><div class="sc-row"><div><span class="kbd">A</span></div><div class="sc-desc">AI key setup</div></div><div class="sc-row"><div><span class="kbd">Esc</span></div><div class="sc-desc">Close overlay</div></div></div></div>
 
