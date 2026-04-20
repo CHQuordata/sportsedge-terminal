@@ -90,6 +90,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .sc-panel{background:var(--bg1);border:1px solid var(--bdr2);border-radius:6px;padding:24px 32px;min-width:360px}
 .sc-title{font-size:13px;font-weight:600;color:var(--grn);letter-spacing:1px;margin-bottom:16px}.sc-row{display:flex;justify-content:space-between;padding:6px 0}.sc-desc{font-size:11px;color:var(--t2)}
 .edge-card{background:var(--grn-bg);border:1px solid var(--grn-bdr);border-radius:4px;padding:10px 12px;margin-bottom:8px}
+.edge-card-dim{background:var(--bg2);border-color:var(--bdr);opacity:.55}
 .note{padding:8px 16px;background:var(--bg0);font-size:9px;color:var(--t4);letter-spacing:.5px}.note strong{color:var(--amb)}
 .date-toggle{display:flex;gap:2px}.dt-btn{padding:2px 6px;font-family:var(--mono);font-size:9px;font-weight:600;color:var(--t4);background:var(--bg3);border:1px solid var(--bdr);border-radius:2px;cursor:pointer;transition:.15s;letter-spacing:.5px}.dt-btn:hover{color:var(--t2)}.dt-btn.active{color:var(--cyn);background:rgba(68,138,255,.12);border-color:rgba(68,138,255,.3)}
 .picks-section{padding:8px 0}
@@ -935,7 +936,37 @@ async function selGame(idx){selIdx=idx;renderSlate();const g=fG[idx];const el=$(
       const confTxt=noOdds&&!hasTnData?`<span style="font-size:9px;color:var(--t4);font-weight:400"> · analytics only, no odds</span>`:noOdds&&hasTnData?`<span style="font-size:9px;color:var(--t4);font-weight:400"> · no odds · ${pk.tnSigs.filter(s=>s.edge?.nm===pk.pick.split(' ')[0]||(s.edge&&pk.pick.includes(s.edge.nm.split(' ').pop()))).length||pk.tnSigs.length} signals</span>`:'';  
       const scoreSub=pk.score!=null&&!noOdds?`<span style="font-size:9px;opacity:.55;font-weight:500;margin-left:6px">${pk.score.toFixed(1)}</span>`:'';  
       const tnTagsH=hasTnData?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0 2px">${pk.tnSigs.map(s=>{const aligned=s.edge&&pk.pick.includes(s.edge.nm.split(' ').pop());const clr=aligned?'var(--grn)':s.edge?'var(--t3)':'var(--t4)';const bdr=aligned?'rgba(0,230,118,.25)':'rgba(42,42,62,.5)';return`<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;color:${clr};background:var(--bg3);border:1px solid ${bdr};letter-spacing:.3px">${s.k}</span>`}).join('')}</div>`:'';
-      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${noOdds&&!hasTnData?'low':pk.conf.toLowerCase()}">\u25CF ${noOdds&&!hasTnData?'LEAN':pk.conf}${scoreSub}${confTxt}</div>${tnTagsH}${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;  
+      // ── Edge alignment: cross-reference this AI pick against detected sharp-money edges ──
+      const _eAlign=(()=>{
+        if(noOdds||!g?.id)return null;
+        const gEd=allE.filter(e=>e.g.id===g.id);
+        if(!gEd.length)return null;
+        const lbl=(pk.label||'').toUpperCase();
+        const pt=pk.pick.toLowerCase();
+        const mk=lbl.includes('TOTAL')||pt.includes('over')||pt.includes('under')?'totals':lbl.includes('SPREAD')||pt.match(/[+-]\d+\.5/)?'spreads':'h2h';
+        const mkEd=gEd.filter(e=>e.mk===mk);
+        if(!mkEd.length)return{noEdge:true};
+        const te=mkEd[0]; // highest ep edge for this market
+        const es=te.side.toLowerCase();
+        let aligned=false;
+        if(mk==='totals'){
+          aligned=(pt.includes('over')&&es.startsWith('over'))||(pt.includes('under')&&es.startsWith('under'));
+        } else {
+          const hmLast=g.hm.nm.toLowerCase().split(' ').pop();
+          const awLast=g.aw.nm.toLowerCase().split(' ').pop();
+          const hmAb=(g.hm.ab||'').toLowerCase();
+          const pickHm=pt.includes(hmLast)||pt.includes(hmAb);
+          const edgeHm=es.includes(hmLast)||es.includes(g.hm.nm.toLowerCase());
+          aligned=pickHm?edgeHm:!edgeHm;
+        }
+        return{aligned,ep:te.ep,tier:te.tier,side:te.side,bb:te.bb,mk};
+      })();
+      const _edgeTag=_eAlign&&!_eAlign?.noEdge
+        ?(_eAlign.aligned
+          ?`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.22);border-radius:3px;font-size:9px;font-weight:700;color:var(--grn);letter-spacing:.5px">✓ EDGE CONFIRMED &nbsp;+${_eAlign.ep.toFixed(1)}% @ ${_eAlign.bb}</div>`
+          :`<div style="display:inline-flex;align-items:center;gap:4px;margin:5px 0 2px;padding:3px 8px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.2);border-radius:3px;font-size:9px;font-weight:700;color:var(--red);letter-spacing:.5px">⚡ CONFLICTS WITH EDGE &nbsp;·&nbsp; ${_eAlign.ep.toFixed(1)}% favors ${_eAlign.side.split(' ').slice(0,-1).pop()||_eAlign.side}</div>`)
+        :'';
+      h+=`<div class="pick-card${cls}"><div class="pick-label">\u26A1 ${pk.label}${rBadge}</div><div class="pick-main">${pk.pick}</div><div class="pick-conf ${noOdds&&!hasTnData?'low':pk.conf.toLowerCase()}">\u25CF ${noOdds&&!hasTnData?'LEAN':pk.conf}${scoreSub}${confTxt}</div>${_edgeTag}${tnTagsH}${hasMetrics?renderMetrics(pk):''}<div class="pick-reasoning">${pk.reasoning}</div></div>`;  
     });h+=`</div>`;}
   else if(_renderPicks.length===0&&picks.length>0){h+=`<div style="margin:6px 12px 8px;font-size:10px;color:var(--t4);padding:7px 10px;border:1px solid var(--bdr);border-radius:3px">No edges strong enough to display (all picks scored below 2.5/10). Await odds to establish real signals.</div>`;}
   else if(!g.isTeam){h+=`<div style="margin:2px 16px 8px;font-size:9px;color:var(--t4);padding:6px 10px;border:1px solid var(--bdr);border-radius:3px">No odds found — ${g.spL} market may not be covered by Odds API. Rankings + form signals still applied above.</div>`;}
@@ -1652,6 +1683,22 @@ function renderPicksLeaderboard(){
   graded.forEach((p,i)=>{
     const res=p.result;const sp=p.sport;
     const ic=sp==='tennis'?'🎾':sp==='nba'?'🏀':sp==='nhl'?'🏒':sp==='mlb'?'⚾':sp==='nfl'?'🏈':sp==='mma'?'🥊':'⚡';
+    // Edge alignment micro-tag for leaderboard row
+    const _lg=allG.find(gm=>{const ms=(p.matchup||'').toLowerCase();return gm.aw.nm.toLowerCase().split(/\s+/).some(w=>w.length>3&&ms.includes(w))||gm.hm.nm.toLowerCase().split(/\s+/).some(w=>w.length>3&&ms.includes(w))});
+    const _lgE=_lg?allE.filter(e=>e.g.id===_lg.id):[];
+    let _aTag='';
+    if(_lg&&_lgE.length&&!res){
+      const pt=p.pick.toLowerCase();
+      const mk=pt.includes('over')||pt.includes('under')?'totals':pt.match(/[+-]\d+\.5/)?'spreads':'h2h';
+      const me=_lgE.filter(e=>e.mk===mk);
+      if(me.length){
+        const te=me[0];const es=te.side.toLowerCase();
+        let aligned;
+        if(mk==='totals'){aligned=(pt.includes('over')&&es.startsWith('over'))||(pt.includes('under')&&es.startsWith('under'));}
+        else{const hmL=_lg.hm.nm.toLowerCase().split(' ').pop();const hmA=(_lg.hm.ab||'').toLowerCase();const pH=pt.includes(hmL)||pt.includes(hmA);const eH=es.includes(hmL)||es.includes(_lg.hm.nm.toLowerCase());aligned=pH?eH:!eH;}
+        if(aligned!==undefined)_aTag=`<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;vertical-align:middle;color:${aligned?'var(--grn)':'var(--red)'};background:${aligned?'rgba(0,230,118,.1)':'rgba(255,71,87,.1)'};">${aligned?'✓ EDGE':'⚡ CONFLICT'}</span>`;
+      }
+    }
     h+=`<div class="pick-item${selPickIdx===i?' sel':''}" onclick="selPick(${i})">
       <div class="pick-item-top">
         <span class="pick-item-rank">#${p.rank||i+1}</span>
@@ -1659,7 +1706,7 @@ function renderPicksLeaderboard(){
         <span class="pick-item-match">${p.matchup}</span>
         ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}${p.score!=null?`<span style="opacity:.55;font-weight:500;margin-left:4px">${parseFloat(p.score).toFixed(1)}</span>`:''}</span>`}
       </div>
-      <div class="pick-item-pick">${p.pick}</div>
+      <div class="pick-item-pick">${p.pick}${_aTag}</div>
     </div>`;
   });
   // Filter tennis leans for unbettable matches (same rule as slate)
@@ -1750,7 +1797,22 @@ function selPick(idx){
   const g=allG.find(gm=>{const ms=p.matchup.toLowerCase();return gm.aw.nm.toLowerCase().split(' ').some(w=>w.length>3&&ms.includes(w))||gm.hm.nm.toLowerCase().split(' ').some(w=>w.length>3&&ms.includes(w))});
   if(g?.odds?.bookmakers?.length)h+=renderOdds(g);
   const ge=g?allE.filter(e=>e.g.id===g.id):[];
-  if(ge.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>EDGE DETECTION</div>${ge.map(e=>`<div class="edge-card"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:var(--grn)">${e.ml}: ${e.side}</span><span style="font-size:13px;font-weight:700;color:var(--grn)">${e.ep.toFixed(1)}%</span></div><div style="font-size:9px;color:var(--t2)">Best: ${e.bb} ${fp(e.bp)}</div></div>`).join('')}</div>`;
+  // ── Pick vs Edge alignment banner ──
+  {const pt=p.pick.toLowerCase();
+   const mk=pt.includes('over')||pt.includes('under')?'totals':pt.match(/[+-]\d+\.5/)?'spreads':'h2h';
+   const me=ge.filter(e=>e.mk===mk);
+   if(g&&me.length&&!p.result){
+     const te=me[0];const es=te.side.toLowerCase();
+     let aligned;
+     if(mk==='totals'){aligned=(pt.includes('over')&&es.startsWith('over'))||(pt.includes('under')&&es.startsWith('under'));}
+     else{const hmL=g.hm.nm.toLowerCase().split(' ').pop();const hmA=(g.hm.ab||'').toLowerCase();const pH=pt.includes(hmL)||pt.includes(hmA);const eH=es.includes(hmL)||es.includes(g.hm.nm.toLowerCase());aligned=pH?eH:!eH;}
+     if(aligned===true)h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--grn);letter-spacing:.5px;margin-bottom:2px">✓ EDGE CONFIRMED — sharp money agrees</div><div style="font-size:9px;color:var(--t2)">+${te.ep.toFixed(1)}% pricing edge detected @ ${te.bb} · High-conviction signal</div></div>`;
+     else if(aligned===false)h+=`<div style="margin:0 12px 8px;padding:7px 12px;background:rgba(255,71,87,.07);border:1px solid rgba(255,71,87,.22);border-radius:4px"><div style="font-size:10px;font-weight:700;color:var(--red);letter-spacing:.5px;margin-bottom:2px">⚡ EDGE CONFLICT — sharp money disagrees</div><div style="font-size:9px;color:var(--t2)">${te.ep.toFixed(1)}% edge favors <strong>${te.side}</strong> @ ${te.bb} · Reduce position size or skip</div></div>`;
+   } else if(!ge.length&&!p.result){
+     h+=`<div style="margin:0 12px 8px;padding:6px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;font-size:9px;color:var(--t4)">⬜ No edge data — AI pick only · Treat as soft signal</div>`;
+   }
+  }
+  if(ge.length)h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>EDGE DETECTION</div>${ge.map(e=>{const pt2=p.pick.toLowerCase();const mk2=pt2.includes('over')||pt2.includes('under')?'totals':pt2.match(/[+-]\d+\.5/)?'spreads':'h2h';const isRel=e.mk===mk2;const eC=isRel?'var(--grn)':'var(--t2)';return`<div class="edge-card${isRel?'':' edge-card-dim'}"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:${eC}">${e.ml}: ${e.side}</span><span style="font-size:13px;font-weight:700;color:${eC}">${e.ep.toFixed(1)}%</span></div><div style="font-size:9px;color:var(--t2)">Best: ${e.bb} ${fp(e.bp)}</div></div>`}).join('')}</div>`;
   el.innerHTML=h;el.scrollTop=0;
 }
 
