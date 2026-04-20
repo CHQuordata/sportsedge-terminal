@@ -1449,6 +1449,13 @@ function toggleTrack(id){
   localStorage.setItem('et_tracked',JSON.stringify([...trackedIds]));
   renderTracked();renderSlate();
 }
+function selTracked(id){
+  const g=allG.find(x=>x.id===id);if(!g)return;
+  // Switch to the game's sport tab if not already showing it
+  if(cSport!=='all'&&cSport!==g.cat)setSport(g.cat);
+  const gi=fG.findIndex(x=>x.id===id);
+  if(gi>=0)selGame(gi);
+}
 
 function renderTracked(){
   const el=$('trackedGames');const hdr=$('trackedHdr');const cnt=$('trackedCount');
@@ -1491,8 +1498,7 @@ function renderTracked(){
       if(g.eOdds.overUnder)parts.push(`O/U ${g.eOdds.overUnder}`);
       oddsLine=parts.join(' · ');
     }
-    const gi=fG.findIndex(x=>x.id===g.id);
-    h+=`<div class="tracked-card" onclick="${gi>=0?`selGame(${gi})`:''}">`;
+    h+=`<div class="tracked-card" onclick="selTracked('${g.id}')">`;
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">`;
     h+=`<span style="font-size:9px;color:var(--t4);font-weight:600;letter-spacing:.5px">${g.spI} ${g.spL}${g.playoff?` <span style="color:var(--amb)">PO</span>`:''}</span>`;
     h+=`<button onclick="event.stopPropagation();toggleTrack('${g.id}')" style="background:none;border:none;cursor:pointer;font-family:var(--mono);font-size:9px;color:var(--t4);padding:0;letter-spacing:.3px" title="Untrack">✕</button>`;
