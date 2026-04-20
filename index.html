@@ -8,7 +8,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg0:#06060b;--bg1:#0c0c14;--bg2:#12121c;--bg3:#1a1a28;--bg4:#222234;--bdr:#2a2a3e;--bdr2:#3a3a52;--t1:#eeeef4;--t2:#9898b0;--t3:#606078;--t4:#44445a;--grn:#00e676;--grn-bg:rgba(0,230,118,.08);--grn-bdr:rgba(0,230,118,.2);--red:#ff4757;--red-bg:rgba(255,71,87,.08);--amb:#ffab00;--amb-bg:rgba(255,171,0,.08);--blu:#448aff;--cyn:#00e5ff;--mono:'JetBrains Mono','Courier New',monospace;--sans:'Inter',system-ui,sans-serif}
-html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mono);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mono);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .topbar{height:44px;background:var(--bg1);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 16px;gap:12px;z-index:100}
 .logo{font-weight:700;font-size:15px;color:var(--grn);letter-spacing:2px;white-space:nowrap}.logo span{color:var(--t4);font-weight:400;font-size:12px;margin-left:4px}
 .topbar-div{width:1px;height:20px;background:var(--bdr)}
@@ -314,54 +314,54 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
   .mob-back-btn:active{background:var(--bg3)}
 
   /* ── Base font scale: fluid across 320–480px phones ── */
-  body{font-size:clamp(13px,3.5vw,15px)}
+  body{font-size:clamp(15px,4vw,16px)}
 
   /* ── Game list items: larger touch targets ── */
   .game-row{min-height:54px;padding:10px 14px}
-  .game-teams{font-size:clamp(13px,3.8vw,15px)}
-  .game-meta{font-size:clamp(10px,2.8vw,12px)}
-  .game-odds{font-size:clamp(11px,3.1vw,13px)}
+  .game-teams{font-size:clamp(15px,4.2vw,16px)}
+  .game-meta{font-size:clamp(12px,3.2vw,13px)}
+  .game-odds{font-size:clamp(12px,3.3vw,14px)}
 
   /* ── Detail header ── */
-  .det-teams{font-size:clamp(16px,5vw,22px)}
-  .det-records{font-size:clamp(11px,3vw,13px)}
-  .det-meta{font-size:clamp(10px,2.8vw,12px)}
+  .det-teams{font-size:clamp(19px,5.5vw,24px)}
+  .det-records{font-size:clamp(12px,3.3vw,14px)}
+  .det-meta{font-size:clamp(12px,3.2vw,13px)}
   .det-header{padding:12px}
 
   /* ── Pick cards ── */
   .pick-card{padding:12px 14px;margin:4px 10px}
-  .pick-label{font-size:clamp(9px,2.6vw,11px)}
-  .pick-main{font-size:clamp(14px,4.5vw,17px)}
-  .pick-conf{font-size:clamp(11px,3vw,13px)}
-  .pick-reasoning{font-size:clamp(12px,3.3vw,13px);line-height:1.65}
+  .pick-label{font-size:clamp(11px,2.9vw,12px)}
+  .pick-main{font-size:clamp(16px,4.8vw,19px)}
+  .pick-conf{font-size:clamp(12px,3.3vw,14px)}
+  .pick-reasoning{font-size:clamp(13px,3.6vw,15px);line-height:1.65}
 
   /* ── Picks leaderboard items ── */
   .pick-item{padding:10px 12px}
-  .pick-item-match{font-size:clamp(11px,3vw,13px)}
-  .pick-item-pick{font-size:clamp(12px,3.3vw,14px)}
+  .pick-item-match{font-size:clamp(12px,3.3vw,14px)}
+  .pick-item-pick{font-size:clamp(13px,3.6vw,15px)}
 
   /* ── Analyst note ── */
-  .analyst-note{font-size:clamp(12px,3.3vw,14px)}
+  .analyst-note{font-size:clamp(13px,3.6vw,15px)}
 
   /* ── Record / stat rows ── */
-  .rec-lbl{font-size:clamp(10px,2.8vw,12px)}
-  .rec-val{font-size:clamp(13px,3.5vw,15px)}
+  .rec-lbl{font-size:clamp(12px,3.2vw,13px)}
+  .rec-val{font-size:clamp(14px,4vw,16px)}
 
   /* ── Section titles ── */
-  .sec-title{font-size:clamp(10px,2.8vw,12px)}
+  .sec-title{font-size:clamp(11px,3.1vw,13px)}
 
   /* ── Tennis grid: single column on mobile ── */
   .tennis-grid{grid-template-columns:1fr}
-  .tn-nm{font-size:clamp(12px,3.4vw,14px)}
-  .tn-sv{font-size:clamp(11px,3vw,12px)}
+  .tn-nm{font-size:clamp(13px,3.7vw,15px)}
+  .tn-sv{font-size:clamp(12px,3.3vw,13px)}
 
   /* ── Bottombar: compact ── */
-  .bottombar{font-size:clamp(9px,2.5vw,11px);padding:0 8px;gap:8px}
+  .bottombar{font-size:clamp(11px,2.9vw,12px);padding:0 8px;gap:8px}
 
   /* ── Section / table padding ── */
   .sec{padding:12px 14px}
-  .dtable th{padding:5px 8px;font-size:clamp(9px,2.5vw,11px)}
-  .dtable td{padding:6px 8px;font-size:clamp(11px,3.1vw,13px)}
+  .dtable th{padding:5px 8px;font-size:clamp(11px,2.9vw,12px)}
+  .dtable td{padding:6px 8px;font-size:clamp(12px,3.3vw,14px)}
 
   /* ── Modal / scorecard panel: fit narrow screens ── */
   .modal{width:calc(100vw - 24px);max-width:none;padding:20px}
@@ -369,13 +369,13 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 
   /* ── Confidence filter row: tighter on mobile ── */
   #confFilterRow{padding:4px 8px;gap:3px}
-  #confFilterRow button{font-size:clamp(9px,2.5vw,11px);padding:4px 8px}
+  #confFilterRow button{font-size:clamp(11px,2.9vw,12px);padding:4px 8px}
 
   /* ── Generate button: larger tap target ── */
-  .gen-btn{font-size:clamp(12px,3.3vw,14px);padding:11px 18px}
+  .gen-btn{font-size:clamp(14px,3.6vw,15px);padding:11px 18px}
 
   /* ── AI analyze button ── */
-  .analyze-btn{font-size:clamp(11px,3vw,13px);padding:8px 14px}
+  .analyze-btn{font-size:clamp(13px,3.3vw,14px);padding:8px 14px}
 }
 </style>
 </head>
