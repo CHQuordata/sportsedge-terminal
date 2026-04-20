@@ -1635,65 +1635,85 @@ function updateEdges(){const el=$('edgeAlerts');if(!allE.length){el.innerHTML=`<
   }).join('')}
 function jumpTo(id){const i=fG.findIndex(g=>g.id===id);if(i>=0)selGame(i)}
 
+let _parlaySel=new Set(); // selected indices into _parlayEdges
+let _parlayEdges=[];      // current sharp edges list shown in modal
+
 function buildSharpParlay(){
-  const toDecimal=p=>p>0?(p/100)+1:(100/Math.abs(p))+1;
-  const toAmerican=d=>d>=2?Math.round((d-1)*100):Math.round(-100/(d-1));
-  const fmt=p=>p>0?'+'+p:String(p);
-
-  // Today's sharp edges, one per game (best ep first thanks to sort order)
-  const todayStr=new Date().toDateString();
-  const seen=new Set();
-  const legs=allE.filter(e=>{
-    if(!e.sharp)return false;
-    if(e.g.tm.toDateString()!==todayStr)return false;
-    if(seen.has(e.g.id))return false;
-    seen.add(e.g.id);return true;
-  }).slice(0,4);
-
-  const el=$('parlayContent');
-  if(!legs.length){
-    el.innerHTML=`<div style="font-size:11px;color:var(--t4);padding:12px 0">No Pinnacle sharp edges found for today's games. Try scanning again closer to game time — Pinnacle lines sharpen up 2-4 hours before tip.</div>`;
+  _parlaySel=new Set();
+  _parlayEdges=allE.filter(e=>e.sharp);
+  if(!_parlayEdges.length){
+    $('parlayContent').innerHTML=`<div style="font-size:11px;color:var(--t4);padding:12px 0">No Pinnacle edges detected yet. Scan closer to game time — Pinnacle sharpens lines 2-4 hrs before tip.</div>`;
     $('parlayModal').style.display='flex';return;
   }
+  _renderParlayModal();
+  $('parlayModal').style.display='flex';
+}
 
-  // Build leg rows HTML
-  const legRowsH=(legArr)=>legArr.map((e,i)=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
-      <div style="font-size:11px;font-weight:700;color:var(--t4);width:18px">#${i+1}</div>
-      <div style="flex:1">
-        <div style="font-size:11px;font-weight:700;color:var(--t1)">${e.side}</div>
-        <div style="font-size:9px;color:var(--t3);margin-top:2px">${e.g.aw.nm} @ ${e.g.hm.nm} · ${e.ml} · ${e.g.spL?.toUpperCase()||e.g.cat.toUpperCase()}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:13px;font-weight:700;color:var(--grn)">${fmt(e.bp)}</div>
-        <div style="font-size:8px;color:var(--t3)">+${e.ep.toFixed(1)}% @ PIN</div>
-      </div>
-    </div>`).join('');
+function _pDec(p){return p>0?(p/100)+1:(100/Math.abs(p))+1}
+function _pAm(d){return d>=2?Math.round((d-1)*100):Math.round(-100/(d-1))}
+function _pFmt(p){return p>0?'+'+p:String(p)}
 
-  // Build parlay cards for 2-leg, 3-leg, 4-leg where available
-  let h='';
-  for(let n=2;n<=Math.min(legs.length,4);n++){
-    const subset=legs.slice(0,n);
-    const dec=subset.reduce((acc,e)=>acc*toDecimal(e.bp),1);
-    const am=toAmerican(dec);
-    const winOn100=Math.round((dec-1)*100);
-    const tierClr=n===2?'var(--grn)':n===3?'var(--amb)':'var(--red)';
-    h+=`<div style="margin-bottom:20px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;padding:14px 16px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:${tierClr};letter-spacing:1px">${n}-LEG SHARP PARLAY</div>
-        <div style="text-align:right">
-          <div style="font-size:20px;font-weight:700;color:${tierClr}">${fmt(am)}</div>
-          <div style="font-size:9px;color:var(--t3)">$100 → $${winOn100+100} &nbsp;·&nbsp; win $${winOn100}</div>
-        </div>
+function toggleParlayLeg(idx){
+  if(_parlaySel.has(idx))_parlaySel.delete(idx);else _parlaySel.add(idx);
+  _renderParlayModal();
+}
+
+function _renderParlayModal(){
+  const todayStr=new Date().toDateString();
+  const fmt=_pFmt;
+  // Group edges by date
+  const todayLegs=_parlayEdges.filter(e=>e.g.tm.toDateString()===todayStr);
+  const tmrwLegs=_parlayEdges.filter(e=>e.g.tm.toDateString()!==todayStr);
+
+  const rowH=(e,idx)=>{
+    const sel=_parlaySel.has(idx);
+    const sp=e.g.cat==='nba'?'🏀':e.g.cat==='nhl'?'🏒':e.g.cat==='mlb'?'⚾':e.g.cat==='tennis'?'🎾':'⚡';
+    return`<div onclick="toggleParlayLeg(${idx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:4px;border:1px solid ${sel?'rgba(0,230,118,.35)':'var(--bdr)'};background:${sel?'rgba(0,230,118,.07)':'var(--bg2)'};cursor:pointer;margin-bottom:6px;transition:.15s">
+      <div style="font-size:16px;color:${sel?'var(--grn)':'var(--t4)'};flex-shrink:0">${sel?'☑':'☐'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:${sel?'var(--t1)':'var(--t2)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.side}</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:1px">${sp} ${e.g.aw.ab} @ ${e.g.hm.ab} · ${e.ml}</div>
       </div>
-      ${legRowsH(subset)}
-      <div style="margin-top:10px;font-size:9px;color:var(--t4);line-height:1.6">All legs @ Pinnacle · ${n===2?'Safest option':n===3?'Best risk/reward':'High variance'}${BANKROLL>0?' · Kelly sizing: $'+Math.round(BANKROLL*0.01*(n===2?1:n===3?0.5:0.25))+' recommended':''}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:700;color:${sel?'var(--grn)':'var(--t2)'}">${fmt(e.bp)}</div>
+        <div style="font-size:8px;color:var(--t3)">+${e.ep.toFixed(1)}%</div>
+      </div>
     </div>`;
+  };
+
+  let h='';
+  if(todayLegs.length){
+    h+=`<div style="font-size:9px;font-weight:700;color:var(--t4);letter-spacing:1px;margin-bottom:6px">TODAY</div>`;
+    todayLegs.forEach(e=>h+=rowH(e,_parlayEdges.indexOf(e)));
+  }
+  if(tmrwLegs.length){
+    h+=`<div style="font-size:9px;font-weight:700;color:var(--t4);letter-spacing:1px;margin:10px 0 6px">TOMORROW</div>`;
+    tmrwLegs.forEach(e=>h+=rowH(e,_parlayEdges.indexOf(e)));
   }
 
-  if(!h)h=`<div style="font-size:11px;color:var(--t4)">Only ${legs.length} leg(s) available — need 2+ for a parlay.</div>`;
-  el.innerHTML=h;
-  $('parlayModal').style.display='flex';
+  // Parlay odds strip
+  const sel=Array.from(_parlaySel).map(i=>_parlayEdges[i]);
+  if(sel.length>=2){
+    const dec=sel.reduce((acc,e)=>acc*_pDec(e.bp),1);
+    const am=_pAm(dec);
+    const win100=Math.round((dec-1)*100);
+    const clr=sel.length===2?'var(--grn)':sel.length===3?'var(--amb)':'var(--red)';
+    const kelly=BANKROLL>0?` · Kelly: $${Math.round(BANKROLL*0.01*(sel.length===2?1:sel.length===3?0.5:0.25))}`:'';
+    h+=`<div style="margin-top:12px;padding:12px 14px;background:var(--bg3);border:1px solid ${clr==='var(--grn)'?'rgba(0,230,118,.25)':clr==='var(--amb)'?'rgba(255,171,0,.25)':'rgba(255,71,87,.25)'};border-radius:5px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:10px;font-weight:700;color:${clr};letter-spacing:.5px">${sel.length}-LEG SHARP PARLAY</div>
+        <div style="font-size:22px;font-weight:700;color:${clr}">${_pFmt(am)}</div>
+      </div>
+      <div style="font-size:9px;color:var(--t2);margin-top:4px">$100 → $${win100+100} &nbsp;·&nbsp; win $${win100}${kelly}</div>
+      <div style="font-size:8px;color:var(--t4);margin-top:4px">${sel.map(e=>e.side.split(' ').pop()).join(' + ')}</div>
+    </div>`;
+  } else if(sel.length===1){
+    h+=`<div style="margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;font-size:10px;color:var(--t4)">Select 1 more leg to build a parlay</div>`;
+  } else {
+    h+=`<div style="margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;font-size:10px;color:var(--t4)">☐ Tap legs above to select · need 2+ for a parlay</div>`;
+  }
+
+  $('parlayContent').innerHTML=h;
 }
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('setupModal').style.display='none';$('claudeModal').style.display='none';$('bankrollModal').style.display='none';$('parlayModal').style.display='none';$('tnModal').style.display='none';$('scOverlay').classList.remove('vis');return}if(e.target.tagName==='INPUT'){if(e.key==='Enter')connectApi();return}if($('scOverlay').classList.contains('vis')){$('scOverlay').classList.remove('vis');return}
