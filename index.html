@@ -664,11 +664,14 @@ async function refreshAll(forceOdds=false){
             (x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop()))));
           if(existing){existing.odds=o;return;}
           const lg=t.includes('wta')?'wta':'atp';
+          // Include sport key (e.g. "tennis_atp_french_open") in surface detection —
+          // underscores are converted to spaces inside getSurface so keywords match
           const _oVen=o.sport_title||'';
+          const _oSurf=getSurface(`${_oVen} ${t}`);
           allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:t.includes('wta')?'WTA':'ATP',spI:'\u{1F3BE}',
             aw:{nm:fixTennisName(o.away_team),ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
             hm:{nm:fixTennisName(o.home_team),ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
-            tm:new Date(o.commence_time),st:'pre',stD:'',ven:_oVen,tnName:_oVen,surf:getSurface(_oVen),bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+            tm:new Date(o.commence_time),st:'pre',stD:'',ven:_oVen,tnName:_oVen,surf:_oSurf,bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
         })}));
       }
     }catch(e){}
@@ -1315,7 +1318,7 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
 // ══════════════════════════════════════════════════
 // ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
-function getSurface(venue){const v=(venue||'').toLowerCase();
+function getSurface(venue){const v=(venue||'').toLowerCase().replace(/_/g,' ');// underscores in odds-API sport keys become spaces
   // Direct surface keyword — most reliable
   if(/\bclay\b|terre battue|tierra batida|arcilla/.test(v))return'clay';
   if(/\bgrass\b/.test(v))return'grass';
