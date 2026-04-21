@@ -2430,26 +2430,42 @@ async function generatePicks(){
     // Last-resort: balanced-bracket array extraction — survives any top-level JSON breakage
     function _partialExtract(s){
       try{
+        // Normalize \" → " so \"picks\" style keys are found by the key regex
+        const sn=s.replace(/\\"/g,'"');
         const _arr=key=>{
-          const km=s.match(new RegExp('"'+key+'"\\s*:\\s*\\['));
+          const km=sn.match(new RegExp('"'+key+'"\\s*:\\s*\\['));
           if(!km)return[];
-          const start=s.indexOf('[',km.index+km[0].length-1);
+          const start=sn.indexOf('[',km.index+km[0].length-1);
           if(start<0)return[];
           let depth=0,end=-1;
-          for(let i=start;i<s.length;i++){if(s[i]==='[')depth++;else if(s[i]===']'){depth--;if(!depth){end=i;break;}}}
+          for(let i=start;i<sn.length;i++){if(sn[i]==='[')depth++;else if(sn[i]===']'){depth--;if(!depth){end=i;break;}}}
           if(end<0)return[];
-          try{return JSON.parse(_repairJSON(s.slice(start,end+1)))||[]}catch(e){return[]}
+          try{return JSON.parse(_repairJSON(sn.slice(start,end+1)))||[]}catch(e){return[]}
         };
         const picks=_arr('picks'),leans=_arr('leans'),grading=_arr('grading');
-        const dateM=s.match(/"date"\s*:\s*"(\d{4}-\d{2}-\d{2})/);
-        const rulesM=s.match(/"learned_rules_update"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        const dateM=sn.match(/"date"\s*:\s*"(\d{4}-\d{2}-\d{2})/);
+        const rulesM=sn.match(/"learned_rules_update"\s*:\s*"((?:[^"\\]|\\.)*)"/);
         if(!picks.length&&!leans.length&&!grading.length)return null;
         return{date:dateM?.[1]||new Date().toISOString().split('T')[0],picks,leans,grading,learned_rules_update:rulesM?.[1]||'',analyst_note:'(partial parse — some response data recovered)'};
       }catch(e){return null}
     }
     const repaired=_repairJSON(raw);
+    // Log parse failures to localStorage for debugging
     let result=_tryParse(raw)||_tryParse(repaired)||_tryParse(_stripFilters(repaired))||_tryParse(_stripFilters(raw))||_partialExtract(repaired)||_partialExtract(raw);
-    if(!result){let pe;try{JSON.parse(repaired)}catch(e){pe=e}const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);const snip=repaired.slice(Math.max(0,pos-60),pos+80);throw new Error(`JSON: ${pe?.message} — near: ...${snip}...`)}
+    if(!result){
+      let pe;try{JSON.parse(repaired)}catch(e){pe=e}
+      const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);
+      const snip=repaired.slice(Math.max(0,pos-60),pos+80);
+      localStorage.setItem('et_last_parse_error',JSON.stringify({ts:new Date().toISOString(),msg:pe?.message,near:snip,raw:raw.slice(0,500)}));
+      throw new Error(`JSON: ${pe?.message} — near: ...${snip}...`)
+    }
+    if(result.analyst_note==='(partial parse — some response data recovered)'){
+      // Log what was/wasn't recovered
+      let pe;try{JSON.parse(repaired)}catch(e){pe=e}
+      const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);
+      const snip=repaired.slice(Math.max(0,pos-60),pos+80);
+      localStorage.setItem('et_last_parse_error',JSON.stringify({ts:new Date().toISOString(),msg:'partial:'+pe?.message,near:snip,picks:result.picks?.length||0,leans:result.leans?.length||0,grading:result.grading?.length||0,raw:raw.slice(0,500)}));
+    }
     // Enforce: picks on NO US BOOK ODDS tennis/MMA games get demoted to leans
     if(result.picks){
       const _unbettable=new Set(allG.filter(g=>!hasUsBookOdds(g)&&(g.cat==='tennis'||g.cat==='mma')).flatMap(g=>[g.aw.nm.split(' ').pop().toLowerCase(),g.hm.nm.split(' ').pop().toLowerCase()]));
