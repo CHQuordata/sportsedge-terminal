@@ -593,10 +593,16 @@ async function refreshAll(forceOdds=false){
           if(mDate<startOfToday&&st!=='STATUS_IN_PROGRESS')return;
           const mId=cp.id||`${lg}_${ev.id}_${cp.order||0}`;
           if(seenIds.has(mId))return;seenIds.add(mId);
+          // Surface: try physical venue name + tournament name + any ESPN type hint
+          const _tnNm=ev.name||'',_ven=evVenue||'';
+          const _surfHint=(cp.type?.text||cp.subType?.text||'').toLowerCase();
+          const _surfStr=`${_ven} ${_tnNm} ${_surfHint}`;
+          const _surf=getSurface(_surfStr);
           allG.push({id:mId,sp:lg,cat:'tennis',spL:c.lb,spI:c.ic,
             aw:mkAthlete(comps[0]),hm:mkAthlete(comps[1]),
             tm:mDate,st,stD:cp.status?.type?.shortDetail||'',
-            ven:evVenue||ev.name||'',tnName:ev.name||'',round:cp.round?.displayName||'',
+            ven:_ven||_tnNm,tnName:_tnNm,round:cp.round?.displayName||'',
+            surf:_surf,
             bc:'',odds:null,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
         });
       });
@@ -658,10 +664,11 @@ async function refreshAll(forceOdds=false){
             (x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop()))));
           if(existing){existing.odds=o;return;}
           const lg=t.includes('wta')?'wta':'atp';
+          const _oVen=o.sport_title||'';
           allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:t.includes('wta')?'WTA':'ATP',spI:'\u{1F3BE}',
-            aw:{nm:o.away_team,ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
-            hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
-            tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
+            aw:{nm:fixTennisName(o.away_team),ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
+            hm:{nm:fixTennisName(o.home_team),ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
+            tm:new Date(o.commence_time),st:'pre',stD:'',ven:_oVen,tnName:_oVen,surf:getSurface(_oVen),bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
         })}));
       }
     }catch(e){}
@@ -1057,7 +1064,7 @@ async function selGame(idx){
   }
 
   // ── Tennis Player Profile ──
-  if(g.cat==='tennis'){const surf=getSurface(g.ven),surfTxt=surf==='clay'?'CLAY':surf==='grass'?'GRASS':surf==='indoor'?'INDOOR':'HARD';
+  if(g.cat==='tennis'){const surf=( g.surf || getSurface(g.ven) ),surfTxt=surf==='clay'?'CLAY':surf==='grass'?'GRASS':surf==='indoor'?'INDOOR':'HARD';
 
     h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>PLAYER PROFILE`;
     if(g.round)h+=` <span style="font-size:9px;color:var(--t4);font-weight:400;letter-spacing:0"> — ${g.round}${g.tnName?' · '+g.tnName:''}</span>`;
@@ -1308,7 +1315,18 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
 // ══════════════════════════════════════════════════
 // ── PICK GENERATION with EV, LINE RANGE, SHARP
 // ══════════════════════════════════════════════════
-function getSurface(venue){const v=(venue||'').toLowerCase();if(/clay|terre battue|tierra batida|arcilla/.test(v))return'clay';if(/roland garros|french open|madrid open|rome\b|roma\b|foro italico|internazionali|barcelona|conde de god|monte.carlo|monte carlo|geneva|lyon|hamburg|bucharest|munich|estoril|marrakech|marrakesh|istanbul|prague|strasbourg|cluj|budapest|bogota|houston|stuttgart|porsche tennis|bmw open|rouen|oeiras|jamor|warsaw|warszawa|lausanne|palermo|bastad|b.?stad|rabat|kit[zs]b.hel|umag|gstaad|c.rdoba|buenos.aires|\brio\b|belgrade|beograd|casablanca|perugia|cagliari|florence|firenze|santiago|lima|montevideo|parma|salzburg|fes |marbella|bogot|open de france|open sabadell|banque.*monaco|kremlin.*tennis|grand prix de tennis|hungarian open|serbia open|nordea open|generali open|swiss open|croatia open|morocco open|millenium/.test(v))return'clay';if(/wimbledon|queen.s club|queens club|eastbourne|halle|hertogenbosch|s-hertogenbosch|rosmalen|birmingham|nottingham|mallorca|antalya|bad homburg/.test(v))return'grass';if(/\bindoor\b|bercy|paris.master|paris-bercy|wien\b|vienna|basel|stockholm|rotterdam|marseille|montpellier|sofia\b|zagreb|antwerp|metz\b|milan.*indoor/.test(v))return'indoor';return'hard'}
+function getSurface(venue){const v=(venue||'').toLowerCase();
+  // Direct surface keyword — most reliable
+  if(/\bclay\b|terre battue|tierra batida|arcilla/.test(v))return'clay';
+  if(/\bgrass\b/.test(v))return'grass';
+  if(/\bindoor hard\b/.test(v))return'indoor';
+  // Clay tournaments — venue names ESPN commonly returns + tournament names
+  if(/roland garros|french open|madrid open|caja.m.gica|mutua.*madrid|rome\b|roma\b|foro italico|internazionali|foro.italico|bnl|barcelona|real club de tenis|conde de god|monte.carlo|monte carlo|rolex.*monte|atp.*monte|geneva|lyon|hamburg|am rothenbaum|bucharest|munich|estoril|marrakech|marrakesh|istanbul|prague|strasbourg|cluj|budapest|bogota|houston|stuttgart|porsche.arena|porsche tennis|bmw open|rouen|oeiras|jamor|warsaw|warszawa|lausanne|palermo|bastad|b.?stad|rabat|kit[zs]b.hel|umag|gstaad|c.rdoba|buenos.aires|\brio\b|belgrade|beograd|casablanca|perugia|cagliari|florence|firenze|parco.*del.*foro|santiago|lima|montevideo|parma|salzburg|fes |marbella|bogot|open de france|open sabadell|banque.*monaco|grand prix de tennis|porsche grand prix|hungarian open|serbia open|nordea open|generali open|swiss open|croatia open|morocco open|millennium|leon|cordoba/.test(v))return'clay';
+  // Grass tournaments
+  if(/wimbledon|queen.s club|queens club|eastbourne|halle|hertogenbosch|s-hertogenbosch|rosmalen|birmingham|nottingham|mallorca|antalya|bad homburg|devonshire park|surbiton|ilkley|edgbaston/.test(v))return'grass';
+  // Indoor hard
+  if(/bercy|paris.master|paris-bercy|wien\b|vienna|wiener stadthalle|halle.*indoor|basel|st\.?jakobs|rotterdam|ahoy|marseille|palais des sports|montpellier|sofia\b|zagreb|antwerp|lotto.*arena|metz\b|milan.*indoor|indoor/.test(v))return'indoor';
+  return'hard'}
 function rankTier(r){if(!r)return'unranked';if(r<=10)return`#${r} (top 10)`;if(r<=20)return`#${r} (top 20)`;if(r<=50)return`#${r} (top 50)`;if(r<=100)return`#${r} (top 100)`;return`#${r}`}
 function parseRec(rec){const m=(rec||'').match(/(\d+)-(\d+)/);if(!m)return null;const w=parseInt(m[1]),l=parseInt(m[2]);return w+l>0?w/(w+l):null}
 function genPicks(g,af,hf,pitchers,weather,ext={}){
@@ -1368,13 +1386,13 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
         reasons.push(`${b.nm} holds a stronger season record (${(bp*100).toFixed(0)}% win rate) vs ${w.nm} (${(wp*100).toFixed(0)}%)`)}
       else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec}) vs ${g.hm.nm} (${g.hm.rec}), making this a tight call`)}
     else if(awRank!==null&&hmRank!==null){const rd=awRank-hmRank;score+=rd*0.08;
-      const surf=getSurface(g.ven),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
+      const surf=( g.surf || getSurface(g.ven) ),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
       const b=rd>0?g.hm:g.aw,w=rd>0?g.aw:g.hm,br=rd>0?hmRank:awRank,wr=rd>0?awRank:hmRank;
       if(Math.abs(rd)>=50)reasons.push(`${b.nm} (${rankTier(br)}) vs ${w.nm} (${rankTier(wr)}) on ${surfTxt} — a ${Math.abs(rd)}-place gap at this level is significant; ${g.spL} data shows higher-ranked players win this tier of matchup at a high clip`);
       else if(Math.abs(rd)>=20)reasons.push(`${b.nm} (${rankTier(br)}) holds a ${Math.abs(rd)}-place edge over ${w.nm} (${rankTier(wr)}) on ${surfTxt} — tier separation is a consistent signal in ${g.spL}`);
       else reasons.push(`Rankings tight on ${surfTxt} — ${g.aw.nm} (#${awRank}) vs ${g.hm.nm} (#${hmRank}); narrow edge, defer to surface form and head-to-head`)}
     else if(awRank!==null||hmRank!==null){const ranked=awRank?g.aw:g.hm,r=awRank||hmRank,unr=awRank?g.hm:g.aw;
-      const surf=getSurface(g.ven),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
+      const surf=( g.surf || getSurface(g.ven) ),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
       score+=awRank?-4:4;
       reasons.push(`${ranked.nm} (${rankTier(r)}) faces ${unr.nm} (unranked) on ${surfTxt} — ranked players hold a strong structural edge against unranked opponents at ${g.spL} level`)}
     if(hmMarg&&awMarg&&Math.abs(hmMarg-awMarg)>2){score+=(hmMarg-awMarg)*0.35;const b=hmMarg>awMarg?g.hm:g.aw,m=hmMarg>awMarg?hmMarg:awMarg;
@@ -1501,7 +1519,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
   // ── Tennis: pre-score all surface/H2H/serve signals BEFORE side decision ──
   const tnSigs=[];
   if(g.cat==='tennis'){
-    const _tnSk=getSurface(g.ven)==='clay'?'clay':getSurface(g.ven)==='grass'?'grass':'hard';
+    const _tnSk=( g.surf || getSurface(g.ven) )==='clay'?'clay':( g.surf || getSurface(g.ven) )==='grass'?'grass':'hard';
     const _tnST=_tnSk==='clay'?'CLAY':_tnSk==='grass'?'GRASS':'HARD';
     const _getTNSurf=d=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return _tnSk==='clay'?sn.includes('clay'):_tnSk==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>=3?{w,l,pct:Math.round(w/(w+l)*100)}:null};
     const _getTNBP=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>5?Math.round(sv/fa*100):null};
@@ -1550,7 +1568,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       if(Math.abs(sp2-op2)>.05)reasons.push(`Season record edge: ${side.nm} at ${(sp2*100).toFixed(0)}% win rate vs ${other.nm} at ${(op2*100).toFixed(0)}% (${side.rec} vs ${other.rec})`);
       else reasons.push(`Records are close \u2014 ${g.aw.nm} (${g.aw.rec||'N/A'}) vs ${g.hm.nm} (${g.hm.rec||'N/A'})`)}
     else if(awRank!==null&&hmRank!==null){const sp2=score>=0?hmRank:awRank,op2=score>=0?awRank:hmRank;
-      const surf=getSurface(g.ven),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
+      const surf=( g.surf || getSurface(g.ven) ),surfTxt=surf==='clay'?'clay':surf==='grass'?'grass':'hard court';
       const rd2=Math.abs(awRank-hmRank);
       const skMap={clay:'clay',grass:'grass',hard:'hard',indoor:'hard'};
       const sk=skMap[surf]||'hard';
@@ -1569,8 +1587,8 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       }}
     else if(awRank!==null||hmRank!==null){const ranked=awRank?g.aw:g.hm,r=awRank||hmRank,unr=awRank?g.hm:g.aw;
       reasons.push(`${ranked.nm} (${rankTier(r)}) faces ${unr.nm} (unranked) — ranked player holds a structural edge in ${g.spL}`)}
-    if(g.cat==='tennis'&&tnH2H?.awServe&&tnH2H?.hmServe){const svSk2=getSurface(g.ven)==='clay'?'clay':getSurface(g.ven)==='grass'?'grass':'hard';const awSv2=tnH2H.awServe[svSk2],hmSv2=tnH2H.hmServe[svSk2];const awBp=awSv2?.bp_save_pct?parseFloat(awSv2.bp_save_pct):null,hmBp=hmSv2?.bp_save_pct?parseFloat(hmSv2.bp_save_pct):null;const awF1w=awSv2?.first_won_pct?parseFloat(awSv2.first_won_pct):null,hmF1w=hmSv2?.first_won_pct?parseFloat(hmSv2.first_won_pct):null;if(awBp!==null&&hmBp!==null&&Math.abs(awBp-hmBp)>=8){const btr=awBp>hmBp?g.aw:g.hm,wrs=awBp>hmBp?g.hm:g.aw,btrPct=Math.max(awBp,hmBp),wrsPct=Math.min(awBp,hmBp);reasons.push(`Serve data (${svSk2} 2023-24): ${btr.nm.split(' ').pop()} saves ${btrPct.toFixed(0)}% of BP vs ${wrs.nm.split(' ').pop()} ${wrsPct.toFixed(0)}% — ${(btrPct-wrsPct).toFixed(0)}pp edge holding serve`)}else if(awF1w!==null&&hmF1w!==null&&Math.abs(awF1w-hmF1w)>=6){const btr=awF1w>hmF1w?g.aw:g.hm,btrP=Math.max(awF1w,hmF1w).toFixed(0);reasons.push(`${btr.nm.split(' ').pop()} wins ${btrP}% on 1st serve on ${svSk2} — dominant hold rate vs opponent (Sackmann 2023-24)`)}}
-    if(g.cat==='tennis'&&(awTnApi||hmTnApi)&&!tnSigs.find(s=>s.k.includes('2025'))){const svSk2=getSurface(g.ven)==='clay'?'clay':getSurface(g.ven)==='grass'?'grass':'hard';const surfTxt2=svSk2==='clay'?'Clay':svSk2==='grass'?'Grass':'Hard';const getTNSurf=(d)=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return svSk2==='clay'?sn.includes('clay'):svSk2==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>0?{w,l,pct:Math.round(w/(w+l)*100)}:null};const getTNBP=(d)=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>0?Math.round(sv/fa*100):null};const awSurf=getTNSurf(awTnApi),hmSurf=getTNSurf(hmTnApi);const awBpLive=getTNBP(awTnApi),hmBpLive=getTNBP(hmTnApi);if(awSurf&&hmSurf){const diff=awSurf.pct-hmSurf.pct;if(Math.abs(diff)>=12){const btr=diff>0?g.aw:g.hm,btrS=diff>0?awSurf:hmSurf,wrsS=diff>0?hmSurf:awSurf;score+=Math.abs(diff)*0.04*(side===btr?1:-1);reasons.push(`2025 ${surfTxt2} record: ${btr.nm.split(' ').pop()} ${btrS.w}-${btrS.l} (${btrS.pct}%) vs opponent ${wrsS.w}-${wrsS.l} (${wrsS.pct}%) — current-season surface edge`)}}else if(awSurf||hmSurf){const d=awSurf||hmSurf,pl=awSurf?g.aw:g.hm;if(d.w+d.l>=5)reasons.push(`${pl.nm.split(' ').pop()} 2025 ${surfTxt2}: ${d.w}-${d.l} (${d.pct}%) — contextual surface form`)}if(awBpLive!==null&&hmBpLive!==null&&Math.abs(awBpLive-hmBpLive)>=8){const btr=awBpLive>hmBpLive?g.aw:g.hm,btrP=Math.max(awBpLive,hmBpLive),wrsP=Math.min(awBpLive,hmBpLive);score+=(awBpLive>hmBpLive&&side===g.aw||hmBpLive>awBpLive&&side===g.hm)?0.3:-0.3;reasons.push(`Live career BP save: ${btr.nm.split(' ').pop()} ${btrP}% vs ${wrsP}% — ${(btrP-wrsP)}pp serve pressure edge (matchstat.com)`)}}
+    if(g.cat==='tennis'&&tnH2H?.awServe&&tnH2H?.hmServe){const svSk2=( g.surf || getSurface(g.ven) )==='clay'?'clay':( g.surf || getSurface(g.ven) )==='grass'?'grass':'hard';const awSv2=tnH2H.awServe[svSk2],hmSv2=tnH2H.hmServe[svSk2];const awBp=awSv2?.bp_save_pct?parseFloat(awSv2.bp_save_pct):null,hmBp=hmSv2?.bp_save_pct?parseFloat(hmSv2.bp_save_pct):null;const awF1w=awSv2?.first_won_pct?parseFloat(awSv2.first_won_pct):null,hmF1w=hmSv2?.first_won_pct?parseFloat(hmSv2.first_won_pct):null;if(awBp!==null&&hmBp!==null&&Math.abs(awBp-hmBp)>=8){const btr=awBp>hmBp?g.aw:g.hm,wrs=awBp>hmBp?g.hm:g.aw,btrPct=Math.max(awBp,hmBp),wrsPct=Math.min(awBp,hmBp);reasons.push(`Serve data (${svSk2} 2023-24): ${btr.nm.split(' ').pop()} saves ${btrPct.toFixed(0)}% of BP vs ${wrs.nm.split(' ').pop()} ${wrsPct.toFixed(0)}% — ${(btrPct-wrsPct).toFixed(0)}pp edge holding serve`)}else if(awF1w!==null&&hmF1w!==null&&Math.abs(awF1w-hmF1w)>=6){const btr=awF1w>hmF1w?g.aw:g.hm,btrP=Math.max(awF1w,hmF1w).toFixed(0);reasons.push(`${btr.nm.split(' ').pop()} wins ${btrP}% on 1st serve on ${svSk2} — dominant hold rate vs opponent (Sackmann 2023-24)`)}}
+    if(g.cat==='tennis'&&(awTnApi||hmTnApi)&&!tnSigs.find(s=>s.k.includes('2025'))){const svSk2=( g.surf || getSurface(g.ven) )==='clay'?'clay':( g.surf || getSurface(g.ven) )==='grass'?'grass':'hard';const surfTxt2=svSk2==='clay'?'Clay':svSk2==='grass'?'Grass':'Hard';const getTNSurf=(d)=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return svSk2==='clay'?sn.includes('clay'):svSk2==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>0?{w,l,pct:Math.round(w/(w+l)*100)}:null};const getTNBP=(d)=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>0?Math.round(sv/fa*100):null};const awSurf=getTNSurf(awTnApi),hmSurf=getTNSurf(hmTnApi);const awBpLive=getTNBP(awTnApi),hmBpLive=getTNBP(hmTnApi);if(awSurf&&hmSurf){const diff=awSurf.pct-hmSurf.pct;if(Math.abs(diff)>=12){const btr=diff>0?g.aw:g.hm,btrS=diff>0?awSurf:hmSurf,wrsS=diff>0?hmSurf:awSurf;score+=Math.abs(diff)*0.04*(side===btr?1:-1);reasons.push(`2025 ${surfTxt2} record: ${btr.nm.split(' ').pop()} ${btrS.w}-${btrS.l} (${btrS.pct}%) vs opponent ${wrsS.w}-${wrsS.l} (${wrsS.pct}%) — current-season surface edge`)}}else if(awSurf||hmSurf){const d=awSurf||hmSurf,pl=awSurf?g.aw:g.hm;if(d.w+d.l>=5)reasons.push(`${pl.nm.split(' ').pop()} 2025 ${surfTxt2}: ${d.w}-${d.l} (${d.pct}%) — contextual surface form`)}if(awBpLive!==null&&hmBpLive!==null&&Math.abs(awBpLive-hmBpLive)>=8){const btr=awBpLive>hmBpLive?g.aw:g.hm,btrP=Math.max(awBpLive,hmBpLive),wrsP=Math.min(awBpLive,hmBpLive);score+=(awBpLive>hmBpLive&&side===g.aw||hmBpLive>awBpLive&&side===g.hm)?0.3:-0.3;reasons.push(`Live career BP save: ${btr.nm.split(' ').pop()} ${btrP}% vs ${wrsP}% — ${(btrP-wrsP)}pp serve pressure edge (matchstat.com)`)}}
     if(g.cat==='tennis'&&tnH2H&&!tnSigs.find(s=>s.k==='H2H')){
       if(tnH2H.total>0){const awH2H=tnH2H.awW,hmH2H=tnH2H.hmW,tot=tnH2H.total;
         const ldr=awH2H>hmH2H?g.aw:hmH2H>awH2H?g.hm:null;
@@ -1581,7 +1599,7 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
       } else reasons.push(`H2H: no previous meetings — first career matchup`)
     }
     if(g.cat==='tennis'&&g.aw.seed&&g.hm.seed){const sd=g.hm.seed-g.aw.seed;if(Math.abs(sd)>=2){score+=sd*0.3;const bs=sd>0?g.aw:g.hm,ws=sd>0?g.hm:g.aw;reasons.push(`Seeds: ${bs.nm} [${bs.seed}] vs ${ws.nm} [${ws.seed}] — draw committee assessment`)}}
-    if(g.cat==='tennis'&&awTn?.hand&&hmTn?.hand&&awTn.hand!==hmTn.hand){const surf=getSurface(g.ven);const lhPlayer=awTn.hand==='L'?g.aw:g.hm;if(surf==='clay')reasons.push(`${lhPlayer.nm} (LH): kick serve to backhand on clay — proven structural edge`);else if(surf==='grass')reasons.push(`${lhPlayer.nm} (LH): wide serve to deuce court on grass — potent on this surface`)}
+    if(g.cat==='tennis'&&awTn?.hand&&hmTn?.hand&&awTn.hand!==hmTn.hand){const surf=( g.surf || getSurface(g.ven) );const lhPlayer=awTn.hand==='L'?g.aw:g.hm;if(surf==='clay')reasons.push(`${lhPlayer.nm} (LH): kick serve to backhand on clay — proven structural edge`);else if(surf==='grass')reasons.push(`${lhPlayer.nm} (LH): wide serve to deuce court on grass — potent on this surface`)}
     if(mlEdges.length)reasons.push(`${mlEdges[0].ep.toFixed(1)}% ML edge at ${mlEdges[0].bb} (${fp(mlEdges[0].bp)}) \u2014 implied probability gap signals sharp value`);
     if(mlO&&Math.abs(mlO.price)>=200)reasons.push(`Price is steep at ${fp(mlO.price)} \u2014 consider spread as safer vehicle unless parlaying`);
     else if(mlO&&mlO.price>0)reasons.push(`Plus-money at ${fp(mlO.price)} adds significant value to an already favorable setup`);
@@ -2063,7 +2081,7 @@ function buildGamesContext(todayOnly=false){
     if(noOddsBlock)return;
     if(g.aw.rec||g.hm.rec)ctx+=`  Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
     if(g.aw.rank||g.hm.rank)ctx+=`  Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:'?'} vs ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:'?'}\n`;
-    if(g.cat==='tennis'){const surf=getSurface(g.ven);if(g.round||g.tnName)ctx+=`  Tournament: ${g.tnName||''}${g.round?' — '+g.round:''}\n`;if(g.aw.seed||g.hm.seed)ctx+=`  Seeds: ${g.aw.nm}${g.aw.seed?' ['+g.aw.seed+']':''} vs ${g.hm.nm}${g.hm.seed?' ['+g.hm.seed+']':''}\n`;ctx+=`  Surface: ${surf} — ${surf==='clay'?'clay specialist/heavy topspin players have structural edge':surf==='grass'?'serve dominance elevated, LH advantage in deuce court':surf==='indoor'?'fast conditions, serve hold rates elevated':'balanced hard court'}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(!fm.length)return;const w=fm.filter(m=>m.W).length;const last=fm[0];ctx+=`  ${pl.nm} L5: ${w}-${fm.length-w} (last: ${last.W?'W':'L'} vs ${last.opp}${last.round?', '+last.round:''}${last.tn?', '+last.tn:''})\n`});const tc=tennisCache.get(g.id);if(tc){const sk2=surf==='clay'?'clay':surf==='grass'?'grass':'hard';if(tc.total>0)ctx+=`  H2H: ${g.aw.nm.split(' ').pop()} ${tc.awW}-${tc.hmW} (${tc.total} meetings since 2021)\n`;const awSv=tc.awServe?.[sk2],hmSv=tc.hmServe?.[sk2];if(awSv?.m>=3||hmSv?.m>=3)ctx+=`  Serve stats (${surf} 2023-24): ${g.aw.nm.split(' ').pop()} 1stIn=${awSv?.first_pct||'N/A'}% 1stWon=${awSv?.first_won_pct||'N/A'}% BPsave=${awSv?.bp_save_pct||'N/A'}% | ${g.hm.nm.split(' ').pop()} 1stIn=${hmSv?.first_pct||'N/A'}% 1stWon=${hmSv?.first_won_pct||'N/A'}% BPsave=${hmSv?.bp_save_pct||'N/A'}%\n`}const tng=tnGameCache.get(g.id);if(tng){const svK=surf==='clay'?'clay':surf==='grass'?'grass':'hard';const getTNCtx=(d,nm)=>{if(!d)return null;const sfArr=Array.isArray(d.surface)?d.surface:[];const sfR=sfArr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return svK==='clay'?sn.includes('clay'):svK==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});const stArr=Array.isArray(d.stats)?d.stats:(d.stats?[d.stats]:[]);const st=stArr[0]||{};let out=nm+':';if(sfR){const w=parseInt(sfR.wins??sfR.win??sfR.w??0)||0,l=parseInt(sfR.losses??sfR.loss??sfR.l??0)||0;if(w+l>0)out+=` 2025-${surf}=${w}-${l}(${Math.round(w/(w+l)*100)}%)`}const bp1=parseInt(st.breakPointSavedGm||0),bp2=parseInt(st.breakPointFacedGm||0);if(bp2>0)out+=` BPsave=${Math.round(bp1/bp2*100)}%`;const f1=parseInt(st.firstServeGm||0),f1of=parseInt(st.firstServeOfGm||0);if(f1of>0)out+=` 1stIn=${Math.round(f1/f1of*100)}%`;const fw=parseInt(st.winningOnFirstServeGm||0),fwof=parseInt(st.winningOnFirstServeOfGm||0);if(fwof>0)out+=` 1stWon=${Math.round(fw/fwof*100)}%`;return out};const awCtx=getTNCtx(tng.awData,g.aw.nm.split(' ').pop()),hmCtx=getTNCtx(tng.hmData,g.hm.nm.split(' ').pop());if(awCtx||hmCtx)ctx+=`  Live stats (matchstat.com): ${[awCtx,hmCtx].filter(Boolean).join(' | ')}\n`}}
+    if(g.cat==='tennis'){const surf=( g.surf || getSurface(g.ven) );if(g.round||g.tnName)ctx+=`  Tournament: ${g.tnName||''}${g.round?' — '+g.round:''}\n`;if(g.aw.seed||g.hm.seed)ctx+=`  Seeds: ${g.aw.nm}${g.aw.seed?' ['+g.aw.seed+']':''} vs ${g.hm.nm}${g.hm.seed?' ['+g.hm.seed+']':''}\n`;ctx+=`  Surface: ${surf} — ${surf==='clay'?'clay specialist/heavy topspin players have structural edge':surf==='grass'?'serve dominance elevated, LH advantage in deuce court':surf==='indoor'?'fast conditions, serve hold rates elevated':'balanced hard court'}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(!fm.length)return;const w=fm.filter(m=>m.W).length;const last=fm[0];ctx+=`  ${pl.nm} L5: ${w}-${fm.length-w} (last: ${last.W?'W':'L'} vs ${last.opp}${last.round?', '+last.round:''}${last.tn?', '+last.tn:''})\n`});const tc=tennisCache.get(g.id);if(tc){const sk2=surf==='clay'?'clay':surf==='grass'?'grass':'hard';if(tc.total>0)ctx+=`  H2H: ${g.aw.nm.split(' ').pop()} ${tc.awW}-${tc.hmW} (${tc.total} meetings since 2021)\n`;const awSv=tc.awServe?.[sk2],hmSv=tc.hmServe?.[sk2];if(awSv?.m>=3||hmSv?.m>=3)ctx+=`  Serve stats (${surf} 2023-24): ${g.aw.nm.split(' ').pop()} 1stIn=${awSv?.first_pct||'N/A'}% 1stWon=${awSv?.first_won_pct||'N/A'}% BPsave=${awSv?.bp_save_pct||'N/A'}% | ${g.hm.nm.split(' ').pop()} 1stIn=${hmSv?.first_pct||'N/A'}% 1stWon=${hmSv?.first_won_pct||'N/A'}% BPsave=${hmSv?.bp_save_pct||'N/A'}%\n`}const tng=tnGameCache.get(g.id);if(tng){const svK=surf==='clay'?'clay':surf==='grass'?'grass':'hard';const getTNCtx=(d,nm)=>{if(!d)return null;const sfArr=Array.isArray(d.surface)?d.surface:[];const sfR=sfArr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return svK==='clay'?sn.includes('clay'):svK==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});const stArr=Array.isArray(d.stats)?d.stats:(d.stats?[d.stats]:[]);const st=stArr[0]||{};let out=nm+':';if(sfR){const w=parseInt(sfR.wins??sfR.win??sfR.w??0)||0,l=parseInt(sfR.losses??sfR.loss??sfR.l??0)||0;if(w+l>0)out+=` 2025-${surf}=${w}-${l}(${Math.round(w/(w+l)*100)}%)`}const bp1=parseInt(st.breakPointSavedGm||0),bp2=parseInt(st.breakPointFacedGm||0);if(bp2>0)out+=` BPsave=${Math.round(bp1/bp2*100)}%`;const f1=parseInt(st.firstServeGm||0),f1of=parseInt(st.firstServeOfGm||0);if(f1of>0)out+=` 1stIn=${Math.round(f1/f1of*100)}%`;const fw=parseInt(st.winningOnFirstServeGm||0),fwof=parseInt(st.winningOnFirstServeOfGm||0);if(fwof>0)out+=` 1stWon=${Math.round(fw/fwof*100)}%`;return out};const awCtx=getTNCtx(tng.awData,g.aw.nm.split(' ').pop()),hmCtx=getTNCtx(tng.hmData,g.hm.nm.split(' ').pop());if(awCtx||hmCtx)ctx+=`  Live stats (matchstat.com): ${[awCtx,hmCtx].filter(Boolean).join(' | ')}\n`}}
     if(g.odds?.bookmakers?.length){const bks=g.odds.bookmakers;
       // Consensus ML — best price per side across all books
       const mlAll={};bks.forEach(b=>{const m=b.markets.find(x=>x.key==='h2h');if(m)m.outcomes.forEach(o=>{if(!mlAll[o.name]||o.price>mlAll[o.name])mlAll[o.name]=o.price})});
@@ -2346,7 +2364,7 @@ async function aiAnalyzeGame(gid){
   }
   if(g.aw.rec||g.hm.rec)ctx+=`Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
   if(g.aw.rank||g.hm.rank)ctx+=`Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:''} ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:''}\n`;
-  if(g.cat==='tennis'){const surf=getSurface(g.ven);ctx+=`Surface: ${surf}\n`;if(g.round)ctx+=`Round: ${g.round}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(fm.length){const w=fm.filter(m=>m.W).length;ctx+=`${pl.nm} L5: ${w}-${fm.length-w} — ${fm.map(m=>(m.W?'W':'L')+' vs '+m.opp+(m.round?' ('+m.round+')':'')).join(', ')}\n`}})}
+  if(g.cat==='tennis'){const surf=( g.surf || getSurface(g.ven) );ctx+=`Surface: ${surf}\n`;if(g.round)ctx+=`Round: ${g.round}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(fm.length){const w=fm.filter(m=>m.W).length;ctx+=`${pl.nm} L5: ${w}-${fm.length-w} — ${fm.map(m=>(m.W?'W':'L')+' vs '+m.opp+(m.round?' ('+m.round+')':'')).join(', ')}\n`}})}
   // Team stats + fatigue
   const _cs=gameStatsCache.get(g.id);const _cf=gameFormCache.get(g.id);
   if(_cs?.cat==='nba'&&(_cs.awSt||_cs.hmSt)){ctx+=`Team stats: ${g.aw.nm} PPG ${_cs.awSt?.ppg||'?'} FG% ${_cs.awSt?.fgPct||'?'} TO/G ${_cs.awSt?.toPg||'?'} | ${g.hm.nm} PPG ${_cs.hmSt?.ppg||'?'} FG% ${_cs.hmSt?.fgPct||'?'} TO/G ${_cs.hmSt?.toPg||'?'}\n`}
