@@ -2424,8 +2424,21 @@ async function aiAnalyzeGame(gid){
     if(g.aw.serW!=null&&g.hm.serW!=null)ctx+=`Series score: ${g.aw.nm} ${g.aw.serW} — ${g.hm.serW} ${g.hm.nm}\n`;
   }
   if(g.aw.rec||g.hm.rec)ctx+=`Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
-  if(g.aw.rank||g.hm.rank)ctx+=`Rankings: ${g.aw.rank?g.aw.nm+' #'+g.aw.rank:''} ${g.hm.rank?g.hm.nm+' #'+g.hm.rank:''}\n`;
-  if(g.cat==='tennis'){const surf=( g.surf || getSurface(g.ven) );ctx+=`Surface: ${surf}\n`;if(g.round)ctx+=`Round: ${g.round}\n`;[g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(fm.length){const w=fm.filter(m=>m.W).length;ctx+=`${pl.nm} L5: ${w}-${fm.length-w} — ${fm.map(m=>(m.W?'W':'L')+' vs '+m.opp+(m.round?' ('+m.round+')':'')).join(', ')}\n`}})}
+  const _awRkA=g.aw.rank||(g.cat==='tennis'?tennisRankings.get(String(g.aw.id??''))||null:null);
+  const _hmRkA=g.hm.rank||(g.cat==='tennis'?tennisRankings.get(String(g.hm.id??''))||null:null);
+  if(_awRkA||_hmRkA)ctx+=`Rankings: ${_awRkA?g.aw.nm+' #'+_awRkA:'unranked'} vs ${_hmRkA?g.hm.nm+' #'+_hmRkA:'unranked'}\n`;
+  if(g.cat==='tennis'){
+    const surf=( g.surf || getSurface(g.ven) );ctx+=`Surface: ${surf}\n`;
+    if(g.round)ctx+=`Round: ${g.round}\n`;if(g.tnName)ctx+=`Tournament: ${g.tnName}\n`;
+    [g.aw,g.hm].forEach(pl=>{const fm=(tennisForm.get(String(pl.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);if(fm.length){const w=fm.filter(m=>m.W).length;ctx+=`${pl.nm} L5: ${w}-${fm.length-w} — ${fm.map(m=>(m.W?'W':'L')+' vs '+m.opp+(m.tn?' ('+m.tn+')':'')+(m.round?' '+m.round:'')).join(', ')}\n`}});
+    const tc=tennisCache.get(g.id);
+    if(tc){const sk2=surf==='clay'?'clay':surf==='grass'?'grass':'hard';const awSv=tc.awSurf?.[sk2],hmSv=tc.hmSurf?.[sk2];if(awSv?.tot>=3||hmSv?.tot>=3){ctx+=`${surf} record (2023-24): `;if(awSv?.tot>=3)ctx+=`${g.aw.nm.split(' ').pop()} ${awSv.w}-${awSv.l} (${Math.round(awSv.w/awSv.tot*100)}%) `;if(hmSv?.tot>=3)ctx+=`${g.hm.nm.split(' ').pop()} ${hmSv.w}-${hmSv.l} (${Math.round(hmSv.w/hmSv.tot*100)}%)`;ctx+='\n'}if(tc.total>0)ctx+=`H2H: ${g.aw.nm.split(' ').pop()} ${tc.awW}-${tc.hmW}\n`}
+    const tng=tnGameCache.get(g.id);
+    if(tng?.awData||tng?.hmData){const skT=surf==='clay'?'clay':surf==='grass'?'grass':'hard';[[tng.awData,g.aw.nm],[tng.hmData,g.hm.nm]].forEach(([d,nm])=>{if(!d)return;const sfArr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const sfR=sfArr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return skT==='clay'?sn.includes('clay'):skT==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(sfR){const w=parseInt(sfR.wins??sfR.w??0)||0,l=parseInt(sfR.losses??sfR.l??0)||0;if(w+l>0)ctx+=`${nm.split(' ').pop()} 2025 ${surf}: ${w}-${l} (${Math.round(w/(w+l)*100)}%)\n`}})}
+    const _awHasDbA=!!(tc?.awSurf||tng?.awData||(tennisForm.get(String(g.aw.id))?.length));
+    const _hmHasDbA=!!(tc?.hmSurf||tng?.hmData||(tennisForm.get(String(g.hm.id))?.length));
+    if(!_awHasDbA||!_hmHasDbA){const _spA=[!_awHasDbA?g.aw.nm:null,!_hmHasDbA?g.hm.nm:null].filter(Boolean);ctx+=`\n[RESEARCH NEEDED — ${_spA.join(', ')}: not in stats DB. Use your training knowledge: ranking, playing style, surface record, recent tournament results, known tendencies on ${surf}.]\n`}
+  }
   // Team stats + fatigue
   const _cs=gameStatsCache.get(g.id);const _cf=gameFormCache.get(g.id);
   if(_cs?.cat==='nba'&&(_cs.awSt||_cs.hmSt)){ctx+=`Team stats: ${g.aw.nm} PPG ${_cs.awSt?.ppg||'?'} FG% ${_cs.awSt?.fgPct||'?'} TO/G ${_cs.awSt?.toPg||'?'} | ${g.hm.nm} PPG ${_cs.hmSt?.ppg||'?'} FG% ${_cs.hmSt?.fgPct||'?'} TO/G ${_cs.hmSt?.toPg||'?'}\n`}
@@ -2442,7 +2455,7 @@ async function aiAnalyzeGame(gid){
    if(_missFrm||_missInj||_missOdds){const gaps=[];if(_missFrm)gaps.push('recent form/fatigue');if(_missInj)gaps.push('injury reports');if(_missOdds)gaps.push('live odds');
    ctx+=`\n⚠️ MISSING DATA: ${gaps.join(', ')}. Your analysis MUST flag these gaps. Do not manufacture confidence from missing inputs.\n`;}}
   const _gp=(gamePicksCache.get(g.id)||[]).filter(pk=>(pk.score??0)>=2.5||pk.evData!=null||pk.lineRange!=null);
-  if(_gp.length){ctx+=`\nALGO PICKS (validate or challenge these — ignore any with score below 2.5):\n`;_gp.forEach(pk=>{ctx+=`  [${pk.label}] ${pk.pick} — ${pk.conf}${pk.score!=null?' (score:'+pk.score+')':''}\n  Reasoning: ${(pk.reasons||[]).join(' | ')}\n`})}
+  if(_gp.length){ctx+=`\nALGO PICKS (validate or challenge these — ignore any with score below 2.5):\n`;_gp.forEach(pk=>{const _pkR=pk.reasoning||(pk.reasons||[]).join(' | ')||'(no reasoning generated)';ctx+=`  [${pk.label}] ${pk.pick} — ${pk.conf}${pk.score!=null?' (score:'+pk.score+')':''}\n  Reasoning: ${_pkR}\n`})}
   const rules=localStorage.getItem('et_learned_rules')||'';
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
   const bySp=rec.by_sport?.[g.cat];
