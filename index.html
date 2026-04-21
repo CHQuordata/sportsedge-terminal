@@ -483,8 +483,22 @@ function cSet(map,k,v,max=50){if(map.size>=max)map.delete(map.keys().next().valu
 function closeAllModals(){document.querySelectorAll('.modal-ov').forEach(m=>m.style.display='none');$('scOverlay').classList.remove('vis')}
 let _refreshTimer=null;function debouncedRefresh(force){clearTimeout(_refreshTimer);_refreshTimer=setTimeout(()=>refreshAll(force),400)}
 
+// Known ESPN name errors → correct spelling used by TN API & Sackmann H2H CSVs
+// Key: lowercase ESPN displayName (or common variant), Value: canonical name
+const TENNIS_NAME_FIX={
+  'camilia osario':'Camila Osorio',
+  'camilia osorio':'Camila Osorio',
+  'camila osario':'Camila Osorio',
+};
+function fixTennisName(nm){return TENNIS_NAME_FIX[nm.toLowerCase()]||nm}
+
 // Helper to parse athlete-based competitors (tennis/MMA)
-function mkAthlete(p){return{nm:p.athlete?.displayName||p.athlete?.fullName||'Unknown',ab:p.athlete?.shortName||p.athlete?.displayName?.split(' ').pop()||'?',id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null,seed:p.curatedRank?.current||null,country:p.athlete?.flag?.alt||null}}
+function mkAthlete(p){
+  let nm=p.athlete?.displayName||p.athlete?.fullName||'Unknown';
+  nm=fixTennisName(nm);
+  const ab=p.athlete?.shortName||nm.split(' ').pop()||'?';
+  return{nm,ab,id:p.id||null,rec:p.records?.[0]?.summary||'',sc:p.score||null,seed:p.curatedRank?.current||null,country:p.athlete?.flag?.alt||null}
+}
 
 async function init(){
   // Migrate stale rules if version outdated
