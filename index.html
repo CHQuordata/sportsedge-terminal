@@ -36,10 +36,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .game-meta{display:flex;gap:10px;font-size:10px;color:var(--t3);flex-wrap:wrap}.game-meta .live{color:var(--grn);font-weight:600}.game-meta .period{color:var(--t2);font-weight:500}.game-meta .final-lbl{color:var(--t4)}
 .game-odds{display:flex;gap:8px;margin-top:4px;font-size:11px}.game-odds span{color:var(--t2)}.game-odds .fav{color:var(--cyn);font-weight:500}
 .detail-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t4);gap:12px}.detail-empty-icon{font-size:48px;opacity:.2}.detail-empty-text{font-size:12px;letter-spacing:1px}
-.det-header{padding:20px;border-bottom:1px solid var(--bdr);background:var(--bg2)}
 .det-teams{font-size:22px;font-weight:700;color:var(--t1);margin-bottom:3px;font-family:var(--sans)}.det-records{font-size:12px;color:var(--t2);margin-bottom:8px}.det-meta{display:flex;gap:16px;font-size:11px;color:var(--t3);flex-wrap:wrap}
 .sec{padding:16px 20px;border-bottom:1px solid rgba(42,42,62,.5)}
-.sec-title{font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .ind{width:3px;height:12px;border-radius:1px}
 .pick-card{background:var(--grn-bg);border:1px solid var(--grn-bdr);border-radius:4px;padding:14px 16px;margin:6px 16px}
 .pick-card.medium{background:var(--amb-bg);border-color:rgba(255,171,0,.2)}.pick-card.low{background:var(--bg2);border-color:var(--bdr)}
@@ -245,6 +243,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     flex-shrink:0;
     white-space:nowrap
   }
+  /* Track pin button: larger tap target on mobile */
+  .track-btn{min-height:32px;padding:4px 8px}
   .kbd{display:none}
 
   /* ── Main layout: full-width sliding panels ── */
@@ -252,6 +252,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     display:block;
     position:relative;
     width:100%;
+    height:calc(100vh - 64px - 24px); /* fallback for older Safari */
     height:calc(100svh - 64px - 24px); /* topbar(~64px) + bottombar(24px) */
     overflow:hidden
   }
@@ -909,7 +910,8 @@ async function selGame(idx){
   const prevRow=document.querySelector('.game-row.sel');if(prevRow)prevRow.classList.remove('sel');
   selIdx=idx;
   const nextRow=document.querySelector(`.game-row[data-i="${idx}"]`);if(nextRow)nextRow.classList.add('sel');
-  const g=fG[idx];const el=$('detailPanel');
+  const g=fG[idx];if(!g)return;
+  const el=$('detailPanel');
   if(window.innerWidth<=768)document.body.classList.add('mob-detail-open');
   el.innerHTML='<div class="detail-empty"><div class="pulse" style="font-size:14px;color:var(--grn)">ANALYZING MATCHUP...</div></div>';
   try{
@@ -2514,13 +2516,14 @@ async function aiAnalyzeGame(gid){
     if(!resp.ok)throw new Error('API error');
     const data=await resp.json();
     const txt=data.content[0].text;
+    const safeTxt=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const existing=$('aiGameAnalysis');
     const div=existing||document.createElement('div');
     div.id='aiGameAnalysis';
     div.className='sec';
     div.style.borderLeft='3px solid var(--amb)';
     div.style.background='var(--bg0)';
-    div.innerHTML=`<div class="sec-title"><div class="ind" style="background:var(--amb)"></div>⚡ AI GAME ANALYSIS <span class="tx4">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div><div class="sc-bd"><div class="tx2" style="white-space:pre-wrap">${txt}</div></div>`;
+    div.innerHTML=`<div class="sec-title"><div class="ind" style="background:var(--amb)"></div>⚡ AI GAME ANALYSIS <span class="tx4">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div><div class="sc-bd"><div class="tx2" style="white-space:pre-wrap">${safeTxt}</div></div>`;
     cSet(aiAnalysisCache,g.id,div.innerHTML,20);
     if(!existing){const panel=$('detailPanel');const firstSec=panel.querySelector('.sec,.picks-section');if(firstSec)panel.insertBefore(div,firstSec);else panel.appendChild(div)}
   }catch(e){if(btn){btn.textContent='⚡ AI ANALYZE';btn.disabled=false}return}
