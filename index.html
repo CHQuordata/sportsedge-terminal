@@ -2379,15 +2379,19 @@ async function generatePicks(){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2048,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
     const text=data.content[0].text;
     const m=text.match(/```json\s*([\s\S]+?)\s*```/)||text.match(/(\{[\s\S]+\})/);
     if(!m)throw new Error('No JSON in response');
-    const cleaned=_repairJSON(m[1]);
-    let result;try{result=JSON.parse(cleaned)}catch(pe){const pos=+(pe.message.match(/position (\d+)/)?.[1]||0);const snip=cleaned.slice(Math.max(0,pos-60),pos+80);throw new Error(`JSON: ${pe.message} — near: ...${snip}...`)}
+    const raw=m[1];
+    // Parse strategy: try raw → repaired → filters-stripped → error
+    function _tryParse(s){try{return JSON.parse(s)}catch(e){return null}}
+    function _stripFilters(s){return s.replace(/"filters"\s*:\s*\[[^\]]*\]/g,'"filters":[]')}
+    let result=_tryParse(raw)||_tryParse(_repairJSON(raw))||_tryParse(_stripFilters(_repairJSON(raw)))||_tryParse(_stripFilters(raw));
+    if(!result){const cleaned=_repairJSON(raw);let pe;try{JSON.parse(cleaned)}catch(e){pe=e}const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);const snip=cleaned.slice(Math.max(0,pos-60),pos+80);throw new Error(`JSON: ${pe?.message} — near: ...${snip}...`)}
     // Enforce: picks on NO US BOOK ODDS tennis/MMA games get demoted to leans
     if(result.picks){
       const _unbettable=new Set(allG.filter(g=>!hasUsBookOdds(g)&&(g.cat==='tennis'||g.cat==='mma')).flatMap(g=>[g.aw.nm.split(' ').pop().toLowerCase(),g.hm.nm.split(' ').pop().toLowerCase()]));
