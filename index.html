@@ -835,7 +835,9 @@ function getGameAiConf(g){
   const _toks=nm=>(nm||'').toLowerCase().split(/\s+/).filter(w=>w.length>=3);
   const awT=_toks(g.aw.nm),hmT=_toks(g.hm.nm);
   const _any=(toks,mu)=>toks.some(t=>mu.includes(t));
-  const pk=todayPicksData.picks.find(p=>!p.is_lean&&(!p.sport||p.sport===g.cat)&&(()=>{const mu=(p.matchup||'').toLowerCase();return _any(awT,mu)&&_any(hmT,mu)})());
+  // Normalize atp/wta → tennis so sport check works regardless of what AI writes
+  const _normSp=s=>(!s||s==='atp'||s==='wta')?'tennis':s;
+  const pk=todayPicksData.picks.find(p=>!p.is_lean&&(!p.sport||_normSp(p.sport)===g.cat||p.sport===g.cat)&&(()=>{const mu=(p.matchup||'').toLowerCase();return _any(awT,mu)&&_any(hmT,mu)})());
   return pk?.confidence||null;
 }
 function setConfFilter(f){
