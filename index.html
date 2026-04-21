@@ -2277,16 +2277,18 @@ ATP and WTA clay/hard season is in full swing. Tennis picks on DraftKings and Be
 4. Tennis edges to prioritize: clay specialist vs hard-court player on clay, ranking gap ≥20 places, market favorite ≥65% implied with confirmed surface record, one-sided H2H on surface (3-0 or better).
 5. Only pick tennis games carrying the [DK ✓] or [MGM ✓] tag — all others are leans.
 
-## JSON OUTPUT RULES — MUST FOLLOW OR RESPONSE FAILS TO PARSE
-- Return ONLY the JSON block below — no prose, no commentary outside it
-- ALL string values must be single-line — never put a literal newline/tab inside a string value
+## JSON OUTPUT RULES — CRITICAL: violating any rule causes a parse failure
+- Output raw JSON only — NO markdown fences, NO prose, NO text before or after the JSON
+- Start your response with { and end it with } — nothing else
+- Close EVERY string with a closing quote before the comma: "date":"2026-04-21", NOT "date":"2026-04-21,
+- NEVER put a backslash before a key name: use "picks": NOT \"picks\":
+- ALL string values must be single-line — no literal newlines or tabs inside string values
 - NEVER write a double-quote character (") inside any string value — use apostrophe (') instead
-- NEVER write odds like +220" or 222+" — write them as +220 or 222+ without the trailing quote
-- reasoning, analyst_note, learned_rules_update, note, lean, trigger — all must be single-line strings with NO double-quote characters
+- NEVER write odds like +220" or 222+" — write them as 220 or 222+ without the trailing quote
+- reasoning, analyst_note, learned_rules_update, note, lean, trigger — single-line strings, NO double-quotes inside
 - filters array: short identifier strings only, no spaces, no punctuation
 
-## RESPONSE FORMAT — JSON ONLY, no other text:
-\`\`\`json
+## RESPONSE FORMAT — output raw JSON only, start immediately with { no fences no preamble:
 {
   "date":"YYYY-MM-DD",
   "grading":[{"pick":"exact pick text","sport":"sport","result":"W|L|P|?","note":"brief reason"}],
@@ -2296,8 +2298,7 @@ ATP and WTA clay/hard season is in full swing. Tennis picks on DraftKings and Be
   "leans":[{"matchup":"...","lean":"side and why","trigger":"what would promote to graded pick"}],
   "inactive_sports":[{"sport":"NFL","status":"Offseason — returns September 2026"}],
   "analyst_note":"1-2 sentence slate quality note only — NO system alerts, grading complaints, or data warnings"
-}
-\`\`\``;
+}`;
 }
 
 function buildUserMsg(gamesCtx,yesterdayPicks){
@@ -2398,24 +2399,36 @@ async function generatePicks(){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)},{role:'assistant',content:'{'}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
     const text=data.content[0].text;
-    const m=text.match(/```json\s*([\s\S]+?)\s*```/)||text.match(/(\{[\s\S]+\})/);
-    if(!m)throw new Error('No JSON in response');
-    const raw=m[1];
+    // With assistant prefill '{', response continues the JSON — prepend the prefilled char
+    const prefixed='{'+(text.endsWith('}')?text:text.replace(/\}\s*$/, '')+'}');
+    // Also handle case where model still used fences despite instructions
+    const fenceM=text.match(/```json\s*([\s\S]+?)\s*```/)||text.match(/(\{[\s\S]+\})/);
+    const raw=fenceM?fenceM[1]:prefixed;
     // Parse strategy: try raw → repaired → filters-stripped → partial extract → error
     function _tryParse(s){try{return JSON.parse(s)}catch(e){return null}}
     function _stripFilters(s){return s.replace(/"filters"\s*:\s*\[[^\]]*\]/g,'"filters":[]')}
-    // Last-resort: extract picks/leans/grading arrays individually via regex when full parse fails
+    // Last-resort: balanced-bracket array extraction — survives any top-level JSON breakage
     function _partialExtract(s){
       try{
-        const _arr=key=>{const m=s.match(new RegExp('"'+key+'"\\s*:\\s*(\\[[\\s\\S]*?\\])\\s*[,}]'));if(!m)return[];try{return JSON.parse(_repairJSON(m[1]))||[]}catch(e){return[]}};
+        const _arr=key=>{
+          const km=s.match(new RegExp('"'+key+'"\\s*:\\s*\\['));
+          if(!km)return[];
+          const start=s.indexOf('[',km.index+km[0].length-1);
+          if(start<0)return[];
+          let depth=0,end=-1;
+          for(let i=start;i<s.length;i++){if(s[i]==='[')depth++;else if(s[i]===']'){depth--;if(!depth){end=i;break;}}}
+          if(end<0)return[];
+          try{return JSON.parse(_repairJSON(s.slice(start,end+1)))||[]}catch(e){return[]}
+        };
         const picks=_arr('picks'),leans=_arr('leans'),grading=_arr('grading');
-        const dateM=s.match(/"date"\s*:\s*"([^"]+)"/),rulesM=s.match(/"learned_rules_update"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-        if(!picks.length&&!leans.length)return null;
+        const dateM=s.match(/"date"\s*:\s*"(\d{4}-\d{2}-\d{2})/);
+        const rulesM=s.match(/"learned_rules_update"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if(!picks.length&&!leans.length&&!grading.length)return null;
         return{date:dateM?.[1]||new Date().toISOString().split('T')[0],picks,leans,grading,learned_rules_update:rulesM?.[1]||'',analyst_note:'(partial parse — some response data recovered)'};
       }catch(e){return null}
     }
