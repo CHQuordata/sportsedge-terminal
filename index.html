@@ -801,6 +801,8 @@ function setSport(s){cView='slate';cSport=s;document.querySelectorAll('.sport-ta
   const lbls=['GAMES','EDGES','SPORTS','INJURIES'];document.querySelectorAll('.stat-lbl').forEach((el,i)=>{if(lbls[i])el.textContent=lbls[i]});
   applyFilters()}
 function setDateFilter(f){cDateFilter=f;['today','tomorrow','all'].forEach(k=>{const el=$('dt'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.classList.toggle('active',k===f)});const titles={today:"Today's Slate",tomorrow:"Tomorrow's Slate",all:"All Games"};$('panelHdrTitle').textContent=titles[f];
+  // Reset confidence filter when leaving today — picks only exist for today's slate
+  if(f!=='today'&&cConfFilter!=='all')setConfFilter('all');
   // Reset selection — fG is about to be rebuilt for a different date, stale index would hit wrong game
   selIdx=-1;document.body.classList.remove('mob-detail-open');
   const dp=$('detailPanel');if(dp)dp.innerHTML='<div class="detail-empty"><div class="detail-empty-icon">&#9672;</div><div class="detail-empty-text">SELECT A MATCHUP TO RESEARCH</div><div style="font-size:10px;color:var(--t4);margin-top:8px">Use <span class="kbd">&#8593;</span><span class="kbd">&#8595;</span> to navigate</div></div>';
@@ -847,7 +849,8 @@ function applyFilters(){if(cView==='picks')return;_loadTodayPicks();let g=cSport
 // Strip tennis/MMA with no major US book odds — not bettable on FD/DK/BetMGM/Caesars
 if(AK)g=g.filter(gm=>gm.cat!=='tennis'&&gm.cat!=='mma'||hasUsBookOdds(gm));
 // Confidence filter — only applies when AI picks have been generated
-if(cConfFilter!=='all'&&todayPicksData?.picks?.length){
+// Confidence filter only applies to today's slate — picks aren't generated for tomorrow/all
+if(cConfFilter!=='all'&&cDateFilter==='today'&&todayPicksData?.picks?.length){
   if(cConfFilter==='picked')g=g.filter(gm=>getGameAiConf(gm)!==null);
   else g=g.filter(gm=>getGameAiConf(gm)===cConfFilter);
 }
