@@ -2364,11 +2364,12 @@ function _repairJSON(raw){
     const c=s[i];
     if(esc){out+=c;esc=false;continue}
     if(c==='\\'&&inStr){out+=c;esc=true;continue}
+    if(c==='\\'&&!inStr){continue} // strip stray backslashes outside strings (e.g. \"key\" pattern)
     if(c==='"'){
       if(inStr){
-        // Peek past whitespace to decide: is this closing the string or an inner quote?
+        // Peek past whitespace AND stray backslashes to decide: closing quote or inner quote?
         let j=i+1;
-        while(j<s.length&&(s[j]===' '||s[j]==='\n'||s[j]==='\r'||s[j]==='\t'))j++;
+        while(j<s.length&&(s[j]===' '||s[j]==='\n'||s[j]==='\r'||s[j]==='\t'||s[j]==='\\'))j++;
         const nxt=j<s.length?s[j]:'';
         if(nxt===''||nxt===','||nxt==='}'||nxt===']'||nxt===':'){
           out+=c;inStr=false; // real string end
