@@ -2399,14 +2399,15 @@ async function generatePicks(){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)},{role:'assistant',content:'{'}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4096,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
     const text=data.content[0].text;
-    // Assistant prefill '{' means text is everything AFTER the opening brace — just prepend it
-    // Do NOT use text.match(/\{...\}/) — that finds the first nested { inside and extracts the wrong object
-    const raw='{'+text;
+    // Extract JSON: fence block first, then outermost {…} (greedy — first { to last })
+    const fenceM=text.match(/```json\s*([\s\S]+?)\s*```/);
+    const raw=fenceM?fenceM[1]:(text.match(/(\{[\s\S]+\})/)||[])[1]||text;
+    if(!raw||raw===text&&!raw.trim().startsWith('{'))throw new Error('No JSON in response');
     // Parse strategy: try raw → repaired → filters-stripped → partial extract → error
     function _tryParse(s){try{return JSON.parse(s)}catch(e){return null}}
     function _stripFilters(s){return s.replace(/"filters"\s*:\s*\[[^\]]*\]/g,'"filters":[]')}
