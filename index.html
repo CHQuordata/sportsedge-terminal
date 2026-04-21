@@ -2356,8 +2356,8 @@ function _repairJSON(raw){
   // Pre-pass: fix LLM habits that break the state machine
   // 1. Missing closing quote on date field: "date": "2026-04-21, → "date": "2026-04-21",
   let s=raw.replace(/"date"\s*:\s*"(\d{4}-\d{2}-\d{2}),/g,'"date":"$1",');
-  // 2. Strip stray " appended to odds/numbers inside strings: 222+" → 222+
-  s=s.replace(/([0-9][+\-]?)\s*"(\s*[,}\]])/g,'$1$2');
+  // 2. Strip stray " after odds sign: 222+" → 222+  (require +/- so we never strip a real closing quote)
+  s=s.replace(/([0-9][+\-])\s*"(\s*[,}\]])/g,'$1$2');
   // 3. Strip +digits (odds written as +220 which is invalid JSON number)
   s=s.replace(/\+(\d)/g,'$1').replace(/,\s*([}\]])/g,'$1');
   let out='',inStr=false,esc=false;
@@ -2432,7 +2432,7 @@ async function generatePicks(){
       }catch(e){return null}
     }
     const repaired=_repairJSON(raw);
-    let result=_tryParse(raw)||_tryParse(repaired)||_tryParse(_stripFilters(repaired))||_tryParse(_stripFilters(raw))||_partialExtract(raw);
+    let result=_tryParse(raw)||_tryParse(repaired)||_tryParse(_stripFilters(repaired))||_tryParse(_stripFilters(raw))||_partialExtract(repaired)||_partialExtract(raw);
     if(!result){let pe;try{JSON.parse(repaired)}catch(e){pe=e}const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);const snip=repaired.slice(Math.max(0,pos-60),pos+80);throw new Error(`JSON: ${pe?.message} — near: ...${snip}...`)}
     // Enforce: picks on NO US BOOK ODDS tennis/MMA games get demoted to leans
     if(result.picks){
