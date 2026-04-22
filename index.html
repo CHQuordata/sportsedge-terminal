@@ -1203,6 +1203,12 @@ async function selGame(idx){
       else if(tnH2H&&tnH2H.total===0)eRows.push({lbl:'H2H',aw:'FIRST',hm:'MEETING',edge:null,diff:0});
       // BP Save
       if(awBP2!==null&&hmBP2!==null){const d=awBP2-hmBP2;const edge=Math.abs(d)>=8?d>0?g.aw:g.hm:null;eRows.push({lbl:'BP SAVE',aw:awBP2+'%',hm:hmBP2+'%',edge,diff:Math.abs(d)})}
+      // RetWon% (TN API)
+      {const _getRet=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.returnPointsWonGm||0);return v>=20&&v<=70?parseFloat(v.toFixed(1)):null};const awR2=_getRet(awTnApi),hmR2=_getRet(hmTnApi);if(awR2!==null&&hmR2!==null){const d=awR2-hmR2;const edge=Math.abs(d)>=5||awR2>=42||hmR2>=42?d>0?g.aw:g.hm:null;eRows.push({lbl:'RETWON',aw:awR2.toFixed(1)+'%',hm:hmR2.toFixed(1)+'%',edge,diff:Math.abs(d)*2+(awR2>=42||hmR2>=42?8:0)})}else if(awR2!==null||hmR2!==null){const v=awR2??hmR2,pl=awR2!=null?g.aw:g.hm;eRows.push({lbl:'RETWON',aw:awR2!=null?awR2.toFixed(1)+'%':'—',hm:hmR2!=null?hmR2.toFixed(1)+'%':'—',edge:v>=42?pl:null,diff:v>=42?10:0})}}
+      // BPconv% (TN API)
+      {const _getBPConv=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.breakPointConvertedGm||0);return v>=10&&v<=80?parseFloat(v.toFixed(1)):null};const awC2=_getBPConv(awTnApi),hmC2=_getBPConv(hmTnApi);if(awC2!==null&&hmC2!==null){const d=awC2-hmC2;const edge=Math.abs(d)>=10?d>0?g.aw:g.hm:null;eRows.push({lbl:'BP CONV',aw:awC2.toFixed(0)+'%',hm:hmC2.toFixed(0)+'%',edge,diff:Math.abs(d)})}}
+      // Days rest
+      {const _awFRd=(tennisForm.get(String(g.aw.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const _hmFRd=(tennisForm.get(String(g.hm.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const awDd=_awFRd.length?Math.round((g.tm-_awFRd[0].dt)/864e5):null;const hmDd=_hmFRd.length?Math.round((g.tm-_hmFRd[0].dt)/864e5):null;if(awDd!==null&&hmDd!==null){const gap=Math.abs(awDd-hmDd);const edge=gap>=2?(awDd>hmDd?g.aw:g.hm):null;eRows.push({lbl:'REST',aw:awDd+'d',hm:hmDd+'d',edge,diff:gap>=2?Math.min(gap*3,15):0})}}
       // Ranking
       if(g.aw.rank&&g.hm.rank){const d=Math.abs(g.aw.rank-g.hm.rank);const edge=d>=5?g.aw.rank<g.hm.rank?g.aw:g.hm:null;eRows.push({lbl:'RANK',aw:'#'+g.aw.rank,hm:'#'+g.hm.rank,edge,diff:d*0.5})}
       else if(g.aw.rank&&!g.hm.rank)eRows.push({lbl:'RANK',aw:'#'+g.aw.rank,hm:'NR',edge:g.aw,diff:12});
@@ -1589,8 +1595,12 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     const _tnST=_tnSk==='clay'?'CLAY':_tnSk==='grass'?'GRASS':'HARD';
     const _getTNSurf=d=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return _tnSk==='clay'?sn.includes('clay'):_tnSk==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>=3?{w,l,pct:Math.round(w/(w+l)*100)}:null};
     const _getTNBP=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>5?Math.round(sv/fa*100):null};
+    const _getTNRet=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.returnPointsWonGm||0);return v>=20&&v<=70?parseFloat(v.toFixed(1)):null};
+    const _getTNBPConv=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.breakPointConvertedGm||0);return v>=10&&v<=80?parseFloat(v.toFixed(1)):null};
     const awTS=_getTNSurf(awTnApi),hmTS=_getTNSurf(hmTnApi);
     const awBpL=_getTNBP(awTnApi),hmBpL=_getTNBP(hmTnApi);
+    const awRet=_getTNRet(awTnApi),hmRet=_getTNRet(hmTnApi);
+    const awBpConv=_getTNBPConv(awTnApi),hmBpConv=_getTNBPConv(hmTnApi);
     // 2025 surface record from TN API (highest quality)
     if(awTS&&hmTS){const d=awTS.pct-hmTS.pct;score+=d*0.15;if(Math.abs(d)>=8)tnSigs.push({k:'2025 '+_tnST,aw:`${awTS.w}-${awTS.l} (${awTS.pct}%)`,hm:`${hmTS.w}-${hmTS.l} (${hmTS.pct}%)`,edge:d>0?g.aw:g.hm,mag:Math.abs(d)})}
     else if(awTS||hmTS){const d=awTS||hmTS,pl=awTS?g.aw:g.hm;score+=(awTS?-6:6);tnSigs.push({k:'2025 '+_tnST,aw:awTS?`${d.w}-${d.l} (${d.pct}%)`:'—',hm:hmTS?`${d.w}-${d.l} (${d.pct}%)`:'—',edge:pl,mag:12})}
@@ -1605,8 +1615,14 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(tnH2H?.total>=2){const d=(tnH2H.hmW-tnH2H.awW)/tnH2H.total;score+=d*4;const ldr=tnH2H.awW>tnH2H.hmW?g.aw:tnH2H.hmW>tnH2H.awW?g.hm:null;const last=tnH2H.recent[0];tnSigs.push({k:'H2H',aw:String(tnH2H.awW),hm:String(tnH2H.hmW),edge:ldr,mag:Math.abs(tnH2H.awW-tnH2H.hmW)*8+(tnH2H.total>=4?5:0),lastMatch:last?`${(last.dt||'').slice(0,4)} ${last.tn||''} ${last.round||''}: ${last.score||''}`.trim():''})}
     // Break-point save % (TN API)
     if(awBpL!==null&&hmBpL!==null){const d=awBpL-hmBpL;score+=d*0.08;if(Math.abs(d)>=6)tnSigs.push({k:'BP SAVE',aw:awBpL+'%',hm:hmBpL+'%',edge:d>0?g.aw:g.hm,mag:Math.abs(d)})}
+    // RetWon% — Signal #1: ≥42% = dominant returner, highest predictive value
+    if(awRet!==null&&hmRet!==null){const dr=awRet-hmRet;score+=dr*0.12;if(Math.abs(dr)>=5||awRet>=42||hmRet>=42)tnSigs.push({k:'RETWON',aw:awRet.toFixed(1)+'%',hm:hmRet.toFixed(1)+'%',edge:dr>0?g.aw:g.hm,mag:Math.abs(dr)*2+(awRet>=42||hmRet>=42?8:0)})}else if(awRet!=null||hmRet!=null){const v=awRet??hmRet,pl=awRet!=null?g.aw:g.hm;if(v>=42){score+=(awRet!=null?-1:1)*5;tnSigs.push({k:'RETWON',aw:awRet!=null?awRet.toFixed(1)+'%':'—',hm:hmRet!=null?hmRet.toFixed(1)+'%':'—',edge:pl,mag:10})}}
+    // BPconv% — Signal #2: gap ≥10pp = one player breaking serve reliably
+    if(awBpConv!==null&&hmBpConv!==null){const dc=awBpConv-hmBpConv;score+=dc*0.08;if(Math.abs(dc)>=10)tnSigs.push({k:'BP CONV',aw:awBpConv.toFixed(0)+'%',hm:hmBpConv.toFixed(0)+'%',edge:dc>0?g.aw:g.hm,mag:Math.abs(dc)})}
     // 2nd serve vulnerability — sharp edge when gap >=8pp or either player below 50%
     const awSv2W=tnH2H?.awServe?.[_tnSk]?.second_won_pct?parseFloat(tnH2H.awServe[_tnSk].second_won_pct):null;const hmSv2W=tnH2H?.hmServe?.[_tnSk]?.second_won_pct?parseFloat(tnH2H.hmServe[_tnSk].second_won_pct):null;if(awSv2W!==null&&hmSv2W!==null){const d2=awSv2W-hmSv2W;if(Math.abs(d2)>=8||awSv2W<50||hmSv2W<50){score+=d2*0.06;tnSigs.push({k:'2ND SERVE',aw:awSv2W.toFixed(0)+'%',hm:hmSv2W.toFixed(0)+'%',edge:d2>0?g.aw:g.hm,mag:Math.abs(d2)+(awSv2W<50||hmSv2W<50?5:0)})}}
+    // 1st serve % in — high in% = less exposure to 2nd serve attacks
+    const awF1pct=tnH2H?.awServe?.[_tnSk]?.first_pct?parseFloat(tnH2H.awServe[_tnSk].first_pct):null;const hmF1pct=tnH2H?.hmServe?.[_tnSk]?.first_pct?parseFloat(tnH2H.hmServe[_tnSk].first_pct):null;if(awF1pct!==null&&hmF1pct!==null){const df=awF1pct-hmF1pct;if(Math.abs(df)>=8){score+=df*0.04;tnSigs.push({k:'1ST IN',aw:awF1pct.toFixed(0)+'%',hm:hmF1pct.toFixed(0)+'%',edge:df>0?g.aw:g.hm,mag:Math.abs(df)})}}
     // Ranking gap
     if(awRank&&hmRank&&Math.abs(awRank-hmRank)>=10)tnSigs.push({k:'RANK',aw:'#'+awRank,hm:'#'+hmRank,edge:awRank<hmRank?g.aw:g.hm,mag:Math.min(Math.abs(awRank-hmRank)*0.6,25)});
     else if(awRank&&!hmRank)tnSigs.push({k:'RANK',aw:'#'+awRank,hm:'NR',edge:g.aw,mag:15});
@@ -1617,6 +1633,8 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(awFMs.length>=3&&hmFMs.length>=3){const awFP=awFMs.filter(m=>m.W).length/awFMs.length,hmFP=hmFMs.filter(m=>m.W).length/hmFMs.length;const fd=awFP-hmFP;if(Math.abs(fd)>=0.2){score+=(hmFP-awFP)*4;tnSigs.push({k:'L5 FORM',aw:`${awFMs.filter(m=>m.W).length}-${awFMs.filter(m=>!m.W).length}`,hm:`${hmFMs.filter(m=>m.W).length}-${hmFMs.filter(m=>!m.W).length}`,edge:awFP>hmFP?g.aw:g.hm,mag:Math.abs(fd)*20})}}
     else if(awFMs.length>=3&&!hmFMs.length){const awFP=awFMs.filter(m=>m.W).length/awFMs.length;if(awFP>=0.6){score-=3;tnSigs.push({k:'L5 FORM',aw:`${awFMs.filter(m=>m.W).length}-${awFMs.filter(m=>!m.W).length}`,hm:'—',edge:g.aw,mag:Math.round(awFP*15)})}}
     else if(hmFMs.length>=3&&!awFMs.length){const hmFP=hmFMs.filter(m=>m.W).length/hmFMs.length;if(hmFP>=0.6){score+=3;tnSigs.push({k:'L5 FORM',aw:'—',hm:`${hmFMs.filter(m=>m.W).length}-${hmFMs.filter(m=>!m.W).length}`,edge:g.hm,mag:Math.round(hmFP*15)})}}}
+    // Days rest — gap ≥2 days = fatigue/freshness edge
+    {const _awFR=(tennisForm.get(String(g.aw.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const _hmFR=(tennisForm.get(String(g.hm.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const awDays=_awFR.length?Math.round((g.tm-_awFR[0].dt)/864e5):null;const hmDays=_hmFR.length?Math.round((g.tm-_hmFR[0].dt)/864e5):null;if(awDays!==null&&hmDays!==null&&Math.abs(awDays-hmDays)>=2){const gap=Math.abs(awDays-hmDays);const fresher=awDays>hmDays?g.aw:g.hm;score+=(awDays>hmDays?1:-1)*Math.min(gap*0.35,3);tnSigs.push({k:'REST',aw:awDays+'d',hm:hmDays+'d',edge:fresher,mag:Math.min(gap*3,15)})}}
   }
   const side=score>=0?g.hm:g.aw,other=score>=0?g.aw:g.hm,mlO=score>=0?mlHm:mlAw;
   const mag=Math.abs(score);
@@ -2309,8 +2327,8 @@ Playoffs (NBA/NHL): Series context is primary — series score, elimination game
 - Seeds are NOISE — they are draw positions derived from rankings, which are already shown. Never cite seed number as a pick reason.
 - Season W-L record for tennis players is NOISE — it doesn't account for surface, draw difficulty, or opponent quality. Ignore it entirely for pick reasoning.
 - LIMITED DATA tag means no stats DB entry — use ranking + market price ONLY. Do not invent or guess surface records, playing style, or recent results for these players.
-- TRUE SIGNALS in priority order: (1) RetWon% ≥42% = dominant returner — highest predictive value; (2) BPconv% gap ≥10pts = one player breaking serve reliably; (3) 2ndWon% <50% = weak second serve, gets attacked under pressure; (4) Surface win % current season; (5) Days rest gap ≥2 days = meaningful fatigue/freshness edge; (6) BPsave% gap ≥10pts = one player cracking under pressure.
-- RetWon% (return points won) is the single most predictive tennis stat. When available, it should anchor confidence level more than any other signal.
+- TRUE SIGNALS in priority order: (1) RetWon% ≥42% = dominant returner — highest predictive value, SCORED; (2) BPconv% gap ≥10pts = one player breaking serve reliably, SCORED; (3) 2ndWon% <50% = weak second serve vulnerability, SCORED; (4) 1stIn% gap ≥8pts = first serve consistency edge, SCORED; (5) Surface win % current season, SCORED; (6) Days rest gap ≥2 days = fatigue/freshness edge, SCORED; (7) BPsave% gap ≥10pts = one player cracking under pressure, SCORED.
+- RetWon% (return points won) is the single most predictive tennis stat. When available it anchors confidence more than any other signal. ≥42% = dominant returner; gap ≥5pp between players = clear edge.
 
 ## MLB STAT POLICY
 - ERA alone is NOT a pick signal. A 3.20 ERA means nothing without park context (Coors vs Petco), opponent lineup quality, and recent form. Raw ERA is already priced into the line.
