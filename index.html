@@ -1479,6 +1479,8 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(g.cat==='nhl'&&(awNhl||hmNhl)){const awNet=awNhl?.net?parseFloat(awNhl.net):null,hmNet=hmNhl?.net?parseFloat(hmNhl.net):null;if(awNet!==null&&hmNet!==null&&!isNaN(awNet)&&!isNaN(hmNet)){const nd=hmNet-awNet;if(Math.abs(nd)>=0.4){score+=nd*2.5;const b2=nd>0?g.hm:g.aw,w2=nd>0?g.aw:g.hm;reasons.push(`Goal differential edge: ${b2.nm} ${(nd>0?hmNet:awNet)>=0?'+':''}${(nd>0?hmNet:awNet)} net G/gm vs ${w2.nm} ${(nd>0?awNet:hmNet)>=0?'+':''}${(nd>0?awNet:hmNet)} — meaningful season-long edge`)}}const awPP=awNhl?.ppPct?parseFloat(awNhl.ppPct):null,hmPP=hmNhl?.ppPct?parseFloat(hmNhl.ppPct):null;if(awPP!=null&&hmPP!=null&&!isNaN(awPP)&&!isNaN(hmPP)){const ppDiff=hmPP-awPP;if(Math.abs(ppDiff)>=5){score+=ppDiff*0.15;const bPP=ppDiff>0?g.hm:g.aw,bPct=Math.max(awPP,hmPP).toFixed(1),wPct=Math.min(awPP,hmPP).toFixed(1);reasons.push(`Special teams edge: ${bPP.nm} PP ${bPct}% vs opponent ${wPct}% — ${Math.abs(ppDiff).toFixed(1)}pp gap is a reliable ATS signal in hockey`)}}}
     if(g.cat==='nba'&&(awF3||hmF3)&&!(awF3&&hmF3)){score+=(awF3?-1:1)*3.5;reasons.push(`${awF3?g.aw.nm:g.hm.nm} playing 3rd game in 4 nights — covers only ~38% ATS on 3-in-4; ${awF3?g.hm.nm:g.aw.nm} has significant fatigue edge`)}
     if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*2.5;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} on a back-to-back — B2B teams cover only ~44% ATS${g.cat==='nhl'?' in the NHL':''}`)}
+    // MLB spread: SP ERA gap ≥1.0 is the single biggest ML/spread predictor
+    if(g.cat==='mlb'&&pitchers?.away&&pitchers?.home){const aEraS=parseFloat(pitchers.away.era),hEraS=parseFloat(pitchers.home.era);if(!isNaN(aEraS)&&!isNaN(hEraS)){const gap=hEraS-aEraS;if(Math.abs(gap)>=1.0){score-=gap*0.4;const btr=gap>0?g.aw:g.hm,btrSP=gap>0?pitchers.away.name:pitchers.home.name,wrsSP=gap>0?pitchers.home.name:pitchers.away.name,btrEra=Math.min(aEraS,hEraS).toFixed(2),wrsEra=Math.max(aEraS,hEraS).toFixed(2);reasons.push(`SP edge: ${btrSP} (${btrEra} ERA) vs ${wrsSP} (${wrsEra} ERA) — ${Math.abs(gap).toFixed(2)}-run gap is primary ML driver for ${btr.nm}`);}}}
     const side=score>=0?g.hm:g.aw,mag=Math.abs(score),conf=mag>=5?'HIGH':mag>=2.5?'MEDIUM':'LOW';
     const spSideOdds=spFav&&g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='spreads')?.outcomes?.find(o=>o.name===side.nm||side.nm.includes(o.name.split(' ').pop()));
     const spSideSpread=spSideOdds?.point??( spFav&&g.eOdds?.spread!==undefined?(side===g.hm?g.eOdds.spread:-g.eOdds.spread):null);
@@ -1504,15 +1506,25 @@ function genPicks(g,af,hf,pitchers,weather,ext={}){
     if(toEdges.length){reasons.push(`${toEdges[0].ep.toFixed(1)}% total edge at ${toEdges[0].bb} on ${toEdges[0].side}`);ts2+=toEdges[0].side.toLowerCase().includes('over')?1:-1}
     // ── Probable pitchers (MLB) ──
     if(pitchers&&g.cat==='mlb'){const ap=pitchers.away,hp=pitchers.home;if(ap||hp){const aEra=parseFloat(ap?.era)||4.2,hEra=parseFloat(hp?.era)||4.2;const combined=aEra+hEra;const adj=(combined-8.4)*0.3;ts2+=adj;
-      // K/9 signal: high strikeouts = fewer balls in play = under lean
-      const aK=parseFloat(ap?.k9)||8.0,hK=parseFloat(hp?.k9)||8.0;const combK=(aK+hK)/2;if(combK>=9.5){ts2-=0.8;reasons.push(`High-K duel: ${ap?.name||'SP'} ${ap?.k9||'--'} K/9 + ${hp?.name||'SP'} ${hp?.k9||'--'} K/9 — strikeout pitchers suppress offense, UNDER lean`)}
+      // K/9 signal: requires ERA context per policy — high K alone doesn't suppress runs
+      const aK=parseFloat(ap?.k9)||8.0,hK=parseFloat(hp?.k9)||8.0;const combK=(aK+hK)/2;if(combK>=9.5&&combined<=8.5){ts2-=0.8;reasons.push(`High-K/low-ERA duel: ${ap?.name||'SP'} ${ap?.k9||'--'} K/9 (${aEra.toFixed(2)} ERA) + ${hp?.name||'SP'} ${hp?.k9||'--'} K/9 (${hEra.toFixed(2)} ERA) — elite control suppresses offense, UNDER lean`)}else if(combK>=9.5){reasons.push(`K rate elevated (avg ${combK.toFixed(1)}/9) — context only, ERA doesn't confirm suppression`)}
       // BB/9 signal: high walks = more baserunners = over lean
       const aBB=parseFloat(ap?.bb9)||3.5,hBB=parseFloat(hp?.bb9)||3.5;if(aBB>4.0||hBB>4.0){ts2+=0.6;reasons.push(`Walk concerns: ${aBB>4.0?ap?.name+' BB/9 '+ap?.bb9:''}${aBB>4.0&&hBB>4.0?' / ':''}${hBB>4.0?hp?.name+' BB/9 '+hp?.bb9:''} — baserunner risk supports OVER`)}
-      const aStr=ap?`${ap.name} (${ap.era} ERA, ${ap.k9} K/9, ${ap.bb9||'--'} BB/9)`:'TBD';const hStr=hp?`${hp.name} (${hp.era} ERA, ${hp.k9} K/9, ${hp.bb9||'--'} BB/9)`:'TBD';reasons.unshift(`SP: ${g.aw.ab} ${aStr} vs ${g.hm.ab} ${hStr}`)}}
+      // WHIP validates ERA — sharp bettors always cross-check WHIP against ERA
+      const aWhip=parseFloat(ap?.whip)||1.3,hWhip=parseFloat(hp?.whip)||1.3;
+      const aEraLies=aEra<4.0&&aWhip>=1.35,hEraLies=hEra<4.0&&hWhip>=1.35;
+      const aDom=aEra<=3.50&&aWhip<1.15,hDom=hEra<=3.50&&hWhip<1.15;
+      if(aEraLies||hEraLies){const liar=(aEraLies&&hEraLies)?'Both SPs':aEraLies?ap?.name||'Away SP':hp?.name||'Home SP';const w=aEraLies?aWhip.toFixed(2):hWhip.toFixed(2);ts2+=0.5;reasons.push(`${liar} WHIP (${w}) contradicts ERA — high contact rate, ERA likely overstates quality, lean OVER`)}
+      else if(aDom||hDom){const dom=(aDom&&hDom)?'Both SPs':aDom?ap?.name||'Away SP':hp?.name||'Home SP';const w=aDom?aWhip.toFixed(2):hWhip.toFixed(2);ts2-=0.5;reasons.push(`${dom} elite WHIP (${w}) validates ERA — true contact suppressor, UNDER lean amplified`)}
+      // HR/9 × park factor — power pitchers in hitter parks = OVER amplifier
+      const pf3=getMLBParkFactor(g.ven);const aHr=parseFloat(ap?.hr9)||1.0,hHr=parseFloat(hp?.hr9)||1.0;const combHr=(aHr+hHr)/2;
+      if(pf3>1.03&&combHr>1.3){ts2+=0.8;reasons.push(`HR/9 risk (${combHr.toFixed(1)}/9 combined) at hitter-friendly park — elevated HR rate amplifies OVER`)}
+      else if(pf3<0.97&&combHr<0.8){ts2-=0.6;reasons.push(`Low HR/9 (${combHr.toFixed(1)}/9 combined) at pitcher-friendly park — suppressed power, UNDER amplified`)}
+      const aStr=ap?`${ap.name} (${ap.era} ERA, ${ap.whip||'--'} WHIP, ${ap.k9} K/9)`:'TBD';const hStr=hp?`${hp.name} (${hp.era} ERA, ${hp.whip||'--'} WHIP, ${hp.k9} K/9)`:'TBD';reasons.unshift(`SP: ${g.aw.ab} ${aStr} vs ${g.hm.ab} ${hStr}`)}}
     // ── Park factor (MLB) ──
     if(g.cat==='mlb'){const pf=getMLBParkFactor(g.ven);if(pf!==1.0){const pfAdj=(pf-1.0)*3;ts2+=pfAdj;const pfPct=Math.abs((pf-1)*100).toFixed(0);reasons.push(`${g.ven||'Park'}: ${pf>1?'+'+pfPct+'% hitter-friendly (OVER lean)':'-'+pfPct+'% pitcher-friendly (UNDER lean)'} park factor`)}}
     // ── Weather (MLB/NFL outdoor) ──
-    if(weather){if(weather.wind>15){const suppressing=weather.wind>20;ts2+=suppressing?-1.5:-0.8;reasons.push(`Wind ${weather.wind} mph ${weather.windDir} — ${suppressing?'strong':'moderate'} wind suppresses scoring, lean UNDER`)}if(weather.temp<45){ts2-=0.8;reasons.push(`Cold weather (${weather.temp}°F) historically depresses MLB run scoring by 5-10%`)}if(weather.temp>90){ts2+=0.5;reasons.push(`Heat (${weather.temp}°F) can cause ball to carry and pitchers to fatigue faster`)}}
+    if(weather){if(weather.wind>15){const wd=(weather.windDir||'').toUpperCase();const blowingOut=wd==='S'||wd==='SSW'||wd==='SW'||wd==='SSE'||wd==='SE';const blowingIn=wd==='N'||wd==='NNW'||wd==='NW'||wd==='NNE'||wd==='NE';const strong=weather.wind>20;if(blowingOut){ts2+=strong?1.5:0.8;reasons.push(`Wind ${weather.wind} mph ${weather.windDir} blowing OUT — ball carries to outfield, strong OVER lean`)}else if(blowingIn){ts2+=strong?-1.5:-0.8;reasons.push(`Wind ${weather.wind} mph ${weather.windDir} blowing IN — suppresses fly balls, UNDER lean`)}else{ts2-=strong?0.8:0.4;reasons.push(`Wind ${weather.wind} mph ${weather.windDir} — crosswind, mild suppression lean`)}}if(weather.temp<45){ts2-=0.8;reasons.push(`Cold weather (${weather.temp}°F) historically depresses MLB run scoring by 5-10%`)}if(weather.temp>90){ts2+=0.5;reasons.push(`Heat (${weather.temp}°F) can cause ball to carry and pitchers to fatigue faster`)}}
     if(g.cat==='nba'){
       const awPpg=awNba?.ppg?parseFloat(awNba.ppg):null,hmPpg=hmNba?.ppg?parseFloat(hmNba.ppg):null;
       const awOpp=awNba?.oppPpg?parseFloat(awNba.oppPpg):null,hmOpp=hmNba?.oppPpg?parseFloat(hmNba.oppPpg):null;
@@ -2344,10 +2356,10 @@ Playoffs (NBA/NHL): Series context is primary — series score, elimination game
 - RetWon% (return points won) is the single most predictive tennis stat. When available it anchors confidence more than any other signal. ≥42% = dominant returner; gap ≥5pp between players = clear edge.
 
 ## MLB STAT POLICY
-- ERA alone is NOT a pick signal. A 3.20 ERA means nothing without park context (Coors vs Petco), opponent lineup quality, and recent form. Raw ERA is already priced into the line.
-- MANDATORY second angle: to pick an MLB total or side, you must have SP ERA + at least one of: park factor (pitcher's park vs hitter's park), bullpen ERA/recent workload, opposing lineup vs SP handedness, or recent SP form (last 3 starts trend).
-- K/9 is context only — high strikeout pitchers still give up runs; don't treat K/9 as a run-prevention edge without ERA and WHIP support.
-- W-L record of SP is meaningless for betting — it reflects run support, not pitcher quality.
+- ERA alone is NOT a pick signal without WHIP validation. Always cross-check: ERA <4.0 with WHIP ≥1.35 = ERA is lying (high contact, regression risk, lean OVER). ERA ≤3.50 with WHIP <1.15 = true ace, UNDER lean amplified.
+- SCORED signals in priority order: (1) SP ERA gap ≥1.0 — primary ML/spread driver, SCORED; (2) WHIP vs ERA contradiction — SCORED; (3) HR/9 × park factor — SCORED; (4) Park factor — SCORED; (5) BB/9 >4.0 — SCORED; (6) K/9 ONLY when combined ERA ≤8.5 — context only otherwise; (7) Wind direction OUT = OVER, IN = UNDER — SCORED; (8) Temperature extremes — SCORED.
+- K/9 is context only unless combined ERA ≤8.5 confirms both pitchers are actually suppressing runs. Never cite K/9 alone as UNDER reason.
+- W-L record of SP is meaningless — reflects run support, not pitcher quality. Never use it.
 
 ## NBA STAT POLICY
 - Season-average PPG, FG%, 3P%, TO/G are already fully priced into the spread — never use them as a standalone pick reason. "Team A averages 116 PPG vs Team B 108 PPG" is circular; the spread already reflects this.
