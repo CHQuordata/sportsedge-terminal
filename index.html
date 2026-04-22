@@ -682,13 +682,22 @@ async function refreshAll(forceOdds=false){
           const existing=allG.find(x=>x.cat==='tennis'&&(
             (x.aw.nm.includes(o.away_team.split(' ').pop())&&x.hm.nm.includes(o.home_team.split(' ').pop()))||
             (x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop()))));
-          if(existing){existing.odds=o;return;}
-          const lg=t.includes('wta')?'wta':'atp';
-          // Include sport key (e.g. "tennis_atp_french_open") in surface detection —
-          // underscores are converted to spaces inside getSurface so keywords match
+          if(existing){
+            existing.odds=o;
+            // Fix tour label if sport_title has a clearer signal than what was set first
+            const _tVen=o.sport_title||'';
+            if(/\batp\b/i.test(_tVen)&&existing.spL==='WTA'){existing.spL='ATP';existing.sp='atp'}
+            else if(/\bwta\b/i.test(_tVen)&&existing.spL==='ATP'){existing.spL='WTA';existing.sp='wta'}
+            return;
+          }
           const _oVen=o.sport_title||'';
+          // sport_title ("ATP Mutua Madrid Open") is the most reliable tour signal;
+          // fall back to key name only if title is ambiguous
+          const _lgFromTitle=/\batp\b/i.test(_oVen)?'atp':/\bwta\b/i.test(_oVen)?'wta':null;
+          const lg=_lgFromTitle||(t.includes('wta')?'wta':'atp');
+          // Also fix existing game if it was mis-tagged (e.g. ATP match grabbed by WTA key first)
           const _oSurf=getSurface(`${_oVen} ${t}`);
-          allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:t.includes('wta')?'WTA':'ATP',spI:'\u{1F3BE}',
+          allG.push({id:'t_'+o.id,sp:lg,cat:'tennis',spL:lg==='wta'?'WTA':'ATP',spI:'\u{1F3BE}',
             aw:{nm:fixTennisName(o.away_team),ab:o.away_team.split(' ').pop(),id:null,rec:'',sc:null},
             hm:{nm:fixTennisName(o.home_team),ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
             tm:new Date(o.commence_time),st:'pre',stD:'',ven:_oVen,tnName:_oVen,surf:_oSurf,bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
