@@ -840,14 +840,25 @@ let cConfFilter='all';
 function _loadTodayPicks(){if(!todayPicksData){const sd=localStorage.getItem('et_picks_date');if(sd===new Date().toDateString()){try{todayPicksData=JSON.parse(localStorage.getItem('et_picks_today')||'null')}catch(e){}}}}
 function getGameAiConf(g){
   _loadTodayPicks();
-  if(!todayPicksData?.picks)return null;
-  const _toks=nm=>(nm||'').toLowerCase().split(/\s+/).filter(w=>w.length>=3);
-  const awT=_toks(g.aw.nm),hmT=_toks(g.hm.nm);
-  const _any=(toks,mu)=>toks.some(t=>mu.includes(t));
-  // Normalize atp/wta → tennis so sport check works regardless of what AI writes
-  const _normSp=s=>(!s||s==='atp'||s==='wta')?'tennis':s;
-  const pk=todayPicksData.picks.find(p=>!p.is_lean&&(!p.sport||_normSp(p.sport)===g.cat||p.sport===g.cat)&&(()=>{const mu=(p.matchup||'').toLowerCase();return _any(awT,mu)&&_any(hmT,mu)})());
-  return pk?.confidence||null;
+  // 1. Check AI (Claude) picks first
+  if(todayPicksData?.picks?.length){
+    const _toks=nm=>(nm||'').toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+    const awT=_toks(g.aw.nm),hmT=_toks(g.hm.nm);
+    const _any=(toks,mu)=>toks.some(t=>mu.includes(t));
+    const _normSp=s=>(!s||s==='atp'||s==='wta')?'tennis':s;
+    const pk=todayPicksData.picks.find(p=>!p.is_lean&&(!p.sport||_normSp(p.sport)===g.cat||p.sport===g.cat)&&(()=>{const mu=(p.matchup||'').toLowerCase();return _any(awT,mu)&&_any(hmT,mu)})());
+    if(pk?.confidence)return pk.confidence;
+  }
+  // 2. Fall back to algo picks — use cached result or compute quickly with available data
+  let algoPicks=gamePicksCache.get(g.id);
+  if(!algoPicks){
+    const af=gameFormCache.get(g.aw.id)||[];
+    const hf=gameFormCache.get(g.hm.id)||[];
+    try{algoPicks=genPicks(g,af,hf,null,null,{});if(algoPicks?.length)gamePicksCache.set(g.id,algoPicks);}catch(e){}
+  }
+  if(!algoPicks?.length)return null;
+  const best=algoPicks.find(p=>p.conf==='HIGH')||algoPicks.find(p=>p.conf==='MEDIUM');
+  return best?.conf||null;
 }
 function setConfFilter(f){
   cConfFilter=f;
