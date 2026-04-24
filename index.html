@@ -2234,7 +2234,8 @@ function buildGamesContext(todayOnly=false){
   games.forEach(g=>{
     const t=g.st==='STATUS_IN_PROGRESS'?`LIVE ${g.stD}`:g.st==='STATUS_FINAL'?`FINAL${g.aw.sc!=null?' '+g.aw.sc+'-'+g.hm.sc:''}`:g.tm.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'});
     const _plGn=(g.playoff&&g.aw.serW!=null&&g.hm.serW!=null)?g.aw.serW+g.hm.serW+1:null;
-    const playoffTag=g.playoff?` [PLAYOFFS Game ${_plGn||'?'} — ${g.aw.nm} ${g.aw.serW??0}-${g.hm.serW??0} ${g.hm.nm}]`:'';
+    const _awW=g.aw.serW??0,_hmW=g.hm.serW??0,_serLeader=g.playoff&&g.aw.serW!=null?(_awW>_hmW?g.aw:_hmW>_awW?g.hm:null):null,_serTrailer=_serLeader===g.aw?g.hm:g.aw;
+    const playoffTag=g.playoff?` [PLAYOFFS Game ${_plGn||'?'} — SERIES: ${g.aw.nm} ${_awW}-${_hmW} ${g.hm.nm}${_serLeader?` | LEADER: ${_serLeader.nm} | FACING ELIM: ${_serTrailer.nm}`:''}]`:'';
     const hasUsOdds=hasUsBookOdds(g);
     const noOddsBlock=!hasUsOdds&&(g.cat==='tennis'||g.cat==='mma');
     const _hasDK=g.cat==='tennis'&&g.odds?.bookmakers?.some(b=>(b.key||'').includes('draftkings')||(b.title||'').toLowerCase().includes('draftkings'));
@@ -2684,8 +2685,7 @@ async function aiAnalyzeGame(gid){
     ctx+=`⚠️ THIS IS A ${g.cat==='nhl'?'NHL':'NBA'} PLAYOFF GAME`;
     if(gameNum)ctx+=` — ROUND 1, GAME ${gameNum}`;
     ctx+=`.\nDO NOT apply any regular-season reasoning. Seeding is locked, load management does not exist in playoffs, pace tendencies shift, rest patterns change. Focus ONLY on: series momentum (if not Game 1), matchup adjustments, playoff intensity, home-court/ice advantage, and which team's style wins in a 7-game series.\n`;
-    if(g.serSum)ctx+=`Series status: ${g.serSum}\n`;
-    if(g.aw.serW!=null&&g.hm.serW!=null)ctx+=`Series score: ${g.aw.nm} ${g.aw.serW} — ${g.hm.serW} ${g.hm.nm}\n`;
+    if(g.aw.serW!=null&&g.hm.serW!=null){const awW=g.aw.serW,hmW=g.hm.serW,tot=awW+hmW;const leader=awW>hmW?g.aw:hmW>awW?g.hm:null;const trailer=leader===g.aw?g.hm:g.aw;const trailerW=leader===g.aw?hmW:awW;ctx+=`SERIES SCORE (GROUND TRUTH — override your training data): ${g.aw.nm} ${awW} — ${hmW} ${g.hm.nm}\n`;if(leader)ctx+=`SERIES LEADER: ${leader.nm} (${Math.max(awW,hmW)}-${Math.min(awW,hmW)}). FACING ELIMINATION: ${trailer.nm} (${trailerW} win${trailerW!==1?'s':''}). DO NOT flip this — it is live data.\n`;else ctx+=`Series is TIED ${awW}-${hmW}.\n`;}else if(g.serSum)ctx+=`Series status: ${g.serSum}\n`;
   }
   if(g.aw.rec||g.hm.rec)ctx+=`Records: ${g.aw.nm} ${g.aw.rec||'N/A'} | ${g.hm.nm} ${g.hm.rec||'N/A'}\n`;
   const _awRkA=g.aw.rank||(g.cat==='tennis'?tennisRankings.get(String(g.aw.id??''))||null:null);
