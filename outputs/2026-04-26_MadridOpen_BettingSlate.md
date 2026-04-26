@@ -111,13 +111,21 @@ Full slate analysis session. Parlay construction, live adjustments, outcomes tra
 | Rybakina -1.5 sets | TBD |
 | Cavs -2.5 | TBD |
 
-### Actual Bets Taken:
-1. **Live bet: Gauff ML -115** (taken in-match during 3rd set after -1.5 sets scenario expired) — WIN
-2. **Active parlay:**
-   - Sinner -5.5 games
-   - Rybakina straight sets
-   - Cavs -2.5
-   - Fonseca +1.5 games first set (-150)
+### Actual Bets Taken — Final Results:
+| Leg | Result |
+|-----|--------|
+| Gauff ML -115 (live bet) | **WIN** |
+| Sinner -5.5 games -275 | **WIN** |
+| Fonseca +1.5 first set games -150 | **WIN** |
+| Cavs -2.5 | **LOSS** |
+| Rybakina straight sets | **LOSS** |
+
+**Day record: 3-2**
+
+### Vehicle Override Validation:
+Rybakina straight sets LOSS confirms the in-session downgrade was correct in principle. We flagged the ⚠️ 3-setter risk (dropped set vs Ruse in R2) and downgraded from -1.5 sets → -1.5 games during the session. Player who took -1.5 games instead of straight sets would have been protected.
+
+**Rule reinforced:** Never take straight sets on a player who dropped a set in the same draw, regardless of dominance level. Vehicle is doubly constrained — vote count AND in-tournament form both must clear.
 
 ---
 
