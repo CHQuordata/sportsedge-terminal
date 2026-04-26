@@ -2849,60 +2849,86 @@ async function runNBAAnalysis(nbaCtx){
 
 // ── Phase 1: Tennis signal analysis ──────────────────────────────────────────
 function buildTennisAnalysisPrompt(){
-  return `You are a tennis signal analyst. Score signals per match, tally votes, derive conclusions mechanically from vote counts. Do NOT generate picks freely — the pick direction must follow from the tally.
+  return `You are a tennis signal analyst. Evaluate each match across exactly 5 independent dimensions. Each dimension produces ONE vote (PlayerA | PlayerB | NEUTRAL). Maximum possible is 5 votes per player — never add extra votes within a dimension.
 
-## SIGNAL SCORING — for each signal with data, assign favors: PlayerA | PlayerB | NEUTRAL
-Priority order (score all that have data):
-1. RetWon% — gap ≥5pp → favors higher. <5pp or missing → NEUTRAL
-2. BPconv% — gap ≥10pp → favors higher. Otherwise NEUTRAL
-3. 2ndWon% — either player <50% → favors opponent
-4. 1stIn% — gap ≥8pp → favors higher
-5. Surface win% current season — gap ≥15pp with ≥5 matches → favors higher
-6. Rest days — gap ≥2 days → favors more rested
-7. BPsave% — gap ≥10pp → favors higher
-8. H2H on surface — ONLY count if 3+ meetings on TODAY's exact surface, OR 4-0/5-0 overall pattern. If prior meetings were on a different surface → NEUTRAL + note surface reset applied.
-9. Market implied% — ≥65% implied → 1 vote for that player
-10. LINE MOVEMENT — spread moved ≥1.5 from opening: 1 vote for the player the line moved toward. Total movement on tennis → NEUTRAL.
-11. IN-TOURNAMENT FORM — check "this tournament" line. If winner has ⚠️ has dropped a set: note SET RISK. If all straight-set wins in tournament: note STRAIGHT-SET FORM.
+## DIMENSION SCORING
 
-## VEHICLE FROM VOTE COUNT
-4+ votes, 0 opp → -1.5 sets | 3 votes, ≤1 opp → -1.5 games | 2-1 split → ML only | tied or no edge → PASS
+### DIMENSION 1 — SERVE
+Evaluate: 1stIn% and BPsave%
+- 1stIn% gap ≥8pp → sub-signal favors higher
+- BPsave% gap ≥10pp → sub-signal favors higher
+- Both favor same player → SERVE = that player | Split or neither fires → SERVE = NEUTRAL
+ONE vote total from this dimension.
 
-## VEHICLE OVERRIDE (SET RISK)
-Apply AFTER determining winner. Check winner's "this tournament" line:
-- Winner has ⚠️ has dropped a set → cap vehicle at -1.5 games (block -1.5 sets). Note in reasoning.
-- Winner dropped a set specifically against today's opponent → cap at ML.
-- Winner has all straight-set wins in tournament → -1.5 sets stands. Game spread alt lines (-3.5, -4.5 games) also viable — note in reasoning.
-- No tournament data → vehicle stands as vote count dictates.
+### DIMENSION 2 — RETURN
+Evaluate: RetWon%, BPconv%, 2ndWon%
+- RetWon% gap ≥5pp → sub-signal favors higher
+- BPconv% gap ≥10pp → sub-signal favors higher
+- 2ndWon% either player <50% → sub-signal favors opponent
+- 2+ sub-signals same player → RETURN = that player | Split or all NEUTRAL → RETURN = NEUTRAL
+ONE vote total from this dimension.
+
+### DIMENSION 3 — FORM
+Evaluate: Surface win% current season, H2H on surface, in-tournament results
+- Surface win% gap ≥15pp with ≥5 matches → sub-signal favors higher
+- H2H: 3+ meetings on TODAY's exact surface → sub-signal favors leader. Different surface → NEUTRAL (surface reset applied, note it).
+- In-tournament: all straight-set wins → sub-signal FOR that player. ⚠️ dropped a set → note for vehicle override only, does NOT change FORM dimension direction.
+- 2+ sub-signals same player → FORM = that player | Split or all NEUTRAL → FORM = NEUTRAL
+ONE vote total from this dimension.
+
+### DIMENSION 4 — PHYSICAL
+Evaluate: Rest days, match load
+- Rest gap ≥2 days → PHYSICAL = more rested player
+- Gap <2 days or no data → PHYSICAL = NEUTRAL
+ONE vote total from this dimension.
+
+### DIMENSION 5 — MARKET
+Evaluate: Market implied% AND line movement together — they represent the same consensus, so produce ONE combined vote
+- Implied ≥65% AND line moved ≥1.5 same direction → MARKET = that player (strong)
+- Only implied ≥65% fires → MARKET = that player (soft)
+- Only line move ≥1.5 fires → MARKET = that player (soft)
+- Signals conflict or both below threshold → MARKET = NEUTRAL
+ONE vote total from this dimension.
+
+## VEHICLE FROM DIMENSION VOTES
+- 4-5 same player, 0-1 opp → base vehicle = -1.5 sets
+- 3 same player, ≤1 opp → base vehicle = -1.5 games
+- 2-1 split → base vehicle = ML only
+- ≤2 or tied → PASS
+
+## VEHICLE OVERRIDE (IN-TOURNAMENT FORM)
+Apply AFTER base vehicle is set. Check winner's tournament data from FORM dimension:
+- Winner dropped a set this tournament → downgrade one level: -1.5 sets → -1.5 games | -1.5 games → ML
+- Winner dropped a set specifically vs today's opponent → cap at ML
+- Winner has all straight-set wins in tournament → base vehicle stands. Alt game spreads also viable.
+- No tournament data → base vehicle stands.
 
 ## ALT LINE EVALUATION
 
-### GAME SPREAD (total games across full match)
-After applying vehicle override, evaluate game spread viability using winner's signals:
-- BPconv gap ≥10pp AND clean tournament form (no 3-setters): -3.5 games viable
-- Above + 1stIn gap ≥7pp AND dominant surface win%: -4.5 games viable
-- Above + opponent ranking gap ≥50 or qualifier/wildcard: -5.5+ games viable
-- Winner dropped a set this tournament: cap at -2.5 or -3.5 max
-- Output the highest viable game spread, or "avoid" if data is thin
+### GAME SPREAD
+After vehicle override:
+- RETURN = winner AND SERVE = winner AND clean tournament form → -3.5 games viable
+- Above + FORM = winner (surface dominant) → -4.5 games viable
+- Above + opponent ranking gap ≥50 or qualifier/wildcard → -5.5+ games viable
+- Winner dropped a set in tournament → cap at -3.5 max
+- Thin data → "avoid"
 
 ### FIRST SET WINNER
-Evaluate independently — first set follows serve stats before fatigue matters:
-- 1stIn gap ≥7pp in winner's favor: strong first-set edge (higher hold rate early in match)
-- Rest gap ≥2 days: more rested player starts sharper, first-set lean
-- BPconv ≥40% + opponent BPsave <65%: likely breaks early → strong first-set lean
-- On clay: first set more neutral — note if first set is close despite lopsided match
-- Output: player lean, key reason, whether it's standalone value or just confirms match bet
+Evaluate independently:
+- SERVE = winner AND 1stIn gap ≥7pp → strong first-set edge
+- PHYSICAL = winner (more rested) → first-set sharpness edge
+- On clay: first set more neutral — note if close despite lopsided match
+- Output: player lean, key reason, standalone value or confirmation only
 
 ## UNITS + PARLAY TIER
-Assign mechanically after confidence:
-- Units: HIGH=2 | MEDIUM=1 | LOW=0.5
-- Parlay tier: HIGH confidence with strong data → "leg" | MEDIUM → "standalone" | LOW or PASS → "avoid"
+- Units: 4-5 dim votes → 2u | 3 dim votes → 1u | ≤2 → 0.5u
+- Parlay tier: 4+ dim votes strong data → "leg" | 3 dim votes → "standalone" | ≤2 → "avoid"
 
 ## CONFIDENCE
-HIGH: 4+ votes, 0-1 opp, strong data | MEDIUM: 3 votes, 1-2 opp | LOW: 2-1 weak data | PASS: tied
+HIGH: 4-5 dim votes, 0-1 opp, SERVE or RETURN covered | MEDIUM: 3 dim votes | LOW: 2-1 split | PASS: ≤2 or tied
 
 ## JSON OUTPUT — raw JSON only, start with { immediately, no markdown fences, no text before or after
-{"tennis_analysis":[{"matchup":"A vs B","surface":"clay","signals":[{"name":"signal name","detail":"specific stat or observation","favors":"A or B or NEUTRAL"}],"votes":{"A":0,"B":0,"NEUTRAL":0},"winner":"A or PASS","vehicle":"-1.5 sets or -1.5 games or ML or PASS","confidence":"HIGH or MEDIUM or LOW or PASS","reasoning":"2-3 sentences on key signals driving conclusion","tournament_note":"clean straight sets or ⚠️ 3-setter vs [opponent] [score]","alt_lines":{"game_spread":"-3.5 viable or -4.5 viable or avoid","first_set":"A favored — 1stIn gap 8pp, BPconv dominant or close — avoid"},"units":2,"parlay_tier":"leg or standalone or avoid","pick_string":"A -1.5 sets or PASS","has_us_odds":true}]}`;
+{"tennis_analysis":[{"matchup":"A vs B","surface":"clay","dimensions":{"serve":{"winner":"A or B or NEUTRAL","signals":["1stIn A 64% vs B 56% — 8pp favors A","BPsave A 73% vs B 59% — 14pp favors A"]},"return":{"winner":"A or B or NEUTRAL","signals":["RetWon A 44% vs B 38% — 6pp favors A","BPconv A 47% vs B 31% — 16pp favors A"]},"form":{"winner":"A or B or NEUTRAL","signals":["Surface 5-0 vs 2-2 clay 2025 favors A","H2H NEUTRAL surface reset applied"]},"physical":{"winner":"A or B or NEUTRAL","signals":["Rest 0d vs 2d — favors B"]},"market":{"winner":"A or B or NEUTRAL","signals":["Implied 80% favors A","Line -1.0 below threshold NEUTRAL"]}},"dimension_votes":{"A":4,"B":1,"NEUTRAL":0},"winner":"A or PASS","vehicle":"-1.5 sets or -1.5 games or ML or PASS","confidence":"HIGH or MEDIUM or LOW or PASS","reasoning":"2-3 sentences on key dimensions driving conclusion","tournament_note":"clean straight sets or ⚠️ 3-setter vs [opponent] [score]","alt_lines":{"game_spread":"-3.5 viable or -4.5 viable or avoid","first_set":"A favored — serve dominant or close — avoid"},"units":2,"parlay_tier":"leg or standalone or avoid","pick_string":"A -1.5 sets or PASS","has_us_odds":true}]}`;
 }
 
 async function runTennisAnalysis(tennisCtx){
@@ -2911,7 +2937,7 @@ async function runTennisAnalysis(tennisCtx){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:buildTennisAnalysisPrompt(),messages:[{role:'user',content:tennisCtx+'\n\nScore every available signal for each match. Tally votes. Derive conclusions from tallies. Output raw JSON only — start with { immediately.'}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,system:buildTennisAnalysisPrompt(),messages:[{role:'user',content:tennisCtx+'\n\nEvaluate each match across 5 dimensions (SERVE, RETURN, FORM, PHYSICAL, MARKET). Each dimension produces exactly one vote. Tally dimension votes. Apply vehicle override from tournament form. Evaluate alt lines and first set. Output raw JSON only — start with { immediately.'}]})
     });
     if(!resp.ok)return null;
     const data=await resp.json();
