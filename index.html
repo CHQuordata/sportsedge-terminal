@@ -2702,11 +2702,15 @@ SKATER SIGNALS:
 ## PUCK LINE NOTE
 Puck line is -1.5/+1.5. Only recommend -1.5 when goalie gap AND net goals gap both favor same team (2+ votes from those signals alone). Otherwise recommend ML or +1.5 for dog.
 
+## UNITS + PARLAY TIER
+- Units: HIGH=2 | MEDIUM=1 | LOW=0.5
+- Parlay tier: HIGH + goalie edge confirmed → "leg" | MEDIUM → "standalone" | LOW or PASS → "avoid"
+
 ## CONFIDENCE
 HIGH: 3+ votes same side, 0-1 opp, goalie signal present | MEDIUM: 2-1 split | LOW: weak data | PASS: tied
 
 ## JSON OUTPUT — raw JSON only, start with { immediately
-{"nhl_analysis":[{"matchup":"Team A vs Team B","away_goalie":"name SV%","home_goalie":"name SV%","signals":[{"name":"signal name","detail":"specific stat","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"ml_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"ml_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","ml_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","ml_pick":"Team A ML or PASS","total_pick":"Under 5.5 or PASS","reasoning":"2-3 sentences on goalie matchup and key signals"}]}`;
+{"nhl_analysis":[{"matchup":"Team A vs Team B","away_goalie":"name SV%","home_goalie":"name SV%","signals":[{"name":"signal name","detail":"specific stat","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"ml_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"ml_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","ml_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","ml_pick":"Team A ML or PASS","total_pick":"Under 5.5 or PASS","reasoning":"2-3 sentences on goalie matchup and key signals","units":2,"parlay_tier":"leg or standalone or avoid"}]}`;
 }
 
 async function runNHLAnalysis(nhlCtx){
@@ -2755,11 +2759,15 @@ TEAM SIGNALS:
 ## RUN LINE NOTE
 Run line is -1.5/+1.5. Only recommend -1.5 when SP gap is dominant (2+ votes on pitching alone for that team). Otherwise recommend ML or +1.5 for dog.
 
+## UNITS + PARLAY TIER
+- Units: HIGH=2 | MEDIUM=1 | LOW=0.5
+- Parlay tier: HIGH + dominant SP gap → "leg" | MEDIUM → "standalone" | LOW or PASS → "avoid"
+
 ## CONFIDENCE
 HIGH: 3+ votes same direction, 0-1 opposite | MEDIUM: 2-1 split with strong SP signal | LOW: weak data | PASS: tied or no edge
 
 ## JSON OUTPUT — raw JSON only, start with { immediately
-{"mlb_analysis":[{"matchup":"Team A vs Team B","away_sp":"SP name ERA WHIP","home_sp":"SP name ERA WHIP","signals":[{"name":"signal name","detail":"specific stat","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"ml_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"ml_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","ml_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","ml_pick":"Team A ML or PASS","total_pick":"Under 8.5 or PASS","reasoning":"2-3 sentences on SP matchup and key signals"}]}`;
+{"mlb_analysis":[{"matchup":"Team A vs Team B","away_sp":"SP name ERA WHIP","home_sp":"SP name ERA WHIP","signals":[{"name":"signal name","detail":"specific stat","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"ml_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"ml_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","ml_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","ml_pick":"Team A ML or PASS","total_pick":"Under 8.5 or PASS","reasoning":"2-3 sentences on SP matchup and key signals","units":2,"parlay_tier":"leg or standalone or avoid"}]}`;
 }
 
 async function runMLBAnalysis(mlbCtx){
@@ -2810,11 +2818,15 @@ REGULAR SEASON SIGNALS (use when NOT tagged [PLAYOFFS]):
 ## TOTAL SIGNAL
 If 2+ UNDER votes or 2+ OVER votes → pick that total side. Otherwise NEUTRAL on total.
 
+## UNITS + PARLAY TIER
+- Units: HIGH=2 | MEDIUM=1 | LOW=0.5
+- Parlay tier: HIGH + reversion or fatigue signal confirmed → "leg" | MEDIUM → "standalone" | LOW or PASS → "avoid"
+
 ## CONFIDENCE
 HIGH: 3+ votes, 0-1 opp, clear data | MEDIUM: 2-1 split with strong signal | LOW: weak data | PASS: tied
 
 ## JSON OUTPUT — raw JSON only, start with { immediately, no markdown fences
-{"nba_analysis":[{"matchup":"Team A vs Team B","is_playoff":true,"signals":[{"name":"signal name","detail":"specific data","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"spread_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"spread_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","spread_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","spread_pick":"Team A -3.5 or PASS","total_pick":"Under 221.5 or PASS","reasoning":"2-3 sentences on key signals"}]}`;
+{"nba_analysis":[{"matchup":"Team A vs Team B","is_playoff":true,"signals":[{"name":"signal name","detail":"specific data","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"spread_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"spread_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","spread_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","spread_pick":"Team A -3.5 or PASS","total_pick":"Under 221.5 or PASS","reasoning":"2-3 sentences on key signals","units":2,"parlay_tier":"leg or standalone or avoid"}]}`;
 }
 
 async function runNBAAnalysis(nbaCtx){
@@ -2863,11 +2875,34 @@ Apply AFTER determining winner. Check winner's "this tournament" line:
 - Winner has all straight-set wins in tournament → -1.5 sets stands. Game spread alt lines (-3.5, -4.5 games) also viable — note in reasoning.
 - No tournament data → vehicle stands as vote count dictates.
 
+## ALT LINE EVALUATION
+
+### GAME SPREAD (total games across full match)
+After applying vehicle override, evaluate game spread viability using winner's signals:
+- BPconv gap ≥10pp AND clean tournament form (no 3-setters): -3.5 games viable
+- Above + 1stIn gap ≥7pp AND dominant surface win%: -4.5 games viable
+- Above + opponent ranking gap ≥50 or qualifier/wildcard: -5.5+ games viable
+- Winner dropped a set this tournament: cap at -2.5 or -3.5 max
+- Output the highest viable game spread, or "avoid" if data is thin
+
+### FIRST SET WINNER
+Evaluate independently — first set follows serve stats before fatigue matters:
+- 1stIn gap ≥7pp in winner's favor: strong first-set edge (higher hold rate early in match)
+- Rest gap ≥2 days: more rested player starts sharper, first-set lean
+- BPconv ≥40% + opponent BPsave <65%: likely breaks early → strong first-set lean
+- On clay: first set more neutral — note if first set is close despite lopsided match
+- Output: player lean, key reason, whether it's standalone value or just confirms match bet
+
+## UNITS + PARLAY TIER
+Assign mechanically after confidence:
+- Units: HIGH=2 | MEDIUM=1 | LOW=0.5
+- Parlay tier: HIGH confidence with strong data → "leg" | MEDIUM → "standalone" | LOW or PASS → "avoid"
+
 ## CONFIDENCE
 HIGH: 4+ votes, 0-1 opp, strong data | MEDIUM: 3 votes, 1-2 opp | LOW: 2-1 weak data | PASS: tied
 
 ## JSON OUTPUT — raw JSON only, start with { immediately, no markdown fences, no text before or after
-{"tennis_analysis":[{"matchup":"A vs B","surface":"clay","signals":[{"name":"signal name","detail":"specific stat or observation","favors":"A or B or NEUTRAL"}],"votes":{"A":0,"B":0,"NEUTRAL":0},"winner":"A or PASS","vehicle":"-1.5 sets or -1.5 games or ML or PASS","confidence":"HIGH or MEDIUM or LOW or PASS","reasoning":"2-3 sentences on key signals driving conclusion","tournament_note":"clean straight sets or ⚠️ 3-setter vs [opponent] [score]","pick_string":"A -1.5 sets or PASS","has_us_odds":true}]}`;
+{"tennis_analysis":[{"matchup":"A vs B","surface":"clay","signals":[{"name":"signal name","detail":"specific stat or observation","favors":"A or B or NEUTRAL"}],"votes":{"A":0,"B":0,"NEUTRAL":0},"winner":"A or PASS","vehicle":"-1.5 sets or -1.5 games or ML or PASS","confidence":"HIGH or MEDIUM or LOW or PASS","reasoning":"2-3 sentences on key signals driving conclusion","tournament_note":"clean straight sets or ⚠️ 3-setter vs [opponent] [score]","alt_lines":{"game_spread":"-3.5 viable or -4.5 viable or avoid","first_set":"A favored — 1stIn gap 8pp, BPconv dominant or close — avoid"},"units":2,"parlay_tier":"leg or standalone or avoid","pick_string":"A -1.5 sets or PASS","has_us_odds":true}]}`;
 }
 
 async function runTennisAnalysis(tennisCtx){
@@ -2892,7 +2927,7 @@ async function runTennisAnalysis(tennisCtx){
 async function syncFromKV(){
   if(!WORKER_URL)return;
   try{
-    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_completed_games'];
+    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_completed_games','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl'];
     const results=await Promise.allSettled(keys.map(k=>fetch(`${WORKER_URL}/kv/${k}`,{signal:AbortSignal.timeout(4000)}).then(r=>r.ok?r.json():null)));
     results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value?.value!=null)localStorage.setItem(keys[i],r.value.value)});
   }catch(_){}
@@ -2900,7 +2935,7 @@ async function syncFromKV(){
 async function syncToKV(){
   if(!WORKER_URL)return;
   try{
-    const keys=['et_learned_rules','et_cumulative','et_picks_history'];
+    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl'];
     await Promise.allSettled(keys.map(k=>{const v=localStorage.getItem(k);if(!v)return Promise.resolve();return fetch(`${WORKER_URL}/kv/${k}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:v}),signal:AbortSignal.timeout(4000)})}));
   }catch(_){}
 }
@@ -3002,11 +3037,12 @@ async function generatePicks(){
     const _hasNBA=allG.some(g=>g.cat==='nba'&&g.tm.toDateString()===_todayStr);
     const _hasMLB=allG.some(g=>g.cat==='mlb'&&g.tm.toDateString()===_todayStr);
     const _hasNHL=allG.some(g=>g.cat==='nhl'&&g.tm.toDateString()===_todayStr);
+    const _mkRules=(k,sport)=>{const r=localStorage.getItem(k);return r?`LEARNED RULES (${sport} — apply these first, highest priority):\n${r}\n\n`:''};
     const [tennisResult,nbaResult,mlbResult,nhlResult]=await Promise.allSettled([
-      _hasTennis?runTennisAnalysis(buildGamesContext(true,g=>g.cat==='tennis')):Promise.resolve(null),
-      _hasNBA?runNBAAnalysis(buildGamesContext(true,g=>g.cat==='nba')):Promise.resolve(null),
-      _hasMLB?runMLBAnalysis(buildGamesContext(true,g=>g.cat==='mlb')):Promise.resolve(null),
-      _hasNHL?runNHLAnalysis(buildGamesContext(true,g=>g.cat==='nhl')):Promise.resolve(null)
+      _hasTennis?runTennisAnalysis(_mkRules('et_learned_rules_tennis','tennis')+buildGamesContext(true,g=>g.cat==='tennis')):Promise.resolve(null),
+      _hasNBA?runNBAAnalysis(_mkRules('et_learned_rules_nba','NBA')+buildGamesContext(true,g=>g.cat==='nba')):Promise.resolve(null),
+      _hasMLB?runMLBAnalysis(_mkRules('et_learned_rules_mlb','MLB')+buildGamesContext(true,g=>g.cat==='mlb')):Promise.resolve(null),
+      _hasNHL?runNHLAnalysis(_mkRules('et_learned_rules_nhl','NHL')+buildGamesContext(true,g=>g.cat==='nhl')):Promise.resolve(null)
     ]);
     const tennisAnalysis=tennisResult.status==='fulfilled'?tennisResult.value:null;
     const nbaAnalysis=nbaResult.status==='fulfilled'?nbaResult.value:null;
