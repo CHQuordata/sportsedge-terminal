@@ -2317,11 +2317,11 @@ function buildGamesContext(todayOnly=false,gameFilter=null){
     const cached=gameStatsCache.get(g.id);
     const cachedForm=gameFormCache.get(g.id);
     if(cached?.cat==='nba'){const{awSt,hmSt}=cached;
-      if(awSt||hmSt)ctx+=`  Team stats: ${g.aw.nm} PPG ${awSt?.ppg||'?'} oppPPG ${awSt?.oppPpg||'?'} Net ${awSt?.netPts!=null?(parseFloat(awSt.netPts)>=0?'+':'')+awSt.netPts:'?'} Pace ${awSt?.pace||'?'} FG% ${awSt?.fgPct||'?'} 3P% ${awSt?.tpPct||'?'} TO/G ${awSt?.toPg||'?'} | ${g.hm.nm} PPG ${hmSt?.ppg||'?'} oppPPG ${hmSt?.oppPpg||'?'} Net ${hmSt?.netPts!=null?(parseFloat(hmSt.netPts)>=0?'+':'')+hmSt.netPts:'?'} Pace ${hmSt?.pace||'?'} FG% ${hmSt?.fgPct||'?'} 3P% ${hmSt?.tpPct||'?'} TO/G ${hmSt?.toPg||'?'}\n`;
+      if(awSt?.pace||hmSt?.pace)ctx+=`  Pace (poss/48): ${g.aw.nm} ${awSt?.pace||'?'} | ${g.hm.nm} ${hmSt?.pace||'?'}\n`;
       if(cachedForm){const{af,hf}=cachedForm;const awB2b=isB2B(af,g.tm),hmB2b=isB2B(hf,g.tm),awF3=is3in4(af,g.tm),hmF3=is3in4(hf,g.tm);
         const _cl10=f=>{if(!f||f.length<5)return null;const ms=f.slice(0,10).map(m=>{const p=m.sc.split('-').map(Number);return p.length===2&&!isNaN(p[0])&&!isNaN(p[1])?p[0]-p[1]:null}).filter(x=>x!==null);return ms.length>=5?parseFloat((ms.reduce((a,b)=>a+b,0)/ms.length).toFixed(1)):null};
         const awL10=_cl10(af),hmL10=_cl10(hf);
-        if(awL10!==null||hmL10!==null)ctx+=`  L10 net: ${g.aw.nm} ${awL10!==null?(awL10>=0?'+':'')+awL10:'N/A'} | ${g.hm.nm} ${hmL10!==null?(hmL10>=0?'+':'')+hmL10:'N/A'} pts/gm — primary sharp signal\n`;
+        if(awL10!==null||hmL10!==null)ctx+=`  L10 net rating (primary signal): ${g.aw.nm} ${awL10!==null?(awL10>=0?'+':'')+awL10:'N/A'} | ${g.hm.nm} ${hmL10!==null?(hmL10>=0?'+':'')+hmL10:'N/A'} pts/gm\n`;const awRst=af?.length?Math.round((g.tm-af[0].dt)/864e5):null,hmRst=hf?.length?Math.round((g.tm-hf[0].dt)/864e5):null;if(awRst!=null||hmRst!=null){ctx+=`  Rest: ${g.aw.nm} ${awRst!=null?awRst+'d':'?'} | ${g.hm.nm} ${hmRst!=null?hmRst+'d':'?'}\n`;if(awRst!=null&&hmRst!=null&&Math.abs(awRst-hmRst)>=2){const _mR=awRst>hmRst?g.aw.nm:g.hm.nm;ctx+=`  ⚠️ REST EDGE: ${_mR} +${Math.abs(awRst-hmRst)}d advantage\n`}}
         const awRt=(()=>{if(!af||!af.length)return 0;let n=0;for(const m of af){if(!m.hm)n++;else break;}return n})();
         if(!g.playoff&&awRt>=3)ctx+=`  ⚠️ ROAD TRIP: ${g.aw.nm} on game ${awRt+1} of road trip — ATS cover rate depressed\n`;
         const fat=[];if(awF3)fat.push(`${g.aw.nm} 3-IN-4 NIGHTS`);else if(awB2b)fat.push(`${g.aw.nm} BACK-TO-BACK`);if(hmF3)fat.push(`${g.hm.nm} 3-IN-4 NIGHTS`);else if(hmB2b)fat.push(`${g.hm.nm} BACK-TO-BACK`);
@@ -2792,6 +2792,8 @@ async function runMLBAnalysis(mlbCtx){
 // ── Phase 1: NBA signal analysis ─────────────────────────────────────────────
 function buildNBAAnalysisPrompt(){
   return `You are an NBA betting signal analyst. Score signals per game, tally votes, derive spread/total conclusions mechanically from vote counts. Do NOT generate picks freely — direction must follow from the tally.
+
+CONTEXT DATA PROVIDED: L10 net rating (labeled as primary signal), Pace (poss/48), Rest days per team, B2B/3-in-4 fatigue flags, series history (playoffs). Season-average PPG, Net rating, FG%, 3P%, TO/G are NOT provided — they are fully priced into the market and not signals.
 
 ## SIGNAL SCORING — assign favors: TeamA | TeamB | NEUTRAL | UNDER | OVER (for totals)
 Score every signal that has data. Skip signals with no data — do not invent.
