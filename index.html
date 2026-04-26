@@ -2519,7 +2519,7 @@ ATP and WTA clay/hard season is in full swing. Tennis picks on DraftKings and Be
 }`;
 }
 
-function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,nbaAnalysis,mlbAnalysis){
+function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,nbaAnalysis,mlbAnalysis,nhlAnalysis){
   let msg=gamesCtx;
   if(yesterdayPicks.length){
     msg+=`\nYESTERDAY'S UNGRADED PICKS (grade using results in game data above):\n`;
@@ -2536,6 +2536,20 @@ function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,nbaA
       msg+=`${g.away_team} @ ${g.home_team}: ${as}-${hs} FINAL [${(g.sport||'').replace('basketball_','').replace('icehockey_','').replace('baseball_','').replace('tennis_','')}]\n`;
     });
     msg+='\n';
+  }
+  // Inject pre-locked NHL conclusions from Phase 1
+  if(nhlAnalysis?.nhl_analysis?.length){
+    const actionableNHL=nhlAnalysis.nhl_analysis.filter(na=>na.ml_winner!=='PASS'||na.total_side!=='PASS');
+    if(actionableNHL.length){
+      msg+=`\n## NHL PRE-ANALYSIS — LOCKED CONCLUSIONS (do not re-derive, incorporate exactly)\n`;
+      actionableNHL.forEach(na=>{
+        const ml=na.ml_winner!=='PASS'?`ML=${na.ml_pick} | ${na.ml_confidence}`:'ML=PASS';
+        const to=na.total_side!=='PASS'?`TOTAL=${na.total_pick} | ${na.total_confidence}`:'TOTAL=PASS';
+        const svStr=Object.entries(na.ml_votes||{}).filter(([k])=>k!=='NEUTRAL').map(([k,v])=>`${k}:${v}`).join(' vs ');
+        msg+=`${na.matchup} [${na.away_goalie||'?'} vs ${na.home_goalie||'?'}]: ${ml} | ${to} | Votes(${svStr}) | ${na.reasoning}\n`;
+      });
+      msg+='\n';
+    }
   }
   // Inject pre-locked MLB conclusions from Phase 1
   if(mlbAnalysis?.mlb_analysis?.length){
@@ -2663,6 +2677,53 @@ function _repairJSON(raw){
     out+=c;
   }
   return out;
+}
+
+// ── Phase 1: NHL signal analysis ─────────────────────────────────────────────
+function buildNHLAnalysisPrompt(){
+  return `You are an NHL betting signal analyst. Score signals per game, tally votes, derive puck line and total conclusions mechanically. Do NOT generate picks freely — direction must follow from vote tallies.
+
+## SIGNAL SCORING — assign favors: TeamA | TeamB | NEUTRAL | UNDER | OVER
+Score every signal with data. Never invent data not present.
+
+GOALTENDING (highest weight):
+1. GOALIE SAVE% GAP — gap ≥0.015: 2 votes for higher save% team. Gap 0.010-0.014: 1 vote. <0.010: NEUTRAL.
+2. COMBINED SAVE% — both goalies combined ≥.920: 1 vote UNDER. Combined ≤.900: 1 vote OVER.
+3. STARTING GOALIE CONFIRMED — if unconfirmed, note as NEUTRAL on goalie signal.
+
+SKATER SIGNALS:
+4. NET GOALS/GAME GAP — gap ≥0.4 G/gm: 1 vote for higher team.
+5. PP% GAP — gap ≥5pp: 1 vote for higher PP% team.
+6. PK% GAP — gap ≥5pp: 1 vote for higher PK% team (independent of PP%).
+7. B2B FATIGUE — team on back-to-back: 1 vote AGAINST that team on puck line + 1 vote UNDER.
+8. HOME ICE — baseline 1 vote home team unless goalie/fatigue signals override.
+
+## PUCK LINE NOTE
+Puck line is -1.5/+1.5. Only recommend -1.5 when goalie gap AND net goals gap both favor same team (2+ votes from those signals alone). Otherwise recommend ML or +1.5 for dog.
+
+## CONFIDENCE
+HIGH: 3+ votes same side, 0-1 opp, goalie signal present | MEDIUM: 2-1 split | LOW: weak data | PASS: tied
+
+## JSON OUTPUT — raw JSON only, start with { immediately
+{"nhl_analysis":[{"matchup":"Team A vs Team B","away_goalie":"name SV%","home_goalie":"name SV%","signals":[{"name":"signal name","detail":"specific stat","favors":"TeamA or TeamB or NEUTRAL or UNDER or OVER"}],"ml_votes":{"TeamA":0,"TeamB":0,"NEUTRAL":0},"total_votes":{"UNDER":0,"OVER":0,"NEUTRAL":0},"ml_winner":"TeamA or TeamB or PASS","total_side":"UNDER or OVER or PASS","ml_confidence":"HIGH or MEDIUM or LOW or PASS","total_confidence":"HIGH or MEDIUM or LOW or PASS","ml_pick":"Team A ML or PASS","total_pick":"Under 5.5 or PASS","reasoning":"2-3 sentences on goalie matchup and key signals"}]}`;
+}
+
+async function runNHLAnalysis(nhlCtx){
+  if(!CLAUDE_KEY||!nhlCtx)return null;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:3000,system:buildNHLAnalysisPrompt(),messages:[{role:'user',content:nhlCtx+'\n\nScore every available signal for each NHL game. Tally votes. Derive ML and total conclusions from tallies. Output raw JSON only — start with { immediately.'}]})
+    });
+    if(!resp.ok)return null;
+    const data=await resp.json();
+    const text=data.content[0].text;
+    const fenceM=text.match(/```json\s*([\s\S]+?)\s*```/);
+    const raw=fenceM?fenceM[1]:(text.match(/(\{[\s\S]+\})/)||[])[1]||text;
+    if(!raw||!raw.trim().startsWith('{'))return null;
+    return JSON.parse(_repairJSON(raw));
+  }catch(e){return null;}
 }
 
 // ── Phase 1: MLB signal analysis ─────────────────────────────────────────────
@@ -2928,14 +2989,17 @@ async function generatePicks(){
     const _hasTennis=allG.some(g=>g.cat==='tennis'&&g.tm.toDateString()===_todayStr&&hasUsBookOdds(g));
     const _hasNBA=allG.some(g=>g.cat==='nba'&&g.tm.toDateString()===_todayStr);
     const _hasMLB=allG.some(g=>g.cat==='mlb'&&g.tm.toDateString()===_todayStr);
-    const [tennisResult,nbaResult,mlbResult]=await Promise.allSettled([
+    const _hasNHL=allG.some(g=>g.cat==='nhl'&&g.tm.toDateString()===_todayStr);
+    const [tennisResult,nbaResult,mlbResult,nhlResult]=await Promise.allSettled([
       _hasTennis?runTennisAnalysis(buildGamesContext(true,g=>g.cat==='tennis')):Promise.resolve(null),
       _hasNBA?runNBAAnalysis(buildGamesContext(true,g=>g.cat==='nba')):Promise.resolve(null),
-      _hasMLB?runMLBAnalysis(buildGamesContext(true,g=>g.cat==='mlb')):Promise.resolve(null)
+      _hasMLB?runMLBAnalysis(buildGamesContext(true,g=>g.cat==='mlb')):Promise.resolve(null),
+      _hasNHL?runNHLAnalysis(buildGamesContext(true,g=>g.cat==='nhl')):Promise.resolve(null)
     ]);
     const tennisAnalysis=tennisResult.status==='fulfilled'?tennisResult.value:null;
     const nbaAnalysis=nbaResult.status==='fulfilled'?nbaResult.value:null;
     const mlbAnalysis=mlbResult.status==='fulfilled'?mlbResult.value:null;
+    const nhlAnalysis=nhlResult.status==='fulfilled'?nhlResult.value:null;
     // Phase 2 — Main picks call
     const gamesCtx=buildGamesContext(true); // full slate — tennis included for parlay context
     const yPicks=getYesterdayPicks();
@@ -2944,7 +3008,7 @@ async function generatePicks(){
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,tennisAnalysis,nbaAnalysis,mlbAnalysis)}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,tennisAnalysis,nbaAnalysis,mlbAnalysis,nhlAnalysis)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
