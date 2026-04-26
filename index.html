@@ -2886,7 +2886,7 @@ Evaluate: Surface win% current season, H2H on surface, in-tournament results
 - In-tournament: all straight-set wins → sub-signal FOR that player. ⚠️ dropped a set → note for vehicle override only, does NOT change FORM dimension direction. ⚠️ tiebreak in draw → note tiebreak tendency, reduces game spread ceiling.
 - Home country: if "HOME COUNTRY" flag present for a player → sub-signal for that player. Strongest at clay GS (Roland Garros) and clay Masters (Madrid, Rome) where crowd drives energy and momentum in long rallies. Moderate at all other events. Flag it in signals, let it tip a split.
 - Left-handed player: if either player is LH (use training knowledge), note LH clay advantage — cross-court forehand to RH opponent's backhand is structural on clay. Counts as an additional FORM sub-signal on clay only.
-- Opponent quality: use opponent rankings shown in context (look for `#N` after opponent name). If opponents are ranked >50 or no rank shown, surface win% sub-signal is soft — note "vs lower competition" and require 2 other sub-signals to assign the FORM vote.
+- Opponent quality: use opponent rankings shown in context (look for "#N" after opponent name). If opponents are ranked >50 or no rank shown, surface win% sub-signal is soft — note "vs lower competition" and require 2 other sub-signals to assign the FORM vote.
 - ret/WO win: if winner's last tournament match ended ret/WO, note "match sharpness unknown" — weakens in-tournament sub-signal.
 - 2+ sub-signals same player → FORM = that player | Split or all NEUTRAL → FORM = NEUTRAL
 ONE vote total from this dimension.
