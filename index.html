@@ -2110,11 +2110,13 @@ function saveLoggedBet(){
 function renderDashboardStats(){
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
   const ov=rec.overall||{w:0,l:0,p:0};const tot=ov.w+ov.l+ov.p;
-  document.querySelectorAll('.stat-lbl').forEach((el,i)=>{const lblMap=['TODAY','RECORD','HIT RATE','PARLAYS'];if(lblMap[i])el.textContent=lblMap[i]});
+  document.querySelectorAll('.stat-lbl').forEach((el,i)=>{const lblMap=['TODAY','RECORD','HIT RATE','P&L'];if(lblMap[i])el.textContent=lblMap[i]});
   $('stG').textContent=todayPicksData?.picks?.length??'-';
   $('stE').textContent=tot>0?`${ov.w}-${ov.l}`:'-';
   $('stS').textContent=tot>0?`${Math.round(ov.w/tot*100)}%`:'-';
-  $('stI').textContent=todayPicksData?.parlays?.length??'-';
+  const pl=ov.profit;const plEl=$('stI');
+  if(pl!=null){const v=Math.abs(pl).toFixed(2);plEl.textContent=(pl>=0?'+$':'-$')+v;plEl.className='stat-val '+(pl>0?'g':pl<0?'r':'a')}
+  else{plEl.textContent='-';plEl.className='stat-val';}
 }
 
 function switchToPicksView(){
@@ -2405,7 +2407,7 @@ function getYesterdayPicks(){
 
 function updateCumulativeRecord(){
   // Always rebuild from scratch from et_picks_history — never additive
-  const rec={overall:{w:0,l:0,p:0},by_confidence:{},by_sport:{}};
+  const rec={overall:{w:0,l:0,p:0,profit:null},by_confidence:{},by_sport:{}};
   const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
   if(!Array.isArray(history)){localStorage.setItem('et_cumulative',JSON.stringify(rec));return;}
   history.forEach(slate=>{
@@ -2418,6 +2420,13 @@ function updateCumulativeRecord(){
       if(!rec.by_confidence[cf])rec.by_confidence[cf]={w:0,l:0,p:0};
       rec.by_sport[sp][k]=(rec.by_sport[sp][k]||0)+1;
       rec.by_confidence[cf][k]=(rec.by_confidence[cf][k]||0)+1;
+      // P&L: only count picks that have a wager set
+      if(p.wager!=null){
+        if(rec.overall.profit==null)rec.overall.profit=0;
+        if(k==='w'&&p.payout!=null)rec.overall.profit+=p.payout-p.wager;
+        else if(k==='l')rec.overall.profit-=p.wager;
+        // push: no change
+      }
     });
   });
   localStorage.setItem('et_cumulative',JSON.stringify(rec));
