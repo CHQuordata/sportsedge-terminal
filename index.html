@@ -1396,7 +1396,20 @@ async function fetchTNPlayerData(tour,pid){if(!TN_API_KEY||!pid)return null;cons
 async function fetchTNPlayerPair(sp,awNm,hmNm){if(!TN_API_KEY)return null;const tour=sp==='wta'?'wta':'atp';const[awId,hmId]=await Promise.all([getTNPlayerId(tour,awNm),getTNPlayerId(tour,hmNm)]);if(!awId&&!hmId)return null;const[awData,hmData]=await Promise.all([awId?fetchTNPlayerData(tour,awId):null,hmId?fetchTNPlayerData(tour,hmId):null]);return{awData,hmData}}
 async function fetchTennisMatchSummary(sp,gid,awNm,hmNm,awId,hmId){try{const awL=(awNm||'').split(' ').pop().toLowerCase(),hmL=(hmNm||'').split(' ').pop().toLowerCase();const newsUrl=sp=>id=>id?`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/athletes/${id}/news?limit=10`:`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/news?limit=30`;const sig=()=>({signal:AbortSignal.timeout(7000)});const[sum,awNews,hmNews]=await Promise.all([fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/summary?event=${gid}`,sig()).then(r=>r.ok?r.json():null).catch(()=>null),fetch(newsUrl(sp)(awId),sig()).then(r=>r.ok?r.json():null).catch(()=>null),hmId&&hmId!==awId?fetch(newsUrl(sp)(hmId),sig()).then(r=>r.ok?r.json():null).catch(()=>null):Promise.resolve(null)]);const out={};if(sum){const comp=sum.header?.competitions?.[0];const art=sum.article;if(art?.story||art?.description){out.espnStory=(art.story||art.description).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();out.espnLink=art.links?.web?.href||null;}out.espnHead=art?.headline||comp?.notes?.[0]?.headline||null;}const findArt=(feed,a,b)=>(feed?.articles||[]).find(x=>{const t=((x.headline||'')+' '+(x.description||'')).toLowerCase();return a.length>2&&b.length>2&&t.includes(a)&&t.includes(b)});const art=findArt(awNews,awL,hmL)||findArt(hmNews,hmL,awL)||findArt(awNews,hmL,awL);if(art){out.newsHead=art.headline;out.newsDesc=art.description;out.newsLink=art.links?.web?.href||null;}return Object.keys(out).length?out:null}catch(e){return null}}
 function extractTennisStats(d){if(!d)return null;return{hand:d.hand?.abbreviation||null,handFull:d.hand?.displayValue||null,age:d.age||null,country:d.birthPlace?.country?.displayName||null}}
-async function fetchNBATeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${tid}/statistics`,{signal:AbortSignal.timeout(7000)});return r.ok?r.json():null}catch(e){return null}}
+async function fetchNBATeamStats(tid){
+  if(!tid)return null;
+  const szn=sportSeason('nba');
+  // Try playoff stats first (type=3), fall back to regular season (type=2)
+  const urls=[
+    `https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/${szn}/types/3/teams/${tid}/statistics`,
+    `https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/${szn}/types/2/teams/${tid}/statistics`,
+    `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${tid}/statistics`
+  ];
+  for(const url of urls){
+    try{const r=await fetch(url,{signal:AbortSignal.timeout(5000)});if(!r.ok)continue;const d=await r.json();const st=extractNBAStats(d);if(st?.oppPpg||st?.pace||st?.ppg)return d;}catch(_){}
+  }
+  return null;
+}
 async function fetchNHLTeamStats(tid){if(!tid)return null;try{const r=await fetch(`https://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl/seasons/${sportSeason('nhl')}/types/2/teams/${tid}/statistics`,{signal:AbortSignal.timeout(7000)});return r.ok?r.json():null}catch(e){return null}}
 // extractNHLStats — see lib/parsing.js
 async function fetchGameProps(sport_key,eventId){if(!AK||!sport_key||!eventId)return null;const mkts=PROP_MARKETS[sport_key];if(!mkts)return null;try{const r=await fetch(`https://api.the-odds-api.com/v4/sports/${sport_key}/events/${eventId}/odds?apiKey=${AK}&markets=${mkts}&bookmakers=${PROP_BOOKS}&oddsFormat=american`,{signal:AbortSignal.timeout(7000)});return r.ok?r.json():null}catch(e){return null}}
