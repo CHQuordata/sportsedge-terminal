@@ -2114,8 +2114,9 @@ function renderDashboardStats(){
   $('stG').textContent=todayPicksData?.picks?.length??'-';
   $('stE').textContent=tot>0?`${ov.w}-${ov.l}`:'-';
   $('stS').textContent=tot>0?`${Math.round(ov.w/tot*100)}%`:'-';
-  const pl=ov.profit;const plEl=$('stI');
+  const pl=ov.profit;const pending=ov.pending;const plEl=$('stI');
   if(pl!=null){const v=Math.abs(pl).toFixed(2);plEl.textContent=(pl>=0?'+$':'-$')+v;plEl.className='stat-val '+(pl>0?'g':pl<0?'r':'a')}
+  else if(pending!=null){plEl.textContent='$'+pending.toFixed(2)+' LIVE';plEl.className='stat-val a';}
   else{plEl.textContent='-';plEl.className='stat-val';}
 }
 
@@ -2128,6 +2129,7 @@ function switchToPicksView(){
   const savedDate=localStorage.getItem('et_picks_date');
   if(savedDate===new Date().toDateString()){try{todayPicksData=JSON.parse(localStorage.getItem('et_picks_today')||'null')}catch(e){todayPicksData=null}}
   else todayPicksData=null;
+  updateCumulativeRecord();
   renderDashboardStats();
   renderPicksLeaderboard();renderPicksOverview();
 }
@@ -2178,7 +2180,7 @@ function renderPicksLeaderboard(){
         <span class="pick-item-match">${p.matchup}</span>
         ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}${p.score!=null?`<span style="opacity:.55;font-weight:500;margin-left:4px">${parseFloat(p.score).toFixed(1)}</span>`:''}</span>`}
       </div>
-      <div class="pick-item-pick">${p.pick}${_aTag}</div>
+      <div class="pick-item-pick">${p.pick}${_aTag}${p.is_manual&&p.wager?`<span style="font-size:9px;color:var(--t4);margin-left:6px">$${p.wager.toFixed(2)}${p.result==='W'&&p.payout?` → +$${(p.payout-p.wager).toFixed(2)}`:p.result==='L'?` → -$${p.wager.toFixed(2)}`:' pending'}</span>`:''}</div>
     </div>`;
   });
   // Filter tennis leans for unbettable matches (same rule as slate)
@@ -2407,25 +2409,29 @@ function getYesterdayPicks(){
 
 function updateCumulativeRecord(){
   // Always rebuild from scratch from et_picks_history — never additive
-  const rec={overall:{w:0,l:0,p:0,profit:null},by_confidence:{},by_sport:{}};
+  const rec={overall:{w:0,l:0,p:0,profit:null,pending:null},by_confidence:{},by_sport:{}};
   const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
   if(!Array.isArray(history)){localStorage.setItem('et_cumulative',JSON.stringify(rec));return;}
   history.forEach(slate=>{
     if(!slate)return;
-    (slate.picks||[]).filter(p=>['W','L','P'].includes(p.result)&&!p.is_lean).forEach(p=>{
-      const k=p.result.toLowerCase();
-      rec.overall[k]=(rec.overall[k]||0)+1;
-      const sp=p.sport||'unknown',cf=p.confidence||'MEDIUM';
-      if(!rec.by_sport[sp])rec.by_sport[sp]={w:0,l:0,p:0};
-      if(!rec.by_confidence[cf])rec.by_confidence[cf]={w:0,l:0,p:0};
-      rec.by_sport[sp][k]=(rec.by_sport[sp][k]||0)+1;
-      rec.by_confidence[cf][k]=(rec.by_confidence[cf][k]||0)+1;
-      // P&L: only count picks that have a wager set
-      if(p.wager!=null){
-        if(rec.overall.profit==null)rec.overall.profit=0;
-        if(k==='w'&&p.payout!=null)rec.overall.profit+=p.payout-p.wager;
-        else if(k==='l')rec.overall.profit-=p.wager;
-        // push: no change
+    (slate.picks||[]).filter(p=>!p.is_lean).forEach(p=>{
+      if(['W','L','P'].includes(p.result)){
+        const k=p.result.toLowerCase();
+        rec.overall[k]=(rec.overall[k]||0)+1;
+        const sp=p.sport||'unknown',cf=p.confidence||'MEDIUM';
+        if(!rec.by_sport[sp])rec.by_sport[sp]={w:0,l:0,p:0};
+        if(!rec.by_confidence[cf])rec.by_confidence[cf]={w:0,l:0,p:0};
+        rec.by_sport[sp][k]=(rec.by_sport[sp][k]||0)+1;
+        rec.by_confidence[cf][k]=(rec.by_confidence[cf][k]||0)+1;
+        if(p.wager!=null){
+          if(rec.overall.profit==null)rec.overall.profit=0;
+          if(k==='w'&&p.payout!=null)rec.overall.profit+=p.payout-p.wager;
+          else if(k==='l')rec.overall.profit-=p.wager;
+        }
+      } else if(p.result==='?'&&p.wager!=null){
+        // pending bet with a wager — track separately as "at risk"
+        if(rec.overall.pending==null)rec.overall.pending=0;
+        rec.overall.pending+=p.wager;
       }
     });
   });
