@@ -2160,9 +2160,10 @@ function renderPicksOverview(){
   // Grading — reads from et_picks_history (algorithmic grades), not Claude output
   const yGraded=getYesterdayPicks();
   if(yGraded.length){
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>YESTERDAY GRADED</div>`;
+    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>YESTERDAY GRADED <span style="font-size:9px;color:var(--t4);font-weight:400;margin-left:6px">click badge to correct</span></div>`;
     yGraded.forEach(gr=>{
-      h+=`<div class="grade-row"><span class="pib pib-${gr.result}" style="flex-shrink:0">${gr.result}</span><span class="grade-pick">${gr.pick}</span><span class="grade-note">${gr.matchup||''}</span></div>`;
+      const safeP=encodeURIComponent(gr.pick||'');
+      h+=`<div class="grade-row"><span class="pib pib-${gr.result}" style="flex-shrink:0;cursor:pointer" title="Click to correct grade" onclick="correctHistoryGrade('${safeP}')">${gr.result}</span><span class="grade-pick">${gr.pick}</span><span class="grade-note">${gr.matchup||''}</span></div>`;
     });
     h+='</div>';
   }
@@ -2359,6 +2360,23 @@ function updateCumulativeRecord(){
     });
   });
   localStorage.setItem('et_cumulative',JSON.stringify(rec));
+}
+
+function correctHistoryGrade(encodedPick){
+  const pickText=decodeURIComponent(encodedPick);
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  const cycle={W:'L',L:'P',P:'W'};
+  let found=false;
+  history.forEach(slate=>{
+    (slate.picks||[]).forEach(p=>{
+      if(p.pick===pickText){p.result=cycle[p.result]||'W';found=true;}
+    });
+  });
+  if(found){
+    localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+    updateCumulativeRecord();
+    renderPicksOverview();
+  }
 }
 
 function correctGrade(idx){
@@ -3052,10 +3070,12 @@ function autoGradeFromScores(completedGames){
   const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
   let changed=false;
   history.forEach(slate=>{
+    const slateAge=Date.now()-new Date(slate.date).getTime();
+    const regrade=slateAge<48*60*60*1000;
     (slate.picks||[]).forEach(pick=>{
-      if(pick.result&&pick.result!=='?')return;
+      if(!regrade&&pick.result&&pick.result!=='?')return;
       const r=gradePickFromScore(pick,completedGames);
-      if(r){pick.result=r;changed=true;}
+      if(r&&r!==pick.result){pick.result=r;changed=true;}
     });
   });
   if(changed){localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));updateCumulativeRecord();}
