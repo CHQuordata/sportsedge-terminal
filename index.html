@@ -2738,7 +2738,7 @@ SKATER SIGNALS:
 6. PK% GAP — gap ≥5pp: 1 vote for higher PK% team (independent of PP%).
 7. B2B FATIGUE — team on back-to-back: 1 vote AGAINST that team on puck line + 1 vote UNDER.
 8. HOME ICE — baseline 1 vote home team unless goalie/fatigue signals override.
-9. LINE MOVEMENT — spread moved ≥1.5 from opening: 1 vote in direction of move. Total moved ≥1.0 from opening: OVER or UNDER vote in direction of move.
+9. LINE MOVEMENT — flag in reasoning only. If it confirms your primary lean: note as supporting. If it conflicts: add ⚠️ cautionary note. Does NOT award a vote in any direction.
 
 ## PUCK LINE NOTE
 Puck line is -1.5/+1.5. Only recommend -1.5 when goalie gap AND net goals gap both favor same team (2+ votes from those signals alone). Otherwise recommend ML or +1.5 for dog.
@@ -2795,7 +2795,7 @@ PARK + WEATHER SIGNALS:
 TEAM SIGNALS:
 10. BULLPEN — team with depleted bullpen (back-to-back high-leverage games): 1 vote OVER, 1 vote against that team.
 11. HOME FIELD — 1 vote home team on ML/run line unless pitching signals override.
-12. LINE MOVEMENT — spread moved ≥1.5 from opening: 1 vote in direction of move. Total moved ≥1.0 from opening: OVER or UNDER vote in direction of move.
+12. LINE MOVEMENT — flag in reasoning only. If it confirms your primary lean: note as supporting. If it conflicts: add ⚠️ cautionary note. Does NOT award a vote in any direction.
 
 ## RUN LINE NOTE
 Run line is -1.5/+1.5. Only recommend -1.5 when SP gap is dominant (2+ votes on pitching alone for that team). Otherwise recommend ML or +1.5 for dog.
@@ -2845,7 +2845,7 @@ PLAYOFF SIGNALS (use these when game is tagged [PLAYOFFS]):
 4. DESPERATION vs COMPLACENCY — team up 3-0 or 3-1: 1 vote AGAINST that team (complacency risk). Down team: 1 vote FOR.
 5. REST DIFFERENTIAL — gap ≥2 days: 1 vote for more rested team.
 6. SERIES DOMINANCE — one team avg +8 margin across series: 1 vote for the trailing team (intensity response).
-7. LINE MOVEMENT — if noted: 1 vote in direction of sharp move.
+7. LINE MOVEMENT — flag in reasoning only. If it confirms your primary lean: note as supporting. If it conflicts: add ⚠️ cautionary note. Does NOT award a vote.
 
 REGULAR SEASON SIGNALS (use when NOT tagged [PLAYOFFS]):
 1. L10 NET RATING — divergence ≥4pts: 1 vote for higher-rated team. ≥8pts: 2 votes.
@@ -2853,7 +2853,7 @@ REGULAR SEASON SIGNALS (use when NOT tagged [PLAYOFFS]):
 3. REST ADVANTAGE — gap ≥2 days: 1 vote for rested team.
 4. PACE MISMATCH — slow team (≤98 pace) vs fast team (≥102): 1 vote UNDER.
 5. HOME COURT — baseline 1 vote home unless fatigue/form overrides.
-6. LINE MOVEMENT — if noted: 1 vote in direction of sharp move.
+6. LINE MOVEMENT — flag in reasoning only. If it confirms your primary lean: note as supporting. If it conflicts: add ⚠️ cautionary note. Does NOT award a vote.
 7. ROAD TRIP — away team on game 3+ of consecutive road trip (flagged ⚠️ ROAD TRIP in context): 1 vote AGAINST away team on spread.
 
 CONTEXT-ONLY (do not score as votes): PUBLIC BETS %, injury listings. These are already priced into the line. Reference in reasoning only if extreme (e.g., confirmed star OUT with no replacement data).
@@ -2934,11 +2934,13 @@ Evaluate: Rest days, match load
 ONE vote total from this dimension.
 
 ### DIMENSION 5 — MARKET
-Evaluate: Market implied% AND line movement together — they represent the same consensus, so produce ONE combined vote
-- Implied ≥65% AND (spread/total moved ≥1.5 OR ML implied moved ≥5pp) same direction → MARKET = that player (strong)
-- Only implied ≥65% fires → MARKET = that player (soft)
-- Only sharp move fires (spread/total ≥1.5 or ML implied ≥5pp same direction as favorite) → MARKET = that player (soft)
-- Signals conflict or both below threshold → MARKET = NEUTRAL
+Implied probability anchors this dimension. Line movement is a flag only — it NEVER independently awards a vote and NEVER flips the vote against the implied-probability side.
+- Implied ≥65% → MARKET = that player (vote awarded)
+  - If line also moved same direction: note as "sharp confirmed" in signals
+  - If line moved opposite direction: add ⚠️ cautionary note in signals, but VOTE STAYS with implied
+- Implied 55–64% → MARKET = that player (soft vote)
+  - Line movement reinforces or cautions as above, does not change the vote
+- Implied <55% (near pick'em) → MARKET = NEUTRAL regardless of line movement
 ONE vote total from this dimension.
 
 ## VEHICLE FROM DIMENSION VOTES
