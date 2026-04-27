@@ -2341,35 +2341,22 @@ function getYesterdayPicks(){
   return graded;
 }
 
-function updateCumulativeRecord(grading,picks){
-  const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{"overall":{"w":0,"l":0,"p":0},"by_confidence":{},"by_sport":{}}');
-  if(!rec.overall)rec.overall={w:0,l:0,p:0};
-  if(!rec.by_confidence)rec.by_confidence={};
-  if(!rec.by_sport)rec.by_sport={};
-  grading.forEach(g=>{
-    if(!['W','L','P'].includes(g.result))return;
-    const k=g.result.toLowerCase();rec.overall[k]=(rec.overall[k]||0)+1;
-    // Match by: exact pick text → matchup overlap → sport+name token
-    const mp=picks?.find(p=>{
-      if(p.pick===g.pick)return true;
-      if(p.matchup&&g.matchup&&p.matchup.toLowerCase()===g.matchup.toLowerCase())return true;
-      if(p.sport&&g.sport&&p.sport!==g.sport)return false;
-      const toks=(p.matchup||'').toLowerCase().split(/[\s@,|]+/).filter(w=>w.length>=3);
-      return toks.length&&toks.every(t=>(g.pick||'').toLowerCase().includes(t)||(g.matchup||'').toLowerCase().includes(t));
-    });
-    if(mp){const sp=mp.sport||'unknown',cf=mp.confidence||'MEDIUM';
+function updateCumulativeRecord(){
+  // Always rebuild from scratch from et_picks_history — never additive
+  const rec={overall:{w:0,l:0,p:0},by_confidence:{},by_sport:{}};
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  history.forEach(slate=>{
+    (slate.picks||[]).filter(p=>['W','L','P'].includes(p.result)&&!p.is_lean).forEach(p=>{
+      const k=p.result.toLowerCase();
+      rec.overall[k]=(rec.overall[k]||0)+1;
+      const sp=p.sport||'unknown',cf=p.confidence||'MEDIUM';
       if(!rec.by_sport[sp])rec.by_sport[sp]={w:0,l:0,p:0};
       if(!rec.by_confidence[cf])rec.by_confidence[cf]={w:0,l:0,p:0};
       rec.by_sport[sp][k]=(rec.by_sport[sp][k]||0)+1;
       rec.by_confidence[cf][k]=(rec.by_confidence[cf][k]||0)+1;
-    }
+    });
   });
   localStorage.setItem('et_cumulative',JSON.stringify(rec));
-  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
-  const y=new Date();y.setDate(y.getDate()-1);
-  const yi=history.findIndex(s=>new Date(s.date).toDateString()===y.toDateString());
-  if(yi>=0)history[yi].grading=grading;
-  localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
 }
 
 function correctGrade(idx){
@@ -3069,7 +3056,7 @@ function autoGradeFromScores(completedGames){
       if(r){pick.result=r;changed=true;}
     });
   });
-  if(changed)localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+  if(changed){localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));updateCumulativeRecord();}
 }
 
 async function generatePicks(){
