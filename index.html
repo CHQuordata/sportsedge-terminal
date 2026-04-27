@@ -456,6 +456,25 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 <div class="modal-ov" id="setupModal" style="display:none"><div class="modal"><div class="modal-title">SPORTSEDGE TERMINAL</div><div class="modal-sub">Enter your Odds API key for live odds, EV calculation, and edge detection across 10+ sportsbooks.<br><br>Without a key, ESPN provides schedules, injuries, form, and records for all sports including tennis &amp; UFC.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only</div></div></div>
 <div class="modal-ov" id="claudeModal" style="display:none"><div class="modal"><div class="modal-title" style="color:var(--amb)">AI PICKS ENGINE</div><div class="modal-sub">Enter your Anthropic API key to enable self-learning daily picks with grading, memory, and cumulative record tracking.<br><br>Uses <strong>claude-sonnet-4-6</strong> for analysis. Picks are generated on-demand and stored locally — your key never leaves your browser.</div><input class="modal-input" id="claudeKeyInput" type="password" placeholder="sk-ant-api03-..." autocomplete="off"><button class="modal-btn" style="background:var(--amb)" onclick="connectClaude()">CONNECT AI ENGINE</button><a class="modal-link" href="https://console.anthropic.com/" target="_blank">Get API key → console.anthropic.com</a><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('claudeModal').style.display='none'">Cancel</div></div></div>
 <div class="modal-ov" id="tnModal" style="display:none"><div class="modal"><div class="modal-title" style="color:var(--cyn)">TENNIS API</div><div class="modal-sub">Enter your RapidAPI key for the <strong>Tennis API – ATP WTA ITF</strong> by matchstat.com.<br><br>Provides current-season surface records (2025), career serve stats, and player data. <strong>PRO plan $10/mo</strong> on RapidAPI — your key is stored locally.</div><input class="modal-input" id="tnKeyInput" type="password" placeholder="RapidAPI key..." autocomplete="off"><button class="modal-btn" style="background:var(--cyn);color:var(--bg0)" onclick="connectTN()">CONNECT TENNIS API</button><a class="modal-link" href="https://rapidapi.com/jjrm365-kIFr3Nx_odV/api/tennis-api-atp-wta-itf" target="_blank">Subscribe → RapidAPI ($10/mo)</a><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('tnModal').style.display='none'">Cancel</div></div></div>
+<div class="modal-ov" id="logBetModal" style="display:none"><div class="modal" style="max-width:420px;width:100%">
+  <div class="modal-title" style="color:var(--cyn)">LOG BET</div>
+  <div class="modal-sub" style="margin-bottom:12px">Record a manually placed bet — single or parlay. Counts toward your permanent record.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    <select id="lbSport" style="padding:8px;font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--t1);border:1px solid var(--bdr);border-radius:3px">
+      <option value="tennis">Tennis</option><option value="nba">NBA</option><option value="nhl">NHL</option><option value="mlb">MLB</option><option value="mma">MMA</option><option value="parlay">Parlay (multi-sport)</option>
+    </select>
+    <select id="lbResult" style="padding:8px;font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--t1);border:1px solid var(--bdr);border-radius:3px">
+      <option value="W">WIN ✅</option><option value="L">LOSS ❌</option><option value="P">PUSH</option><option value="?">PENDING</option>
+    </select>
+  </div>
+  <textarea id="lbPick" rows="3" placeholder="Describe the bet — e.g. Medvedev -3.5 games -165 / Kostyuk straight sets -215 / Potapova +6.5 games -185" style="width:100%;padding:8px;font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--t1);border:1px solid var(--bdr);border-radius:3px;resize:vertical;margin-bottom:8px"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+    <input id="lbWager" type="number" min="0" step="0.01" placeholder="Wager ($)" style="padding:8px;font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--t1);border:1px solid var(--bdr);border-radius:3px">
+    <input id="lbPayout" type="number" min="0" step="0.01" placeholder="Payout ($) if win" style="padding:8px;font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--t1);border:1px solid var(--bdr);border-radius:3px">
+  </div>
+  <button class="modal-btn" style="background:var(--cyn);color:var(--bg0)" onclick="saveLoggedBet()">SAVE BET</button>
+  <div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('logBetModal').style.display='none'">Cancel</div>
+</div></div>
 <div class="modal-ov" id="edgesMobModal" style="display:none;align-items:flex-start;padding-top:0">
   <div style="width:100%;max-width:100%;height:100svh;background:var(--bg0);display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--bdr);flex-shrink:0">
@@ -2063,6 +2082,31 @@ function showBankroll(){$('bankrollModal').style.display='flex';$('bankrollInput
 function saveBankroll(){const v=parseFloat($('bankrollInput').value)||0;BANKROLL=v;localStorage.setItem('bankroll',v);$('bankrollModal').style.display='none';const btn=$('bankrollBtn');if(btn)btn.textContent=v>0?'$'+v.toLocaleString():'BANKROLL';if(selIdx>=0&&selIdx<fG.length)selGame(selIdx)}
 function connectClaude(){const k=$('claudeKeyInput').value.trim();if(!k)return;CLAUDE_KEY=k;localStorage.setItem('et_claude_key',k);$('claudeModal').style.display='none';$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY';if(cView==='picks')renderPicksOverview()}
 
+function showLogBetModal(){$('logBetModal').style.display='flex';$('lbPick').focus()}
+function saveLoggedBet(){
+  const pick=$('lbPick').value.trim();if(!pick)return;
+  const sport=$('lbSport').value;
+  const result=$('lbResult').value;
+  const wager=parseFloat($('lbWager').value)||null;
+  const payout=parseFloat($('lbPayout').value)||null;
+  const today=new Date().toISOString().split('T')[0];
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  let slate=history.find(s=>s.date===today);
+  if(!slate){slate={date:today,picks:[]};history.unshift(slate);}
+  slate.picks.push({
+    pick,sport,result,confidence:'MANUAL',score:null,is_lean:false,is_manual:true,
+    matchup:pick.slice(0,60),
+    wager:wager??undefined,payout:payout??undefined,
+    logged:new Date().toISOString()
+  });
+  localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+  if(['W','L','P'].includes(result))updateCumulativeRecord();
+  renderDashboardStats();
+  renderPicksLeaderboard();renderPicksOverview();
+  $('logBetModal').style.display='none';
+  $('lbPick').value='';$('lbWager').value='';$('lbPayout').value='';
+}
+
 function renderDashboardStats(){
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
   const ov=rec.overall||{w:0,l:0,p:0};const tot=ov.w+ov.l+ov.p;
@@ -2178,7 +2222,9 @@ function renderPicksOverview(){
     h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--cyn)"></div>YESTERDAY GRADED <span style="font-size:9px;color:var(--t4);font-weight:400;margin-left:6px">click badge to correct</span></div>`;
     yGraded.forEach(gr=>{
       const safeP=encodeURIComponent(gr.pick||'');
-      h+=`<div class="grade-row"><span class="pib pib-${gr.result}" style="flex-shrink:0;cursor:pointer" title="Click to correct grade" onclick="correctHistoryGrade('${safeP}')">${gr.result}</span><span class="grade-pick">${gr.pick}</span><span class="grade-note">${gr.matchup||''}</span></div>`;
+      const manualTag=gr.is_manual?`<span style="font-size:9px;color:var(--cyn);margin-left:4px">💰 MANUAL</span>`:'';
+      const profitStr=(gr.is_manual&&gr.wager&&gr.payout&&gr.result==='W')?`<span style="font-size:9px;color:var(--grn);margin-left:6px">+$${(gr.payout-gr.wager).toFixed(2)}</span>`:(gr.is_manual&&gr.wager&&gr.result==='L')?`<span style="font-size:9px;color:var(--red);margin-left:6px">-$${gr.wager.toFixed(2)}</span>`:'';
+      h+=`<div class="grade-row"><span class="pib pib-${gr.result}" style="flex-shrink:0;cursor:pointer" title="Click to correct grade" onclick="correctHistoryGrade('${safeP}')">${gr.result}</span><span class="grade-pick">${gr.pick}${manualTag}${profitStr}</span><span class="grade-note">${gr.is_manual?'':gr.matchup||''}</span></div>`;
     });
     h+='</div>';
   }
@@ -2199,7 +2245,7 @@ function renderPicksOverview(){
   h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>LEARNED RULES (${rules.length})</div>`;
   rules.forEach((r,i)=>{h+=`<div class="rule-item"><span class="rule-num">${i+1}.</span>${r.replace(/^\d+\.\s*/,'')}</div>`});
   h+='</div>';
-  h+=`<div style="padding:12px 16px;display:flex;gap:8px"><button class="gen-btn${isGenerating?' pulse':''}" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING...':'↻ REGENERATE PICKS'}</button><button onclick="resetLearnedRules()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--t3);background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer" title="Reset to default rules">RESET RULES</button></div>`;
+  h+=`<div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="gen-btn${isGenerating?' pulse':''}" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING...':'↻ REGENERATE PICKS'}</button><button onclick="showLogBetModal()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--cyn);background:var(--bg2);border:1px solid var(--cyn);border-radius:4px;cursor:pointer">+ LOG BET</button><button onclick="resetLearnedRules()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--t3);background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer">RESET RULES</button></div>`;
   el.innerHTML=h;el.scrollTop=0;
 }
 
