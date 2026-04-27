@@ -3469,36 +3469,32 @@ async function aiAnalyzeGame(gid){
 }
 
 // ── PIN GATE ──────────────────────────────────────────────────────────────
-const PIN_HASH='b1e2d3';  // change this to your preferred PIN then update hash below
-function _ph(s){let h=0;for(let i=0;i<s.length;i++){h=Math.imul(31,h)+s.charCodeAt(i)|0}return Math.abs(h).toString(16)}
-const CORRECT_HASH='75b15e18';
+const _PIN='1834'; // ← change only this to update the PIN
 
-function checkPin(){
-  const v=$('pinInput').value.trim();
-  if(_ph(v)===CORRECT_HASH){
-    localStorage.setItem('et_auth',CORRECT_HASH);
-    $('pinOverlay').style.display='none';
-    $('appRoot').style.display='';
+window.checkPin=function(){
+  const v=document.getElementById('pinInput').value.trim();
+  if(v===_PIN){
+    localStorage.setItem('et_auth','se_'+_PIN);
+    document.getElementById('pinOverlay').style.display='none';
+    document.getElementById('appRoot').style.display='';
     init();
   } else {
-    $('pinErr').textContent='INCORRECT PIN';
-    $('pinInput').value='';
-    $('pinInput').focus();
-    setTimeout(()=>$('pinErr').textContent='',1500);
+    document.getElementById('pinErr').textContent='INCORRECT PIN';
+    document.getElementById('pinInput').value='';
+    document.getElementById('pinInput').focus();
+    setTimeout(()=>{document.getElementById('pinErr').textContent=''},1500);
   }
+};
+
+if(localStorage.getItem('et_auth')==='se_'+_PIN){
+  document.getElementById('pinOverlay').style.display='none';
+  document.getElementById('appRoot').style.display='';
+  init();
+} else {
+  document.getElementById('pinOverlay').style.display='flex';
+  document.getElementById('appRoot').style.display='none';
+  setTimeout(()=>document.getElementById('pinInput').focus(),100);
 }
-
-(function(){
-  if(localStorage.getItem('et_auth')===CORRECT_HASH){
-    $('pinOverlay').style.display='none';
-    $('appRoot').style.display='';
-    init();
-  } else {
-    $('pinOverlay').style.display='flex';
-    $('appRoot').style.display='none';
-    setTimeout(()=>$('pinInput').focus(),100);
-  }
-})();
 </script>
 </div><!-- /appRoot -->
 </body>
