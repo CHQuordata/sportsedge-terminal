@@ -1,0 +1,20 @@
+{
+  "splits": {
+    "categories": [{
+      "name": "General",
+      "stats": [
+        { "name": "games",            "displayValue": "82",    "value": 82     },
+        { "name": "goals",            "displayValue": "262",   "value": 262    },
+        { "name": "goalsAgainst",     "displayValue": "218",   "value": 218    },
+        { "name": "avgGoalsAgainst",  "displayValue": "2.66",  "value": 2.659  },
+        { "name": "savePct",          "displayValue": ".912",  "value": 0.912  },
+        { "name": "powerPlayGoals",   "displayValue": "52",    "value": 52     },
+        { "name": "powerPlayPct",     "displayValue": "21.3",  "value": 21.3   },
+        { "name": "penaltyKillPct",   "displayValue": "82.1",  "value": 82.1   },
+        { "name": "shotsTotal",       "displayValue": "2706",  "value": 2706   },
+        { "name": "shootingPct",      "displayValue": "9.7",   "value": 9.7    },
+        { "name": "faceoffPercent",   "displayValue": "51.2",  "value": 51.2   }
+      ]
+    }]
+  }
+}

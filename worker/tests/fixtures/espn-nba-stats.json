@@ -1,0 +1,36 @@
+{
+  "results": {
+    "stats": {
+      "categories": [
+        {
+          "name": "General",
+          "stats": [
+            { "name": "avgPoints",        "displayValue": "116.4", "value": 116.4 },
+            { "name": "avgPointsAllowed", "displayValue": "109.8", "value": 109.8 },
+            { "name": "avgAssists",       "displayValue": "27.2",  "value": 27.2  },
+            { "name": "avgRebounds",      "displayValue": "44.1",  "value": 44.1  },
+            { "name": "avgBlocks",        "displayValue": "5.2",   "value": 5.2   },
+            { "name": "avgSteals",        "displayValue": "8.1",   "value": 8.1   },
+            { "name": "avgTurnovers",     "displayValue": "13.5",  "value": 13.5  }
+          ]
+        },
+        {
+          "name": "Shooting",
+          "stats": [
+            { "name": "fieldGoalPct",       "displayValue": "47.8",  "value": 0.478 },
+            { "name": "threePointPct",      "displayValue": "36.2",  "value": 0.362 },
+            { "name": "freeThrowPct",       "displayValue": "78.5",  "value": 0.785 },
+            { "name": "scoringEfficiency",  "displayValue": "112.4", "value": 112.4 },
+            { "name": "shootingEfficiency", "displayValue": "109.2", "value": 109.2 }
+          ]
+        },
+        {
+          "name": "Advanced",
+          "stats": [
+            { "name": "pace", "displayValue": "101.2", "value": 101.2 }
+          ]
+        }
+      ]
+    }
+  }
+}

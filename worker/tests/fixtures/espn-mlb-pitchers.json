@@ -1,0 +1,58 @@
+{
+  "header": {
+    "competitions": [{
+      "competitors": [
+        {
+          "homeAway": "home",
+          "probables": [{
+            "athlete": {
+              "shortName": "G. Cole",
+              "fullName": "Gerrit Cole",
+              "throws": { "abbreviation": "R" }
+            },
+            "statistics": {
+              "splits": {
+                "categories": [
+                  { "name": "ERA",             "displayValue": "3.20", "value": 3.2   },
+                  { "name": "WHIP",            "displayValue": "1.08", "value": 1.08  },
+                  { "name": "fullInnings",     "displayValue": "180",  "value": 180   },
+                  { "name": "partInnings",     "displayValue": "0",    "value": 0     },
+                  { "name": "strikeouts",      "displayValue": "208",  "value": 208   },
+                  { "name": "baseOnBalls",     "displayValue": "45",   "value": 45    },
+                  { "name": "homeRunsAllowed", "displayValue": "22",   "value": 22    },
+                  { "name": "wins",            "displayValue": "14",   "value": 14    },
+                  { "name": "losses",          "displayValue": "6",    "value": 6     }
+                ]
+              }
+            }
+          }]
+        },
+        {
+          "homeAway": "away",
+          "probables": [{
+            "athlete": {
+              "shortName": "C. Burnes",
+              "fullName": "Corbin Burnes",
+              "throws": { "abbreviation": "R" }
+            },
+            "statistics": {
+              "splits": {
+                "categories": [
+                  { "name": "ERA",             "displayValue": "2.94", "value": 2.94 },
+                  { "name": "WHIP",            "displayValue": "0.99", "value": 0.99 },
+                  { "name": "fullInnings",     "displayValue": "195",  "value": 195  },
+                  { "name": "partInnings",     "displayValue": "2",    "value": 2    },
+                  { "name": "strikeouts",      "displayValue": "243",  "value": 243  },
+                  { "name": "baseOnBalls",     "displayValue": "38",   "value": 38   },
+                  { "name": "homeRunsAllowed", "displayValue": "18",   "value": 18   },
+                  { "name": "wins",            "displayValue": "16",   "value": 16   },
+                  { "name": "losses",          "displayValue": "5",    "value": 5    }
+                ]
+              }
+            }
+          }]
+        }
+      ]
+    }]
+  }
+}
