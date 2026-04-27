@@ -486,7 +486,8 @@ let trackedIds=new Set(JSON.parse(localStorage.getItem('et_tracked')||'[]'));
 let _oddsEverOk=false; // true once any successful API call confirms the key works
 const _oddsCache=new Map(),ODDS_TTL=5*60*1000;
 const WORKER_URL=localStorage.getItem('et_worker_url')||'';
-const ODDS_BOOKS='fanduel,draftkings,betmgm,caesars,betonlineag,pinnacle';
+const ODDS_BOOKS='pinnacle,draftkings,betmgm,fanduel,caesars,betonlineag';
+const BOOK_ORDER=['Pinnacle','DraftKings','BetMGM','FanDuel','Caesars','BetOnline.ag'];
 const SPORT_MARKETS={basketball_nba:'h2h,spreads,totals',icehockey_nhl:'h2h,spreads,totals',baseball_mlb:'h2h,spreads,totals,h2h_1st_5_innings,totals_1st_5_innings',_tennis:'h2h,spreads,totals'};
 // ── Book tiers — see lib/signals.js
 function getSportMarkets(sk){if(SPORT_MARKETS[sk])return SPORT_MARKETS[sk];if(sk.startsWith('tennis_'))return SPORT_MARKETS._tennis;return'h2h'}
@@ -1415,7 +1416,7 @@ function renderOdds(g){const bks=g.odds.bookmakers;let h=`<div class="sec"><div 
   mkts.forEach(mk=>{const lb=mktLbl[mk]||mk.toUpperCase();const R={};
     bks.forEach(b=>{const m=b.markets.find(x=>x.key===mk);if(!m)return;m.outcomes.forEach(o=>{const s=o.point!==undefined?`${o.name} ${o.point>0?'+':''}${o.point}`:o.name;if(!R[s])R[s]={};R[s][b.title]=o.price})});
     if(!Object.keys(R).length)return;h+=`<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:600;color:var(--amb);letter-spacing:1px;margin-bottom:6px">${lb}</div><table class="dtable"><thead><tr><th>SIDE</th>`;
-    const bn=[...new Set(bks.map(b=>b.title))].slice(0,6);bn.forEach(b=>h+=`<th>${b.replace(/\s+/g,'').slice(0,8)}</th>`);h+=`<th>BEST</th></tr></thead><tbody>`;
+    const bn=[...new Set(bks.map(b=>b.title))].sort((a,b)=>{const ai=BOOK_ORDER.indexOf(a),bi=BOOK_ORDER.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi)}).slice(0,6);bn.forEach(b=>h+=`<th>${b.replace(/\s+/g,'').slice(0,8)}</th>`);h+=`<th>BEST</th></tr></thead><tbody>`;
     Object.entries(R).forEach(([s,P])=>{const ap=Object.values(P);const bp=ap.reduce((b,p)=>aimp(p)<aimp(b)?p:b,ap[0]);h+=`<tr><td style="color:var(--cyn);font-weight:500">${s}</td>`;bn.forEach(b=>{const p=P[b];h+=p===undefined?'<td style="color:var(--t4)">-</td>':`<td class="${p===bp?'best':''}">${fp(p)}</td>`});h+=`<td class="best">${fp(bp)}</td></tr>`});
     h+=`</tbody></table></div>`});return h+'</div>'}
 
