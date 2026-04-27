@@ -623,7 +623,7 @@ async function oddsFetch(sk,force=false){
 
 async function injectPinnacleOdds(){
   if(!WORKER_URL)return;
-  const spMap={basketball_nba:'nba',icehockey_nhl:'nhl',baseball_mlb:'mlb',american_football_nfl:'nfl'};
+  const spMap={basketball_nba:'nba',icehockey_nhl:'nhl',baseball_mlb:'mlb'};
   await Promise.allSettled(Object.keys(spMap).map(async sk=>{
     try{
       const r=await fetch(`${WORKER_URL}/pinnacle/odds?sport=${sk}`,{signal:AbortSignal.timeout(6000)});
