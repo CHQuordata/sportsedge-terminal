@@ -2105,12 +2105,27 @@ function saveLoggedBet(){
 }
 
 function renderDashboardStats(){
+  document.querySelectorAll('.stat-lbl').forEach((el,i)=>{const lblMap=['TODAY','AI REC','MY REC','P&L'];if(lblMap[i])el.textContent=lblMap[i]});
+  $('stG').textContent=todayPicksData?.picks?.filter(p=>!p.is_lean)?.length??'-';
+  // AI record — from et_picks_history, non-manual picks only
+  const aiRec={w:0,l:0};
+  (JSON.parse(localStorage.getItem('et_picks_history')||'[]')).forEach(slate=>{
+    (slate.picks||[]).filter(p=>!p.is_manual&&!p.is_lean&&['W','L'].includes(p.result)).forEach(p=>{p.result==='W'?aiRec.w++:aiRec.l++;});
+  });
+  const aiTot=aiRec.w+aiRec.l;
+  const aiEl=$('stE');
+  aiEl.textContent=aiTot>0?`${aiRec.w}-${aiRec.l}`:'-';
+  aiEl.className='stat-val '+(aiRec.w>aiRec.l?'g':aiRec.w<aiRec.l?'r':'a');
+  // Manual record — from et_manual_bets
+  const manual=JSON.parse(localStorage.getItem('et_manual_bets')||'[]');
+  const mr={w:0,l:0};manual.filter(p=>['W','L'].includes(p.result)).forEach(p=>p.result==='W'?mr.w++:mr.l++);
+  const mrTot=mr.w+mr.l;
+  const mrEl=$('stS');
+  mrEl.textContent=mrTot>0?`${mr.w}-${mr.l}`:'-';
+  mrEl.className='stat-val '+(mr.w>mr.l?'g':mr.w<mr.l?'r':'a');
+  // P&L — manual bets only
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
-  const ov=rec.overall||{w:0,l:0,p:0};const tot=ov.w+ov.l+ov.p;
-  document.querySelectorAll('.stat-lbl').forEach((el,i)=>{const lblMap=['TODAY','RECORD','HIT RATE','P&L'];if(lblMap[i])el.textContent=lblMap[i]});
-  $('stG').textContent=todayPicksData?.picks?.length??'-';
-  $('stE').textContent=tot>0?`${ov.w}-${ov.l}`:'-';
-  $('stS').textContent=tot>0?`${Math.round(ov.w/tot*100)}%`:'-';
+  const ov=rec.overall||{};
   const pl=ov.profit;const pending=ov.pending;const plEl=$('stI');
   if(pl!=null){const v=Math.abs(pl).toFixed(2);plEl.textContent=(pl>=0?'+$':'-$')+v;plEl.className='stat-val '+(pl>0?'g':pl<0?'r':'a')}
   else if(pending!=null){plEl.textContent='$'+pending.toFixed(2)+' LIVE';plEl.className='stat-val a';}
