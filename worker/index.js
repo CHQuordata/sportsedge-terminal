@@ -340,7 +340,7 @@ function gradePickFromScore(pick, games) {
   }
 
   // ML: "Team ML (-150)" or "Team (-150)" with 3-digit odds
-  const mlM = pt.match(/^(.+?)\s+(?:ML\s*)?[(+-]?(\d{3,})/i);
+  const mlM = pt.match(/^(.+?)\s+(?:ML\s*)?\(?[+-]?(\d{3,})/i);
   if (mlM) {
     const toks = mlM[1].trim().toLowerCase().split(/\s+/).filter(t => t.length >= 3);
     const isHome = toks.some(t => game.home_team.toLowerCase().includes(t));
@@ -417,6 +417,9 @@ async function getPinnacleOdds(env, sportId) {
 
   return result;
 }
+
+// Named exports for unit testing
+export { gradePickFromScore, computeSignalPerformance };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
