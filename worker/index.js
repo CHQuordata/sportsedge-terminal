@@ -2,6 +2,14 @@ const ALLOWED_ORIGIN = 'https://chquordata.github.io';
 const PINNACLE_MMA_SPORT = 7;
 const PINNACLE_TENNIS_SPORT = 33;
 const CRON_SPORTS = ['basketball_nba', 'icehockey_nhl', 'baseball_mlb'];
+const PINNACLE_SPORT_IDS = {
+  basketball_nba: 4,
+  icehockey_nhl: 19,
+  baseball_mlb: 3,
+  american_football_nfl: 15,
+  tennis: 33,
+  mma: 7,
+};
 
 export default {
   async fetch(request, env) {
@@ -19,6 +27,14 @@ export default {
       }
       if (path === '/pinnacle/tennis') {
         const data = await getPinnacleOdds(env, PINNACLE_TENNIS_SPORT);
+        return jsonResponse(data);
+      }
+      if (path === '/pinnacle/odds') {
+        const sp = url.searchParams.get('sport');
+        const key = sp?.startsWith('tennis_') ? 'tennis' : sp;
+        const sportId = PINNACLE_SPORT_IDS[key];
+        if (!sportId) return jsonResponse({ error: 'Unknown sport' }, 400);
+        const data = await getPinnacleOdds(env, sportId);
         return jsonResponse(data);
       }
       if (path === '/health') {
@@ -393,24 +409,28 @@ async function getPinnacleOdds(env, sportId) {
     league.events?.forEach(ev => {
       const fix = eventMap.get(ev.id);
       if (!fix) return;
-      const ml = ev.periods?.find(p => p.number === 0)?.moneyline;
-      if (!ml?.home || !ml?.away) return;
+      const period = ev.periods?.find(p => p.number === 0);
+      if (!period) return;
+      const ml = period.moneyline;
+      const spread = period.spreads?.[0];
+      const total = period.totals?.[0];
+      const markets = [];
+      if (ml?.home && ml?.away) {
+        markets.push({ key: 'h2h', outcomes: [{ name: fix.home, price: ml.home }, { name: fix.away, price: ml.away }] });
+      }
+      if (spread?.hdp !== undefined && spread.home && spread.away) {
+        markets.push({ key: 'spreads', outcomes: [{ name: fix.home, price: spread.home, point: -spread.hdp }, { name: fix.away, price: spread.away, point: spread.hdp }] });
+      }
+      if (total?.points !== undefined && total.over && total.under) {
+        markets.push({ key: 'totals', outcomes: [{ name: 'Over', price: total.over, point: total.points }, { name: 'Under', price: total.under, point: total.points }] });
+      }
+      if (!markets.length) return;
       result.push({
         id: `pinnacle_${ev.id}`,
         home_team: fix.home,
         away_team: fix.away,
         commence_time: fix.starts,
-        bookmakers: [{
-          key: 'pinnacle',
-          title: 'Pinnacle',
-          markets: [{
-            key: 'h2h',
-            outcomes: [
-              { name: fix.home, price: ml.home },
-              { name: fix.away, price: ml.away },
-            ]
-          }]
-        }]
+        bookmakers: [{ key: 'pinnacle', title: 'Pinnacle', markets }]
       });
     });
   });

@@ -621,6 +621,32 @@ async function oddsFetch(sk,force=false){
   const rem=r.headers.get('x-requests-remaining');if(rem!=null){_oddsEverOk=true;$('apiCalls').textContent=`${parseInt(rem).toLocaleString()} calls left`;$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   const data=await r.json();_oddsCache.set(sk,{data,ts:Date.now()});return data;}catch(e){return cached?.data||[]}}
 
+async function injectPinnacleOdds(){
+  if(!WORKER_URL)return;
+  const spMap={basketball_nba:'nba',icehockey_nhl:'nhl',baseball_mlb:'mlb',american_football_nfl:'nfl'};
+  await Promise.allSettled(Object.keys(spMap).map(async sk=>{
+    try{
+      const r=await fetch(`${WORKER_URL}/pinnacle/odds?sport=${sk}`,{signal:AbortSignal.timeout(6000)});
+      if(!r.ok)return;
+      const pg=await r.json();if(!Array.isArray(pg))return;
+      const gSp=spMap[sk];
+      pg.forEach(po=>{
+        const ph=po.home_team.toLowerCase().split(' ').pop();
+        const pa=po.away_team.toLowerCase().split(' ').pop();
+        const pt=new Date(po.commence_time).getTime();
+        const g=allG.find(x=>x.sp===gSp&&x.odds&&
+          (x.hm.nm.toLowerCase().includes(ph)||x.hm.ab.toLowerCase()===ph)&&
+          (x.aw.nm.toLowerCase().includes(pa)||x.aw.ab.toLowerCase()===pa)&&
+          Math.abs(x.tm.getTime()-pt)<4*60*60*1000);
+        if(!g)return;
+        g.odds.bookmakers=g.odds.bookmakers.filter(b=>b.key!=='pinnacle');
+        const bk=po.bookmakers.find(b=>b.key==='pinnacle');
+        if(bk)g.odds.bookmakers.push(bk);
+      });
+    }catch(_){}
+  }));
+}
+
 // ══════════════════════════════
 // ── MAIN REFRESH
 // ══════════════════════════════
@@ -777,6 +803,7 @@ async function refreshAll(forceOdds=false){
         hm:{nm:o.home_team,ab:o.home_team.split(' ').pop(),id:null,rec:'',sc:null},
         tm:new Date(o.commence_time),st:'pre',stD:'',ven:'',bc:'',odds:o,inj:{aw:[],hm:[]},eOdds:null,ha:0,isTeam:false});
     });
+    await injectPinnacleOdds();
     allE=detectEdges(allG.filter(g=>g.odds));
   }
 
