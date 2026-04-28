@@ -2077,7 +2077,8 @@ function toggleSC(){$('scOverlay').classList.toggle('vis')}
 // ══════════════════════════════════════════════════
 // ── AI PICKS ENGINE
 // ══════════════════════════════════════════════════
-let CLAUDE_KEY=localStorage.getItem('et_claude_key')||'',cView='slate',selPickIdx=-1,isGenerating=false,todayPicksData=null,cDateFilter='today';
+let CLAUDE_KEY=localStorage.getItem('et_claude_key')||'',cView='slate',selPickIdx=-1,isGenerating=false,genStatus='',todayPicksData=null,cDateFilter='today';
+function _setGenStatus(s){genStatus=s;document.querySelectorAll('.gen-btn').forEach(b=>{if(b.disabled)b.textContent=s});}
 let BANKROLL=parseFloat(localStorage.getItem('bankroll'))||0;
 const aiAnalysisCache=new Map();
 const gamePicksCache=new Map();
@@ -2164,7 +2165,7 @@ function renderPicksLeaderboard(){
     if(!CLAUDE_KEY){
       el.innerHTML='<div class="pick-gen-state"><div style="font-size:32px;opacity:.2">🤖</div><div style="font-size:12px;letter-spacing:1px;color:var(--t2);margin-top:8px">AI PICKS ENGINE</div><div style="font-size:11px;color:var(--t4);margin-top:8px;max-width:280px;line-height:1.7">Connect your Claude API key to enable AI pick generation.</div><button class="gen-btn" style="margin-top:20px" onclick="showPicksSetup()">CONNECT AI KEY →</button></div>';
     }else{
-      el.innerHTML=`<div class="pick-gen-state"><div style="font-size:32px;opacity:.2">⚡</div><div style="font-size:12px;letter-spacing:1px;color:var(--t2);margin-top:8px">READY TO ANALYZE</div><div style="font-size:11px;color:var(--t4);margin-top:8px;max-width:280px;line-height:1.7">AI grades yesterday, updates its rules, then generates today's slate picks from live data.</div><button class="gen-btn${isGenerating?' pulse':''}" style="margin-top:20px;font-size:13px;padding:12px 20px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING SLATE...':'GENERATE TODAY\'S PICKS ⚡'}</button></div>`;
+      el.innerHTML=`<div class="pick-gen-state"><div style="font-size:32px;opacity:.2">⚡</div><div style="font-size:12px;letter-spacing:1px;color:var(--t2);margin-top:8px">READY TO ANALYZE</div><div style="font-size:11px;color:var(--t4);margin-top:8px;max-width:280px;line-height:1.7">AI grades yesterday, updates its rules, then generates today's slate picks from live data.</div><button class="gen-btn${isGenerating?' pulse':''}" style="margin-top:20px;font-size:13px;padding:12px 20px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?(genStatus||'ANALYZING SLATE...'):'GENERATE TODAY\'S PICKS ⚡'}</button></div>`;
     }
     return;
   }
@@ -2172,7 +2173,7 @@ function renderPicksLeaderboard(){
   const leans=todayPicksData.leans||[];
   const graded=cConfFilter==='all'?allGraded:cConfFilter==='picked'?allGraded:allGraded.filter(p=>p.confidence===cConfFilter);
   // On mobile, show a compact regenerate button at top of picks list
-  const mobRegen=window.innerWidth<=768?`<div style="padding:8px 12px;border-bottom:1px solid var(--bdr)"><button class="gen-btn${isGenerating?' pulse':''}" style="width:100%;font-size:12px;padding:10px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING...':'↻ REGENERATE PICKS'}</button></div>`:'';
+  const mobRegen=window.innerWidth<=768?`<div style="padding:8px 12px;border-bottom:1px solid var(--bdr)"><button class="gen-btn${isGenerating?' pulse':''}" style="width:100%;font-size:12px;padding:10px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?(genStatus||'ANALYZING...'):'↻ REGENERATE PICKS'}</button></div>`:'';
   let h=mobRegen+`<div class="sport-group-hdr">⚡ PICKS (${graded.length}${cConfFilter!=='all'?' · '+cConfFilter:''})</div>`;
   graded.forEach((p,i)=>{
     const res=p.result;const sp=p.sport;
@@ -2275,7 +2276,7 @@ function renderPicksOverview(){
     if(!CLAUDE_KEY){
       el.innerHTML=`${myBetsHtml}<div class="pick-gen-state" style="${gs}"><div style="font-size:36px;opacity:.2">🤖</div><div style="font-size:13px;letter-spacing:1px;color:var(--t2)">AI PICKS ENGINE</div><div style="font-size:10px;color:var(--t4);margin-top:8px;max-width:300px;line-height:1.7">Self-learning daily picks generator. Grades yesterday's picks, updates its own rules, generates today's slate with full analysis. Memory persists in your browser.</div><button class="gen-btn" style="margin-top:20px" onclick="showPicksSetup()">CONNECT AI KEY →</button></div>`;
     }else{
-      el.innerHTML=`${myBetsHtml}<div class="pick-gen-state" style="${gs}"><div style="font-size:36px;opacity:.2">⚡</div><div style="font-size:13px;letter-spacing:1px;color:var(--t2)">READY TO ANALYZE</div><div style="font-size:10px;color:var(--t4);margin-top:8px;max-width:300px;line-height:1.7">AI will grade yesterday's picks, update its learned rules, then generate today's slate based on live odds + ESPN data.</div><button class="gen-btn${isGenerating?' pulse':''}" style="margin-top:20px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING SLATE...':'GENERATE TODAY\'S PICKS ⚡'}</button></div>`;
+      el.innerHTML=`${myBetsHtml}<div class="pick-gen-state" style="${gs}"><div style="font-size:36px;opacity:.2">⚡</div><div style="font-size:13px;letter-spacing:1px;color:var(--t2)">READY TO ANALYZE</div><div style="font-size:10px;color:var(--t4);margin-top:8px;max-width:300px;line-height:1.7">AI will grade yesterday's picks, update its learned rules, then generate today's slate based on live odds + ESPN data.</div><button class="gen-btn${isGenerating?' pulse':''}" style="margin-top:20px" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?(genStatus||'ANALYZING SLATE...'):'GENERATE TODAY\'S PICKS ⚡'}</button></div>`;
     }
     return;
   }
@@ -2321,7 +2322,7 @@ function renderPicksOverview(){
   h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>LEARNED RULES (${rules.length})</div>`;
   rules.forEach((r,i)=>{h+=`<div class="rule-item"><span class="rule-num">${i+1}.</span>${r.replace(/^\d+\.\s*/,'')}</div>`});
   h+='</div>';
-  h+=`<div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="gen-btn${isGenerating?' pulse':''}" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?'ANALYZING...':'↻ REGENERATE PICKS'}</button><button onclick="showLogBetModal()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--cyn);background:var(--bg2);border:1px solid var(--cyn);border-radius:4px;cursor:pointer">+ LOG BET</button><button onclick="resetLearnedRules()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--t3);background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer">RESET RULES</button></div>`;
+  h+=`<div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap"><button class="gen-btn${isGenerating?' pulse':''}" onclick="generatePicks()" ${isGenerating?'disabled':''}>${isGenerating?(genStatus||'ANALYZING...'):'↻ REGENERATE PICKS'}</button><button onclick="showLogBetModal()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--cyn);background:var(--bg2);border:1px solid var(--cyn);border-radius:4px;cursor:pointer">+ LOG BET</button><button onclick="resetLearnedRules()" style="padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--t3);background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;cursor:pointer">RESET RULES</button></div>`;
   el.innerHTML=h;el.scrollTop=0;
 }
 
@@ -3238,13 +3239,14 @@ async function generatePicks(force=false){
   if(!force&&todayPicksData?.picks?.length){
     if(!confirm('Today\'s picks already generated. Regenerate and overwrite?'))return;
   }
-  isGenerating=true;renderPicksLeaderboard();renderPicksOverview();
-  await new Promise(r=>setTimeout(r,50)); // yield so browser paints loading state before heavy work
+  isGenerating=true;_setGenStatus('STARTING...');renderPicksLeaderboard();renderPicksOverview();
+  await new Promise(r=>setTimeout(r,50));
   try{
-    // Sync from KV + fetch completed scores in parallel before doing anything else
+    _setGenStatus('SYNCING DATA...');
     const [,scoresResult]=await Promise.allSettled([syncFromKV(),fetchCompletedScores()]);
     const completed=scoresResult.status==='fulfilled'?scoresResult.value:[];
     if(completed.length)autoGradeFromScores(completed);
+    _setGenStatus('FETCHING STATS...');
     await prefetchStatsForPicks();
     // Phase 1 — Tennis + NBA signal analysis in parallel
     const _todayStr=new Date().toDateString();
@@ -3260,6 +3262,7 @@ async function generatePicks(force=false){
       const r=localStorage.getItem(k);if(r)out+=`LEARNED RULES (${sport} — apply these first, highest priority):\n${r}\n\n`;
       return out;
     };
+    _setGenStatus('ANALYZING SLATE...');
     const [tennisResult,nbaResult,mlbResult,nhlResult]=await Promise.allSettled([
       _hasTennis?runTennisAnalysis(_mkRules('et_learned_rules_tennis','tennis')+buildGamesContext(true,g=>g.cat==='tennis')):Promise.resolve(null),
       _hasNBA?runNBAAnalysis(_mkRules('et_learned_rules_nba','NBA')+buildGamesContext(true,g=>g.cat==='nba')):Promise.resolve(null),
@@ -3270,6 +3273,7 @@ async function generatePicks(force=false){
     const nbaAnalysis=nbaResult.status==='fulfilled'?nbaResult.value:null;
     const mlbAnalysis=mlbResult.status==='fulfilled'?mlbResult.value:null;
     const nhlAnalysis=nhlResult.status==='fulfilled'?nhlResult.value:null;
+    _setGenStatus('GENERATING PICKS...');
     // Phase 2 — Main picks call
     const gamesCtx=buildGamesContext(true); // full slate — tennis included for parlay context
     const yPicks=getYesterdayPicks();
