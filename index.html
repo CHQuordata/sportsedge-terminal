@@ -2878,7 +2878,7 @@ async function runNHLAnalysis(nhlCtx){
   if(!CLAUDE_KEY||!nhlCtx)return null;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
+      method:'POST',signal:AbortSignal.timeout(90000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:3000,system:buildNHLAnalysisPrompt(),messages:[{role:'user',content:nhlCtx+'\n\nScore every available signal for each NHL game. Tally votes. Derive ML and total conclusions from tallies. Output raw JSON only — start with { immediately.'}]})
     });
@@ -2935,7 +2935,7 @@ async function runMLBAnalysis(mlbCtx){
   if(!CLAUDE_KEY||!mlbCtx)return null;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
+      method:'POST',signal:AbortSignal.timeout(90000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:3000,system:buildMLBAnalysisPrompt(),messages:[{role:'user',content:mlbCtx+'\n\nScore every available signal for each MLB game. Tally votes. Derive ML and total conclusions from tallies. Output raw JSON only — start with { immediately.'}]})
     });
@@ -3005,7 +3005,7 @@ async function runNBAAnalysis(nbaCtx){
   if(!CLAUDE_KEY||!nbaCtx)return null;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
+      method:'POST',signal:AbortSignal.timeout(90000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:3000,system:buildNBAAnalysisPrompt(),messages:[{role:'user',content:nbaCtx+'\n\nScore every available signal for each NBA game. Tally votes. Derive spread and total conclusions from tallies. Output raw JSON only — start with { immediately.'}]})
     });
@@ -3119,7 +3119,7 @@ async function runTennisAnalysis(tennisCtx){
   if(!CLAUDE_KEY||!tennisCtx)return null;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
+      method:'POST',signal:AbortSignal.timeout(90000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:4000,system:buildTennisAnalysisPrompt(),messages:[{role:'user',content:tennisCtx+'\n\nEvaluate each match across 5 dimensions (SERVE, RETURN, FORM, PHYSICAL, MARKET). Each dimension produces exactly one vote. Tally dimension votes. Apply vehicle override from tournament form. Evaluate alt lines and first set. Output raw JSON only — start with { immediately.'}]})
     });
@@ -3280,7 +3280,7 @@ async function generatePicks(force=false){
     const rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;
     const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
+      method:'POST',signal:AbortSignal.timeout(120000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:8000,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,tennisAnalysis,nbaAnalysis,mlbAnalysis,nhlAnalysis)}]})
     });
@@ -3451,7 +3451,7 @@ async function aiAnalyzeGame(gid){
   const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
   const bySp=rec.by_sport?.[g.cat];
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:AbortSignal.timeout(60000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:1024,
         system:`You are a sharp sports betting analyst acting as a second opinion on algo-generated picks. ALL data provided in the user message (records, odds, stats, line moves) is live current-season data pulled directly from ESPN and sportsbooks — treat it as ground truth. NEVER question, caveat, or second-guess the provided records or stats based on your training data; your training cutoff means you do not know this season's standings. If the game is marked as a PLAYOFF GAME, apply playoff-specific reasoning only — seeding is irrelevant, load management does not exist, ignore pace and rest signals that apply in regular season. Your job: validate, challenge, or add nuance to algo picks using only the numbers given. Agree with specific reasons, flag what the algo missed, or flip the pick if the data warrants it. Be concise, cite actual numbers. CONFIDENCE RULE: Only assign a confidence score if it is 2.5 or higher — if your honest score for a pick is below 2.5, do not include that pick in your output at all. If MISSING DATA is flagged in the input, explicitly state what data would change your analysis and reduce your overall confidence score accordingly. INJURY POLICY: Injury data is context only — NEVER reduce confidence or challenge a pick solely due to injury. Injury is already priced into the market line. For tennis specifically, if a match is on the slate both players are healthy enough to compete — never cite injury absence as a data gap or confidence reducer for tennis. NHL POLICY: SH% is high-variance noise — never cite it as an offensive edge. Real NHL edges are PP%/PK% gaps, GAA, GF/G. NBA POLICY: Season-average PPG/FG% are already priced in. Net rating is NOT provided separately — the L10 margin in the context IS the net rating equivalent and is the primary defensive efficiency signal. Never flag net rating as missing if L10 margin data is present. Real edges: L10 margin divergence ≥4pts, fatigue (B2B/3-in-4), pace mismatch ≥4 poss/48. TENNIS POLICY: Seeds and season W-L records are noise. True signals in order: RetWon% ≥42%, BPconv% gap, 2ndWon% <50% vulnerability, surface win%, days rest gap ≥2, BPsave% gap.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
