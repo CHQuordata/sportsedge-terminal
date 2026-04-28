@@ -2468,9 +2468,9 @@ function buildGamesContext(todayOnly=false,gameFilter=null){
   return ctx;
 }
 
-function getYesterdayPicks(){
+function getYesterdayPicks(daysBack=1){
   const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
-  const cutoff=Date.now()-3*24*60*60*1000;
+  const cutoff=Date.now()-daysBack*24*60*60*1000;
   const today=new Date().toISOString().split('T')[0];
   const graded=[];
   history.forEach(slate=>{
@@ -3276,7 +3276,7 @@ async function generatePicks(force=false){
     _setGenStatus('GENERATING PICKS...');
     // Phase 2 — Main picks call
     const gamesCtx=buildGamesContext(true); // full slate — tennis included for parlay context
-    const yPicks=getYesterdayPicks();
+    const yPicks=getYesterdayPicks(3);
     const rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;
     const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
