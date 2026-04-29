@@ -18,7 +18,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .sport-tab:hover{color:var(--t2);background:var(--bg3)}.sport-tab.active{color:var(--grn);background:var(--grn-bg);border-color:var(--grn-bdr)}
 .topbar-sp{flex:1}
 .api-st{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--t4)}
-.api-dot{width:6px;height:6px;border-radius:50%;background:var(--red)}.api-dot.ok{background:var(--grn)}
+.api-dot{width:6px;height:6px;border-radius:50%;background:var(--red)}.api-dot.ok{background:var(--grn)}.api-dot.warn{background:var(--amb);box-shadow:0 0 4px var(--amb)}.api-dot.exhausted{background:var(--red);box-shadow:0 0 6px var(--red);animation:pulse 1.5s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .tb-btn{padding:4px 8px;font-family:var(--mono);font-size:10px;color:var(--t3);background:var(--bg2);border:1px solid var(--bdr);border-radius:3px;cursor:pointer;transition:.15s}.tb-btn:hover{color:var(--t1);border-color:var(--bdr2)}.tb-btn.sharp-on{color:var(--grn);background:var(--grn-bg);border-color:var(--grn-bdr)}
 .kbd{display:inline-block;padding:1px 4px;font-size:8px;font-family:var(--mono);color:var(--t4);background:var(--bg0);border:1px solid var(--bdr);border-radius:2px;margin-left:3px}
 .main{display:grid;grid-template-columns:minmax(240px,320px) 1fr minmax(220px,300px);height:calc(100vh - 68px)}
@@ -629,7 +629,7 @@ async function init(){
   const RULES_V='v5';if(localStorage.getItem('et_rules_version')!==RULES_V){localStorage.removeItem('et_learned_rules');localStorage.setItem('et_rules_version',RULES_V)}
   if(AK){$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   if(CLAUDE_KEY){$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY'}
-  if(TN_API_KEY){$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY'}
+  if(TN_API_KEY){$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY';_tnRenderRate()}
   if(BANKROLL>0){const btn=$('bankrollBtn');if(btn)btn.textContent='$'+BANKROLL.toLocaleString()}
   await refreshAll()}
 function showSetup(){$('setupModal').style.display='flex';$('apiKeyInput').focus()}
@@ -683,7 +683,15 @@ async function injectPinnacleOdds(){
 // ── MAIN REFRESH
 // ══════════════════════════════
 async function refreshAll(forceOdds=false){
-  $('slateList').innerHTML=Array(6).fill('<div class="loading-row"><div class="skel" style="width:70%"></div><div class="skel" style="width:50%"></div><div class="skel" style="width:40%"></div></div>').join('');
+  // Skeleton loading state — only when in slate view. The picks view uses
+  // the same #slateList element, so blowing it away with skeletons strands
+  // the user's picks behind a loading mask that never resolves (because
+  // applyFilters early-returns when cView==='picks'). When in picks view
+  // we leave the existing picks render intact and rely on the
+  // renderPicksLeaderboard() call at the end of refreshAll to update.
+  if(cView!=='picks'){
+    $('slateList').innerHTML=Array(6).fill('<div class="loading-row"><div class="skel" style="width:70%"></div><div class="skel" style="width:50%"></div><div class="skel" style="width:40%"></div></div>').join('');
+  }
   const _prevSnap=JSON.parse(localStorage.getItem('ln_snap')||'{}');
   const _openSnap=JSON.parse(localStorage.getItem('ln_open')||'{}');
   allG=[];allE=[];tennisForm=new Map();
@@ -857,7 +865,13 @@ async function refreshAll(forceOdds=false){
   {const snap={};const openUpd={..._openSnap};allG.forEach(g=>{if(!g.odds?.bookmakers?.length)return;const bk=g.odds.bookmakers[0];const{sp,to,ml}=xMkts(bk);const curSp=sp?.outcomes?.find(o=>o.point<0)?.point??null;const curTo=to?.outcomes?.find(o=>o.name==='Over')?.point??null;snap[g.id]={sp:curSp,to:curTo,ml:ml?.outcomes?.map(o=>({n:o.name,pr:o.price}))||[],ts:Date.now()};if(!openUpd[g.id]&&(curSp!=null||ml?.outcomes?.length))openUpd[g.id]={sp:curSp,to:curTo,ml:ml?.outcomes?.map(o=>({n:o.name,pr:o.price}))||[],ts:Date.now()}});localStorage.setItem('ln_snap',JSON.stringify(snap));localStorage.setItem('ln_open',JSON.stringify(openUpd))}
   // Compute line movement vs previous snap + vs opening line
   allG.forEach(g=>{if(!g.odds?.bookmakers?.length)return;const{sp,to,ml}=xMkts(g.odds.bookmakers[0]);const curSp=sp?.outcomes?.find(o=>o.point<0)?.point??null;const curTo=to?.outcomes?.find(o=>o.name==='Over')?.point??null;const prev=_prevSnap[g.id];const open=_openSnap[g.id];const spMv=curSp!=null&&prev?.sp!=null?parseFloat((curSp-prev.sp).toFixed(1)):null;const toMv=curTo!=null&&prev?.to!=null?parseFloat((curTo-prev.to).toFixed(1)):null;const spOpen=curSp!=null&&open?.sp!=null&&open.sp!==curSp?parseFloat((curSp-open.sp).toFixed(1)):null;const toOpen=curTo!=null&&open?.to!=null&&open.to!==curTo?parseFloat((curTo-open.to).toFixed(1)):null;const _mli=pr=>pr>0?100/(pr+100):Math.abs(pr)/(Math.abs(pr)+100);const curMlOs=ml?.outcomes||[];const curFavO=curMlOs.length?curMlOs.reduce((a,b)=>_mli(a.price)>_mli(b.price)?a:b):null;const curFavImp=curFavO?parseFloat((_mli(curFavO.price)*100).toFixed(1)):null;const prevMlO=curFavO&&prev?.ml?.find(o=>o.n===curFavO.name);const openMlO=curFavO&&open?.ml?.find(o=>o.n===curFavO.name);const mlMv=curFavImp!=null&&prevMlO?parseFloat((curFavImp-_mli(prevMlO.pr)*100).toFixed(1)):null;const _mlRaw=curFavImp!=null&&openMlO?parseFloat((curFavImp-_mli(openMlO.pr)*100).toFixed(1)):null;const mlOpen=_mlRaw!=null&&Math.abs(_mlRaw)>=2?_mlRaw:null;if(spMv||toMv||spOpen||toOpen||mlOpen||(mlMv&&Math.abs(mlMv)>=2))g.lineMove={spMv,toMv,prevSp:prev?.sp,prevTo:prev?.to,spOpen,toOpen,openSp:open?.sp,openTo:open?.to,mlMv,mlOpen,mlFav:curFavO?.name,mlFavImp:curFavImp,openMlImp:openMlO?parseFloat((_mli(openMlO.pr)*100).toFixed(1)):null,ts:prev?.ts}});
-  applyFilters();updateStats();updateEdges();renderTracked();$('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
+  // Re-render the active view. applyFilters early-returns when cView==='picks',
+  // so we explicitly call renderPicksLeaderboard in that case to refresh the
+  // picks list with any new edge/odds context the scan brought in.
+  applyFilters();
+  if(cView==='picks')renderPicksLeaderboard();
+  _updateConfFilterAvailability();
+  updateStats();updateEdges();renderTracked();$('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
   if(AK){const ages=[..._oddsCache.values()].map(c=>Date.now()-c.ts);const minAge=ages.length?Math.min(...ages):null;const el=$('oddsCacheAge');if(el&&minAge!=null)el.textContent=minAge<60000?'odds: live':`odds: ${Math.round(minAge/60000)}m ago`}
 }
 
@@ -907,7 +921,7 @@ function setDateFilter(f){cDateFilter=f;['today','tomorrow','all'].forEach(k=>{c
           const g=cands.reduce((best,cur)=>Math.abs(cur.tm.getTime()-oTime)<Math.abs(best.tm.getTime()-oTime)?cur:best);
           g.odds=o;
         });
-      })).then(()=>{allE=detectEdges(allG.filter(g=>g.odds));applyFilters();updateStats();updateEdges();renderTracked()});
+      })).then(()=>{allE=detectEdges(allG.filter(g=>g.odds));applyFilters();if(cView==='picks')renderPicksLeaderboard();updateStats();updateEdges();renderTracked()});
     }
   }
 }
@@ -938,9 +952,29 @@ function getGameAiConf(g){
   return best?.conf||null;
 }
 function setConfFilter(f){
+  // HIGH/MED/PICKED filters require AI picks to filter against. If picks
+  // haven't been generated yet, fall back to ALL silently rather than
+  // leaving the filter "active but inert" (which used to confuse users
+  // into thinking the slate was already filtered when it wasn't).
+  _loadTodayPicks();
+  if(f!=='all'&&!todayPicksData?.picks?.length){
+    console.warn('[FILTER]',f,'requested but no AI picks loaded — falling back to ALL. Generate picks first.');
+    f='all';
+  }
   cConfFilter=f;
   ['all','HIGH','MEDIUM','picked'].forEach(k=>{const el=$(k==='all'?'cfAll':k==='HIGH'?'cfHigh':k==='MEDIUM'?'cfMed':'cfPicked');if(el)el.classList.toggle('active',k===f)});
   if(cView==='picks')renderPicksLeaderboard();else applyFilters();
+}
+// Update conf-filter button visual state — call this after picks are loaded
+// or generated so the user sees which filters are actually usable.
+function _updateConfFilterAvailability(){
+  _loadTodayPicks();
+  const haspicks=!!todayPicksData?.picks?.length;
+  ['cfHigh','cfMed','cfPicked'].forEach(id=>{
+    const el=$(id);if(!el)return;
+    if(haspicks){el.style.opacity='';el.style.cursor='';el.title=''}
+    else{el.style.opacity='0.4';el.style.cursor='not-allowed';el.title='Generate AI picks first to enable confidence filtering'}
+  });
 }
 function applyFilters(){if(cView==='picks')return;_loadTodayPicks();let g=cSport==='all'?[...allG]:cSport==='tennis'?allG.filter(g=>g.cat==='tennis'):allG.filter(g=>g.cat===cSport);if(cDateFilter!=='all'){const ref=new Date();if(cDateFilter==='tomorrow')ref.setDate(ref.getDate()+1);const ds=ref.toDateString();g=g.filter(x=>x.tm.toDateString()===ds)}
 // Strip tennis/MMA with no major US book odds — not bettable on FD/DK/BetMGM/Caesars
@@ -1422,14 +1456,68 @@ function showTNSetup(){$('tnModal').style.display='flex';if(TN_API_KEY)$('tnKeyI
 function connectTN(){const k=$('tnKeyInput').value.trim();if(!k)return;TN_API_KEY=k;localStorage.setItem('tn_api_key',k);$('tnModal').style.display='none';$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY';if(selIdx>=0&&selIdx<fG.length&&fG[selIdx]?.cat==='tennis')selGame(selIdx)}
 const TN_HOST='tennis-api-atp-wta-itf.p.rapidapi.com';
 function tnHdr(){return{'X-RapidAPI-Key':TN_API_KEY,'X-RapidAPI-Host':TN_HOST}}
-async function fetchTNFixtures(tour){if(!TN_API_KEY)return null;const ck='fix:'+tour;const cached=_tnFixCache.get(ck);if(cached&&Date.now()-cached.ts<3*3600000)return cached.data;const mkDate=off=>{const d=new Date();d.setDate(d.getDate()+off);return d.toISOString().split('T')[0]};const dates=[mkDate(0),mkDate(-1),mkDate(1)];try{const all=[];await Promise.all(dates.map(async date=>{let page=1,hasNext=true;while(hasNext&&page<=2){const r=await fetch(`https://${TN_HOST}/tennis/v2/${tour}/fixtures/${date}?filter=PlayerGroup:singles&pageSize=100&pageNo=${page}`,{headers:tnHdr(),signal:AbortSignal.timeout(8000)});if(!r.ok)break;const d=await r.json();const items=Array.isArray(d)?d:d.data||[];all.push(...items);hasNext=!!(d.hasNextPage);page++}}));if(all.length){_tnFixCache.set(ck,{data:all,ts:Date.now()});return all}return null}catch(e){return null}}
+// ── RapidAPI rate-limit tracking ──────────────────────────────────────────────
+// RapidAPI returns rate-limit info in response headers. We read it after every
+// successful TN fetch and surface the running quota in the topbar TN button so
+// the user can see when they're approaching exhaustion BEFORE picks silently
+// degrade to Sackmann fallback. Persists across page reloads via localStorage.
+const _tnRate={
+  remaining:null,limit:null,resetAt:null,
+  perSecRemaining:null,perSecLimit:null,
+  lastSeen:0,// epoch ms of last header read
+};
+try{const _saved=JSON.parse(localStorage.getItem('et_tn_rate')||'null');if(_saved){Object.assign(_tnRate,_saved)}}catch(_){}
+function _tnReadRate(headers){
+  if(!headers)return;
+  // RapidAPI exposes rate-limit info under several header names depending on
+  // the underlying provider's plan tier. Read all known variants.
+  const _h=k=>{try{return headers.get?.(k)??headers[k]??null}catch(_){return null}};
+  const lim=parseInt(_h('x-ratelimit-requests-limit')||_h('X-RateLimit-Requests-Limit')||_h('x-ratelimit-limit')||0);
+  const rem=parseInt(_h('x-ratelimit-requests-remaining')??_h('X-RateLimit-Requests-Remaining')??_h('x-ratelimit-remaining')??NaN);
+  const rst=parseInt(_h('x-ratelimit-requests-reset')||_h('X-RateLimit-Requests-Reset')||0);
+  const psLim=parseInt(_h('x-per-second-ratelimit-limit')||_h('X-Per-Second-RateLimit-Limit')||0);
+  const psRem=parseInt(_h('x-per-second-ratelimit-remaining')??_h('X-Per-Second-RateLimit-Remaining')??NaN);
+  let changed=false;
+  if(!isNaN(rem)){_tnRate.remaining=rem;changed=true}
+  if(lim>0){_tnRate.limit=lim;changed=true}
+  if(rst>0){_tnRate.resetAt=Date.now()+rst*1000;changed=true}
+  if(!isNaN(psRem)){_tnRate.perSecRemaining=psRem;changed=true}
+  if(psLim>0){_tnRate.perSecLimit=psLim;changed=true}
+  if(changed){_tnRate.lastSeen=Date.now();
+    try{localStorage.setItem('et_tn_rate',JSON.stringify(_tnRate))}catch(_){}
+    _tnRenderRate();
+  }
+}
+function _tnRenderRate(){
+  const el=$('tnSt'),dot=$('tnDot');if(!el)return;
+  if(!TN_API_KEY){el.textContent='TN API';return}
+  const rem=_tnRate.remaining,lim=_tnRate.limit;
+  if(rem==null){el.textContent='TN READY';return}
+  const pct=lim>0?(rem/lim)*100:100;
+  el.textContent=`TN ${rem.toLocaleString()}${lim>0?'/'+lim.toLocaleString():''}`;
+  // Visual warning when running low
+  if(dot){
+    dot.classList.remove('warn','exhausted');
+    if(rem===0||(lim>0&&pct<5)){dot.classList.add('exhausted');el.textContent+=' ⚠ EXHAUSTED'}
+    else if(lim>0&&pct<15){dot.classList.add('warn');el.textContent+=' ⚠ LOW'}
+  }
+}
+// Wrap fetch to auto-capture rate-limit headers from any TN-host call.
+// Caller passes the full URL; we route through native fetch and tap the
+// response headers before returning the response unmodified.
+async function _tnFetch(url,opts){
+  const r=await fetch(url,opts);
+  try{_tnReadRate(r.headers)}catch(_){}
+  return r;
+}
+async function fetchTNFixtures(tour){if(!TN_API_KEY)return null;const ck='fix:'+tour;const cached=_tnFixCache.get(ck);if(cached&&Date.now()-cached.ts<3*3600000)return cached.data;const mkDate=off=>{const d=new Date();d.setDate(d.getDate()+off);return d.toISOString().split('T')[0]};const dates=[mkDate(0),mkDate(-1),mkDate(1)];try{const all=[];await Promise.all(dates.map(async date=>{let page=1,hasNext=true;while(hasNext&&page<=2){const r=await _tnFetch(`https://${TN_HOST}/tennis/v2/${tour}/fixtures/${date}?filter=PlayerGroup:singles&pageSize=100&pageNo=${page}`,{headers:tnHdr(),signal:AbortSignal.timeout(8000)});if(!r.ok)break;const d=await r.json();const items=Array.isArray(d)?d:d.data||[];all.push(...items);hasNext=!!(d.hasNextPage);page++}}));if(all.length){_tnFixCache.set(ck,{data:all,ts:Date.now()});return all}return null}catch(e){return null}}
 async function getTNPlayerId(tour,nm){const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   // Try multiple surname candidates to handle compound surnames (e.g. "Osorio Serrano")
   const cands=tnSurnameCands(nm,norm);
   const nmatch=(a,b)=>cands.some(c=>norm(a).includes(c))||norm(a).includes(norm(b.split(' ').pop()));
   const fix=await fetchTNFixtures(tour);if(fix?.length){for(const f of fix){const pairs=[[f.player1?.name||f.player1?.fullName||f.player1?.shortName||'',f.player1Id??f.player1?.id??f.player1?.playerId],[f.player2?.name||f.player2?.fullName||f.player2?.shortName||'',f.player2Id??f.player2?.id??f.player2?.playerId],[f.homePlayer?.name||f.homePlayer?.fullName||'',f.homePlayer?.id??f.homePlayerId],[f.awayPlayer?.name||f.awayPlayer?.fullName||'',f.awayPlayer?.id??f.awayPlayerId]];for(const[pnm,pid]of pairs){if(pid!=null&&cands.some(c=>norm(pnm).includes(c)))return pid}}}
   // Try each candidate surname as a search term, return first hit
-  for(const cand of cands){try{const sr=await fetch(`https://${TN_HOST}/tennis/v2/search?search=${encodeURIComponent(cand)}`,{headers:tnHdr(),signal:AbortSignal.timeout(8000)});if(sr.ok){const sd=await sr.json();const arr=Array.isArray(sd)?sd:sd.data||sd.results||sd.players||[];for(const item of arr){const itype=(item.type||item.category||'').toLowerCase();if(itype&&itype!=='player'&&!itype.includes('player'))continue;const inm=norm(item.name||item.fullName||item.displayName||'');const iid=item.id??item.playerId;if(iid!=null&&cands.some(c=>inm.includes(c)))return iid}}}catch(e){}}
+  for(const cand of cands){try{const sr=await _tnFetch(`https://${TN_HOST}/tennis/v2/search?search=${encodeURIComponent(cand)}`,{headers:tnHdr(),signal:AbortSignal.timeout(8000)});if(sr.ok){const sd=await sr.json();const arr=Array.isArray(sd)?sd:sd.data||sd.results||sd.players||[];for(const item of arr){const itype=(item.type||item.category||'').toLowerCase();if(itype&&itype!=='player'&&!itype.includes('player'))continue;const inm=norm(item.name||item.fullName||item.displayName||'');const iid=item.id??item.playerId;if(iid!=null&&cands.some(c=>inm.includes(c)))return iid}}}catch(e){}}
   return null}
 // TN-API player data cache — surface records and match stats DO update during
 // active tournaments (matches added daily, percentages shift). The previous
@@ -1458,9 +1546,9 @@ async function fetchTNPlayerData(tour,pid){
   try{
     const base=`https://${TN_HOST}/tennis/v2/${tour}`;const h=tnHdr();
     const[profile,stats,surface]=await Promise.all([
-      fetch(`${base}/player/profile/${pid}?include=form`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
-      fetch(`${base}/player/match-stats/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
-      fetch(`${base}/player/surface-summary/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null)
+      _tnFetch(`${base}/player/profile/${pid}?include=form`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      _tnFetch(`${base}/player/match-stats/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      _tnFetch(`${base}/player/surface-summary/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null)
     ]);
     const d={profile:parseD(profile),stats:parseD(stats),surface:parseD(surface),_pid:pid,_tour:tour,
       _fetched:Date.now(),_ttl:_TN_TTL_DEFAULT};
@@ -2344,7 +2432,7 @@ function saveLoggedBet(){
   localStorage.setItem('et_manual_bets',JSON.stringify(manual.slice(0,200)));
   if(['W','L','P'].includes(result))updateCumulativeRecord();
   renderDashboardStats();
-  renderPicksLeaderboard();renderPicksOverview();
+  renderPicksLeaderboard();renderPicksOverview();_updateConfFilterAvailability();
   $('logBetModal').style.display='none';
   $('lbPick').value='';$('lbWager').value='';$('lbPayout').value='';
 }
@@ -2388,7 +2476,7 @@ function switchToPicksView(){
   else todayPicksData=null;
   updateCumulativeRecord();
   renderDashboardStats();
-  renderPicksLeaderboard();renderPicksOverview();
+  renderPicksLeaderboard();renderPicksOverview();_updateConfFilterAvailability();
 }
 
 function renderPicksLeaderboard(){
