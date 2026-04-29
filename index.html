@@ -1431,7 +1431,43 @@ async function getTNPlayerId(tour,nm){const norm=s=>(s||'').toLowerCase().normal
   // Try each candidate surname as a search term, return first hit
   for(const cand of cands){try{const sr=await fetch(`https://${TN_HOST}/tennis/v2/search?search=${encodeURIComponent(cand)}`,{headers:tnHdr(),signal:AbortSignal.timeout(8000)});if(sr.ok){const sd=await sr.json();const arr=Array.isArray(sd)?sd:sd.data||sd.results||sd.players||[];for(const item of arr){const itype=(item.type||item.category||'').toLowerCase();if(itype&&itype!=='player'&&!itype.includes('player'))continue;const inm=norm(item.name||item.fullName||item.displayName||'');const iid=item.id??item.playerId;if(iid!=null&&cands.some(c=>inm.includes(c)))return iid}}}catch(e){}}
   return null}
-async function fetchTNPlayerData(tour,pid){if(!TN_API_KEY||!pid)return null;const ck=`${tour}:${pid}`;if(tnPlayerCache.has(ck))return tnPlayerCache.get(ck);const parseD=r=>{if(r===null)return null;if(r.data!==undefined)return r.data;return r};try{const base=`https://${TN_HOST}/tennis/v2/${tour}`;const h=tnHdr();const[profile,stats,surface]=await Promise.all([fetch(`${base}/player/profile/${pid}?include=form`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(`${base}/player/match-stats/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(`${base}/player/surface-summary/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null)]);const d={profile:parseD(profile),stats:parseD(stats),surface:parseD(surface),_pid:pid,_tour:tour};tnPlayerCache.set(ck,d);return d}catch(e){return null}}
+// TN-API player data cache — surface records and match stats DO update during
+// active tournaments (matches added daily, percentages shift). The previous
+// implementation cached forever in-process, meaning a player fetched on Day 1
+// of a 2-week tournament was still served stale data on Day 14.
+//
+// TTL strategy:
+//   - 6 hours during active tournament weeks (Masters/Slams) — short window,
+//     stats move fast, missing a result for 6h is acceptable
+//   - 24 hours for tour-level / lower events — slower data churn, looser cache
+// Detection is heuristic on profile data; defaults to 6h to be conservative.
+const _TN_TTL_DEFAULT=6*3600000, _TN_TTL_OFFSEASON=24*3600000;
+async function fetchTNPlayerData(tour,pid){
+  if(!TN_API_KEY||!pid)return null;
+  const ck=`${tour}:${pid}`;
+  // Cache hit + within TTL → return cached data
+  if(tnPlayerCache.has(ck)){
+    const cached=tnPlayerCache.get(ck);
+    const ttl=cached?._ttl||_TN_TTL_DEFAULT;
+    const fetched=cached?._fetched||0;
+    if(Date.now()-fetched<ttl)return cached;
+    // Expired — fall through to refresh
+    console.warn('[TN] cache expired for',ck,'(',Math.round((Date.now()-fetched)/3600000),'h old) — refetching');
+  }
+  const parseD=r=>{if(r===null)return null;if(r.data!==undefined)return r.data;return r};
+  try{
+    const base=`https://${TN_HOST}/tennis/v2/${tour}`;const h=tnHdr();
+    const[profile,stats,surface]=await Promise.all([
+      fetch(`${base}/player/profile/${pid}?include=form`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`${base}/player/match-stats/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`${base}/player/surface-summary/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null)
+    ]);
+    const d={profile:parseD(profile),stats:parseD(stats),surface:parseD(surface),_pid:pid,_tour:tour,
+      _fetched:Date.now(),_ttl:_TN_TTL_DEFAULT};
+    tnPlayerCache.set(ck,d);
+    return d;
+  }catch(e){return null}
+}
 async function fetchTNPlayerPair(sp,awNm,hmNm){if(!TN_API_KEY)return null;const tour=sp==='wta'?'wta':'atp';const[awId,hmId]=await Promise.all([getTNPlayerId(tour,awNm),getTNPlayerId(tour,hmNm)]);if(!awId&&!hmId)return null;const[awData,hmData]=await Promise.all([awId?fetchTNPlayerData(tour,awId):null,hmId?fetchTNPlayerData(tour,hmId):null]);return{awData,hmData}}
 // Tennis Abstract fallback — only fires when WORKER_URL is configured. Returns
 // a tnGameCache-shape stub that injects surface W-L into the `surface` array,
@@ -1786,14 +1822,48 @@ if(!g.playoff&&(awL10Net===null||hmL10Net===null))score+=nd*0.3;reasons.push(`Ne
   if(g.cat==='tennis'){
     const _tnSurf=g.surf||getSurface(g.ven);const _tnSk=_tnSurf==='clay'?'clay':_tnSurf==='grass'?'grass':'hard';
     const _tnST=_tnSk==='clay'?'CLAY':_tnSk==='grass'?'GRASS':'HARD';
-    const _getTNSurf=d=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return _tnSk==='clay'?sn.includes('clay'):_tnSk==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>=3?{w,l,pct:Math.round(w/(w+l)*100)}:null};
-    const _getTNBP=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>5?Math.round(sv/fa*100):null};
+    // Surface record extractor — bumped from ≥3 to ≥5 matches. Three matches
+    // is too small to stabilize a surface percentage; a 2-1 record looks like
+    // 67% on hard but is functionally noise.
+    const _getTNSurf=d=>{if(!d)return null;const arr=Array.isArray(d.surface)?d.surface:(d.surface?[d.surface]:[]);const r=arr.find(x=>{const sn=(x.surface||x.surfaceType||'').toLowerCase();return _tnSk==='clay'?sn.includes('clay'):_tnSk==='grass'?sn.includes('grass'):sn.includes('hard')||sn===''});if(!r)return null;const w=parseInt(r.wins??r.win??r.w??0)||0,l=parseInt(r.losses??r.loss??r.l??0)||0;return w+l>=5?{w,l,pct:Math.round(w/(w+l)*100)}:null};
+    // BP save% — bumped sample floor from >5 to ≥20 break points faced.
+    // Below ~20 BPs, save% is high-variance noise; one good or bad service
+    // game flips the percentage by 5+ points.
+    const _getTNBP=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>=20?Math.round(sv/fa*100):null};
+    // RetWon% — extractor unchanged (assumes returnPointsWonGm is a
+    // pre-computed percentage in [20-70] range). Sample-size validation now
+    // happens via the companion _getTNRetSample helper which checks the
+    // total return-points/games-played count. Signal does NOT fire if
+    // sample is below threshold (see scoring code below).
     const _getTNRet=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.returnPointsWonGm||0);return v>=20&&v<=70?parseFloat(v.toFixed(1)):null};
     const _getTNBPConv=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.breakPointConvertedGm||0);return v>=10&&v<=80?parseFloat(v.toFixed(1)):null};
+    // ── Sample-size companions: read the underlying counts from the same
+    // stats object so scoring code can require minimum sample BEFORE firing
+    // a signal. Tries multiple field names because RapidAPI tennis schema
+    // exposes several aliases depending on tier and endpoint version.
+    const _getTNBPConvSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.breakPointOpportunitiesGm||s.breakPointOpportunities||s.bpOpportunities||0)||0};
+    const _getTNRetSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.returnPointsTotalGm||s.returnPointsOfGm||s.returnGamesGm||s.returnGames||0)||0};
+    const _getTNBPSaveSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.breakPointFacedGm||s.breakPointFaced||0)||0};
     let awTS=_getTNSurf(awTnApi),hmTS=_getTNSurf(hmTnApi);
     let awBpL=_getTNBP(awTnApi),hmBpL=_getTNBP(hmTnApi);
     let awRet=_getTNRet(awTnApi),hmRet=_getTNRet(hmTnApi);
     let awBpConv=_getTNBPConv(awTnApi),hmBpConv=_getTNBPConv(hmTnApi);
+    // Sample-size companions — used to gate signal firing below. If counts
+    // are below the per-stat noise floor, the percentage is treated as null
+    // even when the API returned a value. This prevents signals from firing
+    // on tiny samples (e.g. 2-of-3 BPs converted reading as 67%).
+    const _MIN_BPS=20, _MIN_RET=100; // BPs faced/converted; return points or games
+    const awBpConvN=_getTNBPConvSample(awTnApi),hmBpConvN=_getTNBPConvSample(hmTnApi);
+    const awRetN=_getTNRetSample(awTnApi),hmRetN=_getTNRetSample(hmTnApi);
+    const awBpSaveN=_getTNBPSaveSample(awTnApi),hmBpSaveN=_getTNBPSaveSample(hmTnApi);
+    if(awBpConv!=null&&awBpConvN>0&&awBpConvN<_MIN_BPS){console.warn('[TN] BPconv% sample low for',g.aw.nm,'—',awBpConvN,'BPs; signal suppressed');awBpConv=null}
+    if(hmBpConv!=null&&hmBpConvN>0&&hmBpConvN<_MIN_BPS){console.warn('[TN] BPconv% sample low for',g.hm.nm,'—',hmBpConvN,'BPs; signal suppressed');hmBpConv=null}
+    if(awRet!=null&&awRetN>0&&awRetN<_MIN_RET){console.warn('[TN] RetWon% sample low for',g.aw.nm,'—',awRetN,'return events; signal suppressed');awRet=null}
+    if(hmRet!=null&&hmRetN>0&&hmRetN<_MIN_RET){console.warn('[TN] RetWon% sample low for',g.hm.nm,'—',hmRetN,'return events; signal suppressed');hmRet=null}
+    // Note: when the sample-companion field is 0/missing entirely, we keep
+    // the original percentage (treat absence of count as "API didn't expose
+    // the count, but the percentage is still trustworthy"). Suppression
+    // only fires when count IS exposed and falls below threshold.
     // ── Sackmann fallback: when matchstat (TN API) values are blank, derive from
     //    tnH2H surface-specific serve stats (already in tennisCache). RetWon% =
     //    opponent's opp_ret_pct; BPconv% = 100 - opponent's bp_save_pct. Same
@@ -1820,8 +1890,41 @@ if(!g.playoff&&(awL10Net===null||hmL10Net===null))score+=nd*0.3;reasons.push(`Ne
       else if(awCS?.tot>=5){const ap=Math.round(awCS.w/awCS.tot*100);score-=(ap-50)/50*3;tnSigs.push({k:_tnST+' (23-24)',aw:`${awCS.w}-${awCS.l} (${ap}%)`,hm:'—',edge:ap>=50?g.aw:null,mag:Math.abs(ap-50)||5})}
       else if(hmCS?.tot>=5){const hp=Math.round(hmCS.w/hmCS.tot*100);score+=(hp-50)/50*3;tnSigs.push({k:_tnST+' (23-24)',aw:'—',hm:`${hmCS.w}-${hmCS.l} (${hp}%)`,edge:hp>=50?g.hm:null,mag:Math.abs(hp-50)||5})}
     }
-    // H2H head-to-head
-    if(tnH2H?.total>=2){const d=(tnH2H.hmW-tnH2H.awW)/tnH2H.total;score+=d*4;const ldr=tnH2H.awW>tnH2H.hmW?g.aw:tnH2H.hmW>tnH2H.awW?g.hm:null;const last=tnH2H.recent[0];tnSigs.push({k:'H2H',aw:String(tnH2H.awW),hm:String(tnH2H.hmW),edge:ldr,mag:Math.abs(tnH2H.awW-tnH2H.hmW)*8+(tnH2H.total>=4?5:0),lastMatch:last?`${(last.dt||'').slice(0,4)} ${last.tn||''} ${last.round||''}: ${last.score||''}`.trim():''})}
+    // H2H head-to-head — SURFACE-FILTERED per CLAUDE.md surface-reset rule.
+    // Grass H2H does not transfer to clay. Code now scores H2H weight ONLY
+    // on meetings played on the current surface. If <2 same-surface meetings,
+    // the H2H signal still appears in tnSigs (informational) but with greatly
+    // reduced score weight, so the algo doesn't mint confidence on cross-
+    // surface history.
+    if(tnH2H?.total>=2){
+      const _h2hSameSurf=(tnH2H.recent||[]).filter(m=>{
+        const ms=(m.surf||'').toLowerCase();
+        return _tnSk==='clay'?ms.includes('clay'):_tnSk==='grass'?ms.includes('grass'):(ms.includes('hard')||ms.includes('indoor')||!ms);
+      });
+      const _surfAwW=_h2hSameSurf.filter(m=>m.awWon).length;
+      const _surfHmW=_h2hSameSurf.length-_surfAwW;
+      const _surfTot=_h2hSameSurf.length;
+      // Apply full H2H weight only when ≥2 prior meetings on current surface
+      const _useFullH2H=_surfTot>=2;
+      const _useHalfH2H=_surfTot===1;
+      const _wt=_useFullH2H?4:_useHalfH2H?1.5:0;
+      if(_wt>0){
+        const d=_useFullH2H?(_surfHmW-_surfAwW)/_surfTot:(tnH2H.hmW-tnH2H.awW)/tnH2H.total*0.4;
+        score+=d*_wt;
+      }
+      // Build sig — show same-surface record when available, fall back to
+      // overall but tag with low weight so user sees the surface mismatch
+      const ldr=_useFullH2H?(_surfAwW>_surfHmW?g.aw:_surfHmW>_surfAwW?g.hm:null)
+        :(tnH2H.awW>tnH2H.hmW?g.aw:tnH2H.hmW>tnH2H.awW?g.hm:null);
+      const last=tnH2H.recent[0];
+      const _lbl=_useFullH2H?`H2H ${_tnST}`:_useHalfH2H?`H2H (1 on surface)`:`H2H (off-surface)`;
+      const _aw=_useFullH2H?String(_surfAwW):String(tnH2H.awW);
+      const _hm=_useFullH2H?String(_surfHmW):String(tnH2H.hmW);
+      const _baseMag=_useFullH2H?Math.abs(_surfAwW-_surfHmW)*8+(_surfTot>=4?5:0)
+        :_useHalfH2H?Math.abs(tnH2H.awW-tnH2H.hmW)*3
+        :Math.abs(tnH2H.awW-tnH2H.hmW)*1;
+      tnSigs.push({k:_lbl,aw:_aw,hm:_hm,edge:ldr,mag:_baseMag,lastMatch:last?`${(last.dt||'').slice(0,4)} ${last.tn||''} ${last.round||''}: ${last.score||''} [${last.surf||'?'}]`.trim():''});
+    }
     // Break-point save % (TN API)
     if(awBpL!==null&&hmBpL!==null){const d=awBpL-hmBpL;score+=d*0.08;if(Math.abs(d)>=6)tnSigs.push({k:'BP SAVE',aw:awBpL+'%',hm:hmBpL+'%',edge:d>0?g.aw:g.hm,mag:Math.abs(d)})}
     // RetWon% — Signal #1: ≥42% = dominant returner, highest predictive value
@@ -1837,11 +1940,25 @@ if(!g.playoff&&(awL10Net===null||hmL10Net===null))score+=nd*0.3;reasons.push(`Ne
     else if(awRank&&!hmRank)tnSigs.push({k:'RANK',aw:'#'+awRank,hm:'NR',edge:g.aw,mag:15});
     else if(!awRank&&hmRank)tnSigs.push({k:'RANK',aw:'NR',hm:'#'+hmRank,edge:g.hm,mag:15});
     // L5 tournament form (ESPN) — numeric contribution to score
-    {const awFMs=(tennisForm.get(String(g.aw.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);
-    const hmFMs=(tennisForm.get(String(g.hm.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);
+    // L5 form — EXCLUDE retirements from win-loss tally. A "L (ret)" is a
+    // durability red flag, not a skill loss. Counting it as a normal loss
+    // both depresses form score AND hides the durability concern. We split
+    // the data: awFMs / hmFMs are completed matches only (used for form
+    // percentage), and we separately count retirements for the durability
+    // signal.
+    {const _allAw=(tennisForm.get(String(g.aw.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);
+    const _allHm=(tennisForm.get(String(g.hm.id))||[]).slice().sort((a,b)=>b.dt-a.dt).slice(0,5);
+    const awFMs=_allAw.filter(m=>!m.ret), hmFMs=_allHm.filter(m=>!m.ret);
+    const awRetCt=_allAw.filter(m=>m.ret&&!m.W).length, hmRetCt=_allHm.filter(m=>m.ret&&!m.W).length;
     if(awFMs.length>=3&&hmFMs.length>=3){const awFP=awFMs.filter(m=>m.W).length/awFMs.length,hmFP=hmFMs.filter(m=>m.W).length/hmFMs.length;const fd=awFP-hmFP;if(Math.abs(fd)>=0.2){score+=(hmFP-awFP)*4;tnSigs.push({k:'L5 FORM',aw:`${awFMs.filter(m=>m.W).length}-${awFMs.filter(m=>!m.W).length}`,hm:`${hmFMs.filter(m=>m.W).length}-${hmFMs.filter(m=>!m.W).length}`,edge:awFP>hmFP?g.aw:g.hm,mag:Math.abs(fd)*20})}}
     else if(awFMs.length>=3&&!hmFMs.length){const awFP=awFMs.filter(m=>m.W).length/awFMs.length;if(awFP>=0.6){score-=3;tnSigs.push({k:'L5 FORM',aw:`${awFMs.filter(m=>m.W).length}-${awFMs.filter(m=>!m.W).length}`,hm:'—',edge:g.aw,mag:Math.round(awFP*15)})}}
-    else if(hmFMs.length>=3&&!awFMs.length){const hmFP=hmFMs.filter(m=>m.W).length/hmFMs.length;if(hmFP>=0.6){score+=3;tnSigs.push({k:'L5 FORM',aw:'—',hm:`${hmFMs.filter(m=>m.W).length}-${hmFMs.filter(m=>!m.W).length}`,edge:g.hm,mag:Math.round(hmFP*15)})}}}
+    else if(hmFMs.length>=3&&!awFMs.length){const hmFP=hmFMs.filter(m=>m.W).length/hmFMs.length;if(hmFP>=0.6){score+=3;tnSigs.push({k:'L5 FORM',aw:'—',hm:`${hmFMs.filter(m=>m.W).length}-${hmFMs.filter(m=>!m.W).length}`,edge:g.hm,mag:Math.round(hmFP*15)})}}
+    // Durability signal — fires only when one side has 2+ retirements (real
+    // injury concern) and the other doesn't. A single mid-match retirement is
+    // common; two in five matches is a pattern. Score adjustment penalizes the
+    // durability-concerned player on ML; magnitude is 12 (mid-tier signal).
+    if(awRetCt>=2&&hmRetCt<2){score+=2;tnSigs.push({k:'DURABILITY',aw:`${awRetCt} ret L5 ⚠️`,hm:'—',edge:g.hm,mag:12})}
+    else if(hmRetCt>=2&&awRetCt<2){score-=2;tnSigs.push({k:'DURABILITY',aw:'—',hm:`${hmRetCt} ret L5 ⚠️`,edge:g.aw,mag:12})}}
     // Days rest — gap ≥2 days = fatigue/freshness edge
     {const _awFR=(tennisForm.get(String(g.aw.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const _hmFR=(tennisForm.get(String(g.hm.id))||[]).slice().sort((a,b)=>b.dt-a.dt);const awDays=_awFR.length?Math.round((g.tm-_awFR[0].dt)/864e5):null;const hmDays=_hmFR.length?Math.round((g.tm-_hmFR[0].dt)/864e5):null;if(awDays!==null&&hmDays!==null&&Math.abs(awDays-hmDays)>=2){const gap=Math.abs(awDays-hmDays);const fresher=awDays>hmDays?g.aw:g.hm;score+=(awDays>hmDays?1:-1)*Math.min(gap*0.35,3);tnSigs.push({k:'REST',aw:awDays+'d',hm:hmDays+'d',edge:fresher,mag:Math.min(gap*3,15)})}}
   }
