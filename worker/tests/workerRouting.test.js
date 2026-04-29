@@ -49,7 +49,7 @@ describe('Worker fetch handler', () => {
     test('includes version field', async () => {
       const res = await worker.fetch(req('GET', '/health'), mockEnv());
       const data = await res.json();
-      expect(data.version).toBe('2.0');
+      expect(data.version).toBe('2.1');
     });
   });
 

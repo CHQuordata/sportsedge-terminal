@@ -241,9 +241,28 @@ ${existingRulesBlock || '(none yet)'}
 Instructions:
 - Analyze the pick results above by sport.
 - For each sport that has graded picks: identify what's working and what isn't.
-- Preserve rules that are still supported by data. Revise rules contradicted by 3+ data points. Add new rules only when a clear pattern has sample ≥3.
-- Max 12 rules per sport, each max 20 words. Be specific — name the exact signal, condition, and outcome.
-- If no meaningful new lessons exist for a sport, return its existing rules unchanged.
+
+DECAY POLICY — apply to EVERY existing rule before considering preservation:
+- DROP any rule whose referenced signal has FEWER THAN 3 picks in the last 30 days. Stale signals that don't appear in recent data must not persist — they were either learned from a different season, a tournament that's no longer running, or a pattern the system has stopped triggering on. A rule with no current evidence is noise.
+- DROP any rule whose referenced signal has win rate ≤40% with sample ≥10 in the last 30 days. The signal is actively losing money; preserving the rule is worse than having no rule.
+- DROP any rule that depends on a player, team, or tournament-specific name that doesn't appear in any pick from the last 14 days. Roster moves, retirements, and tournament substitutions invalidate name-specific rules quickly.
+- DOWN-PROMOTE (rewrite as softer "context only" guidance, max 15 words) any rule whose signal has 41-49% WR with sample ≥10. It's not a clear edge, just a weak lean.
+
+PRESERVATION CRITERIA — a rule survives only if ALL hold:
+- Referenced signal has ≥3 picks in last 30d
+- Referenced signal has ≥50% WR (or strict policy rule from CLAUDE.md that does not depend on win rate, e.g. "never use SH%")
+- Rule is still consistent with the pick reasoning patterns in the last 7 days
+
+ADDITION CRITERIA — only add new rules when:
+- Sample ≥5 picks for the new pattern in last 30d
+- Win rate ≥55% on that pattern
+- The pattern is reproducible (not just one hot streak with the same pick)
+
+OUTPUT REQUIREMENTS:
+- Max 10 rules per sport (down from 12 — be aggressive about pruning)
+- Each rule max 20 words, name the exact signal/condition/outcome
+- It is BETTER to have 3 strong rules than 10 weak ones — if a sport has no signals meeting preservation criteria, return an empty string for that sport's rules rather than preserving stale ones
+- If a sport has 0 graded picks in the last 30d, return its existing rules unchanged (no data = can't decay)
 - Output raw JSON only. No markdown fences.
 
 Output format (all 4 sport fields required even if unchanged):
@@ -324,16 +343,76 @@ async function fetchAllCompletedScores(apiKey) {
 // ── Pick grading ──────────────────────────────────────────────────────────────
 // Matches a stored pick against completed game scores and returns W / L / P / null
 
+// Normalize a team / player name for matching. Lowercase, strip punctuation,
+// collapse whitespace, drop common league/sport suffixes.
+function _normName(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Find the unique game matching a pick's matchup string. Returns the game
+// object only when BOTH sides of the matchup map to the same game (one to
+// home, one to away). Returns null on no match OR ambiguous match (more than
+// one game contains a side). This eliminates the substring-matching false
+// positives that the old code had — e.g. "LA" matching both Lakers and
+// Clippers, or short tokens hitting multiple teams.
+//
+// AMBIGUOUS_TOKENS is a blacklist of city codes / shared prefixes that, on
+// their own, do not uniquely identify a team. Tokens NOT in this list are
+// accepted at any length (so "Sox", "Mets", "Cubs" still work) — only the
+// short ambiguous ones are filtered.
+const _AMBIG_TOKS = new Set([
+  'la','ny','sf','st','nj','tb','nb','ne','sd','gs','was','wsh','nyc','los',
+  'new','san','the','los angeles','new york'
+]);
+function findGameForPick(matchup, games) {
+  const m = _normName(matchup);
+  if (!m) return null;
+  // Split matchup into two sides on common separators
+  const parts = m.split(/\s+(?:@|vs|v)\s+|\s*,\s*|\s*\|\s*/).filter(Boolean);
+  if (parts.length < 2) {
+    // Fall back: try splitting on " at " (some MLB/NFL formats)
+    const alt = m.split(/\s+at\s+/);
+    if (alt.length === 2) parts.push(...alt);
+  }
+  if (parts.length < 2) return null;
+  const [side1, side2] = parts;
+  const _toks = s => s.split(/\s+/).filter(w => w.length >= 3 && !_AMBIG_TOKS.has(w));
+  const sideMatches = (side, team) => {
+    const t = _normName(team);
+    const sideToks = _toks(side);
+    if (sideToks.some(w => t.includes(w))) return true;
+    // Try team's last word back-referenced into side text
+    const tLast = t.split(/\s+/).pop();
+    if (tLast && tLast.length >= 3 && !_AMBIG_TOKS.has(tLast) && side.includes(tLast)) return true;
+    return false;
+  };
+  const candidates = games.filter(g => {
+    const ht = g.home_team, at = g.away_team;
+    return (sideMatches(side1, ht) && sideMatches(side2, at)) ||
+           (sideMatches(side1, at) && sideMatches(side2, ht));
+  });
+  // Strict: only return if exactly ONE game matches. Ambiguous → null →
+  // pick stays ungraded rather than getting a wrong result.
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function gradePickFromScore(pick, games) {
   const pt = pick.pick || '';
-  const matchup = (pick.matchup || '').toLowerCase();
-  const tokens = matchup.split(/[\s@,|vs.]+/).filter(t => t.length >= 3);
-
-  const game = games.find(g => {
-    const ht = g.home_team.toLowerCase(), at = g.away_team.toLowerCase();
-    return tokens.some(t => ht.includes(t) || at.includes(t));
-  });
+  const matchup = pick.matchup || '';
+  const game = findGameForPick(matchup, games);
   if (!game?.scores?.length) return null;
+
+  // Tennis routes through a dedicated grader regardless of score format —
+  // numeric-sets-won responses would otherwise fall through to team-sport
+  // logic and grade incorrectly (a 2-0 sets win is not a 2-0 ML in points).
+  if ((pick.sport || '').toLowerCase() === 'tennis') {
+    return gradeTennisPick(pick, game);
+  }
 
   const homeS = parseFloat(game.scores.find(s => s.name === game.home_team)?.score ?? 'NaN');
   const awayS = parseFloat(game.scores.find(s => s.name === game.away_team)?.score ?? 'NaN');
@@ -341,7 +420,25 @@ function gradePickFromScore(pick, games) {
 
   const ptL = pt.toLowerCase();
 
-  // Total (Over/Under)
+  // Resolve which side (home/away) of the game a pick references. Uses the
+  // same 4+ char word-matching as findGameForPick so cross-team collisions
+  // (e.g. "LA" hitting both Lakers and Clippers) cannot happen here either.
+  const pickSideIsHome = (pickStr) => {
+    const ht = _normName(game.home_team), at = _normName(game.away_team);
+    const p = _normName(pickStr);
+    const words = p.split(/\s+/).filter(w => w.length >= 3 && !_AMBIG_TOKS.has(w));
+    const inH = words.some(w => ht.includes(w));
+    const inA = words.some(w => at.includes(w));
+    if (inH && !inA) return true;
+    if (inA && !inH) return false;
+    // Fallback: check if either team's last word (3+ chars, not ambig) appears in pick
+    const hLast = ht.split(/\s+/).pop(), aLast = at.split(/\s+/).pop();
+    if (hLast && hLast.length >= 3 && !_AMBIG_TOKS.has(hLast) && p.includes(hLast)) return true;
+    if (aLast && aLast.length >= 3 && !_AMBIG_TOKS.has(aLast) && p.includes(aLast)) return false;
+    return null; // ambiguous — caller should treat as ungraded
+  };
+
+  // Total (Over/Under) — does not need home/away resolution
   if (ptL.includes('over') || ptL.includes('under')) {
     const n = parseFloat((pt.match(/(\d+\.?\d*)/) || [])[1] || 'NaN');
     if (isNaN(n)) return null;
@@ -350,14 +447,15 @@ function gradePickFromScore(pick, games) {
     return (ptL.includes('over') ? combined > n : combined < n) ? 'W' : 'L';
   }
 
-  // Spread: "Team -3.5 (-110)" or "Team +3.5 (-110)"
-  const spM = pt.match(/^(.+?)\s+([+-]\d+\.?\d*)\s*\(/);
+  // Spread: "Team -3.5 (-110)" or "Team +3.5 (-110)" or "Team +0 (-110)"
+  // Widened from old regex to also accept decimal-only spreads (e.g. ".5")
+  // and bare integers (e.g. "+0" without trailing decimal).
+  const spM = pt.match(/^(.+?)\s+([+-]?\d*\.?\d+)\s*\(/);
   if (spM) {
-    const toks = spM[1].trim().toLowerCase().split(/\s+/).filter(t => t.length >= 3);
     const spread = parseFloat(spM[2]);
-    const isHome = toks.some(t => game.home_team.toLowerCase().includes(t));
-    const isAway = !isHome && toks.some(t => game.away_team.toLowerCase().includes(t));
-    if (!isHome && !isAway) return null;
+    if (isNaN(spread)) return null;
+    const isHome = pickSideIsHome(spM[1]);
+    if (isHome === null) return null;
     const margin = (isHome ? homeS - awayS : awayS - homeS) + spread;
     if (Math.abs(margin) < 0.01) return 'P';
     return margin > 0 ? 'W' : 'L';
@@ -366,13 +464,130 @@ function gradePickFromScore(pick, games) {
   // ML: "Team ML (-150)" or "Team (-150)" with 3-digit odds
   const mlM = pt.match(/^(.+?)\s+(?:ML\s*)?\(?[+-]?(\d{3,})/i);
   if (mlM) {
-    const toks = mlM[1].trim().toLowerCase().split(/\s+/).filter(t => t.length >= 3);
-    const isHome = toks.some(t => game.home_team.toLowerCase().includes(t));
-    const isAway = !isHome && toks.some(t => game.away_team.toLowerCase().includes(t));
-    if (!isHome && !isAway) return null;
+    const isHome = pickSideIsHome(mlM[1]);
+    if (isHome === null) return null;
     const pS = isHome ? homeS : awayS, oS = isHome ? awayS : homeS;
     if (pS === oS) return 'P';
     return pS > oS ? 'W' : 'L';
+  }
+
+  return null;
+}
+
+// ── Tennis grading ────────────────────────────────────────────────────────────
+// Tennis pick formats:
+//   "Player Last ML (+144)"            → moneyline
+//   "Player Last -2.5 games (-110)"    → game spread (sum games across all sets)
+//   "UNDER 22.5 total games (-110)"    → total games O/U
+//   "Player Last -1.5 sets (+150)"     → set spread (rare)
+//
+// Odds API tennis scores come in two formats depending on event:
+//   (a) Numeric sets won:    [{name:"Carlos Alcaraz", score:"2"}, ...]
+//   (b) Per-set game counts: [{name:"Alcaraz", score:"6,4,6"}, {name:"X", score:"3,6,4"}]
+// We grade ML reliably from either format; spread/total grading requires
+// per-set game data and returns null if only set counts are available.
+
+function _parseTennisScores(game) {
+  const s1 = game.scores?.find(s => s.name === game.home_team);
+  const s2 = game.scores?.find(s => s.name === game.away_team);
+  if (!s1 || !s2) return null;
+  const raw1 = String(s1.score || '').trim(), raw2 = String(s2.score || '').trim();
+  // Per-set format requires EXPLICIT multi-set separator (space, comma, or
+  // semicolon) — never hyphen alone, since "2-1" is ambiguous (could be
+  // one-set games or a sets-won shorthand). When in doubt, fall back to the
+  // numeric sets-won path which is safer.
+  const isPerSet = /[,\s;]/.test(raw1) || /[,\s;]/.test(raw2);
+  if (isPerSet) {
+    const parseSets = s => s.split(/[,\s;]+/).filter(Boolean).map(g => {
+      // Strip any non-digit characters (e.g. tiebreak parens "7(5)" → "75",
+      // but we only need the leading game count for set-win comparison)
+      const lead = String(g).match(/^\d+/);
+      return lead ? parseInt(lead[0], 10) : null;
+    }).filter(n => n !== null && !isNaN(n));
+    const homeGames = parseSets(raw1), awayGames = parseSets(raw2);
+    if (!homeGames.length || !awayGames.length) return null;
+    const homeTotal = homeGames.reduce((a, b) => a + b, 0);
+    const awayTotal = awayGames.reduce((a, b) => a + b, 0);
+    // Sets won = sets where that side has more games (a 7-6 tiebreak set
+    // still counts as one won — leading-digit parse handles "7(5)" form)
+    const len = Math.min(homeGames.length, awayGames.length);
+    let homeSets = 0, awaySets = 0;
+    for (let i = 0; i < len; i++) {
+      if (homeGames[i] > awayGames[i]) homeSets++;
+      else if (awayGames[i] > homeGames[i]) awaySets++;
+    }
+    return { hasGameDetail: true, homeGames: homeTotal, awayGames: awayTotal, homeSets, awaySets };
+  }
+  // Numeric sets-won format. parseInt with leading-digit fallback handles
+  // edge cases like "2.0" or "  2 " gracefully.
+  const lead1 = raw1.match(/^\d+/), lead2 = raw2.match(/^\d+/);
+  if (!lead1 || !lead2) return null;
+  const n1 = parseInt(lead1[0], 10), n2 = parseInt(lead2[0], 10);
+  if (isNaN(n1) || isNaN(n2)) return null;
+  return { hasGameDetail: false, homeSets: n1, awaySets: n2 };
+}
+
+function gradeTennisPick(pick, game) {
+  const pt = pick.pick || '';
+  const ptL = pt.toLowerCase();
+  const ts = _parseTennisScores(game);
+  if (!ts) return null;
+  const homeWon = ts.homeSets > ts.awaySets;
+  const awayWon = ts.awaySets > ts.homeSets;
+  if (!homeWon && !awayWon) return null; // tied — bad data
+
+  // Total games O/U — requires per-set detail
+  if (ptL.includes('over') || ptL.includes('under')) {
+    if (!ts.hasGameDetail) return null;
+    const n = parseFloat((pt.match(/(\d+\.?\d*)/) || [])[1] || 'NaN');
+    if (isNaN(n)) return null;
+    const combined = ts.homeGames + ts.awayGames;
+    if (Math.abs(combined - n) < 0.01) return 'P';
+    return (ptL.includes('over') ? combined > n : combined < n) ? 'W' : 'L';
+  }
+
+  const pickSideIsHome = (pickStr) => {
+    const ht = _normName(game.home_team), at = _normName(game.away_team);
+    const p = _normName(pickStr);
+    const words = p.split(/\s+/).filter(w => w.length >= 4);
+    const inH = words.some(w => ht.includes(w));
+    const inA = words.some(w => at.includes(w));
+    if (inH && !inA) return true;
+    if (inA && !inH) return false;
+    return null;
+  };
+
+  // Game spread: "Player -2.5 games (-110)" — requires per-set detail
+  const spGames = pt.match(/^(.+?)\s+([+-]?\d*\.?\d+)\s+games?\s*\(/i);
+  if (spGames) {
+    if (!ts.hasGameDetail) return null;
+    const spread = parseFloat(spGames[2]);
+    if (isNaN(spread)) return null;
+    const isHome = pickSideIsHome(spGames[1]);
+    if (isHome === null) return null;
+    const margin = (isHome ? ts.homeGames - ts.awayGames : ts.awayGames - ts.homeGames) + spread;
+    if (Math.abs(margin) < 0.01) return 'P';
+    return margin > 0 ? 'W' : 'L';
+  }
+
+  // Set spread: "Player -1.5 sets (+150)" — works with sets-only data
+  const spSets = pt.match(/^(.+?)\s+([+-]?\d*\.?\d+)\s+sets?\s*\(/i);
+  if (spSets) {
+    const spread = parseFloat(spSets[2]);
+    if (isNaN(spread)) return null;
+    const isHome = pickSideIsHome(spSets[1]);
+    if (isHome === null) return null;
+    const margin = (isHome ? ts.homeSets - ts.awaySets : ts.awaySets - ts.homeSets) + spread;
+    if (Math.abs(margin) < 0.01) return 'P';
+    return margin > 0 ? 'W' : 'L';
+  }
+
+  // Tennis ML: works with any score format. "Player ML (+144)" or "Player (+144)"
+  const mlM = pt.match(/^(.+?)\s+(?:ML\s*)?\(?[+-]?(\d{3,})/i);
+  if (mlM) {
+    const isHome = pickSideIsHome(mlM[1]);
+    if (isHome === null) return null;
+    return (isHome ? homeWon : awayWon) ? 'W' : 'L';
   }
 
   return null;
