@@ -1328,7 +1328,7 @@ async function selGame(idx){
         const leaderLast=leader.split(' ').pop();
         h2hLine=awW===hmW?`H2H even ${awW}-${hmW} (${tot} meeting${tot>1?'s':''})`:`${leaderLast} leads H2H ${Math.max(awW,hmW)}-${Math.min(awW,hmW)} (${tot} meeting${tot>1?'s':''} since 2021)`;
         const surfIcon=s=>s==='Clay'?'🔴':s==='Grass'?'🟢':s==='Hard'?'🔵':'⚪';
-        h2hDetail=tnH2H.recent.map(m=>{const rShort=r=>(r||'').replace('Quarterfinal','QF').replace('Semifinal','SF').replace('Final','F').replace('Round ','R');const winner=m.awWon?g.aw.nm.split(' ').pop():g.hm.nm.split(' ').pop();return`<div style="font-size:8px;color:var(--t3);padding:1px 0">${surfIcon(m.surf)} ${m.dt.slice(0,4)} ${m.tn} ${rShort(m.round)}: <span style="color:${m.awWon?'var(--cyn)':'var(--amb)'}">${winner}</span> ${m.score}</div>`}).join('');
+        h2hDetail=tnH2H.recent.map(m=>{const rShort=r=>(r||'').replace('Quarterfinal','QF').replace('Semifinal','SF').replace('Final','F').replace('Round ','R');const winner=m.awWon?g.aw.nm.split(' ').pop():g.hm.nm.split(' ').pop();const yr=(m.dt||'').toString().slice(0,4);return`<div style="font-size:8px;color:var(--t3);padding:1px 0">${surfIcon(m.surf)} ${yr} ${m.tn||''} ${rShort(m.round)}: <span style="color:${m.awWon?'var(--cyn)':'var(--amb)'}">${winner}</span> ${m.score||''}</div>`}).join('');
       } else if(tnH2H&&tnH2H.total===0){
         h2hLine=null; // genuine first meeting
       } else {
