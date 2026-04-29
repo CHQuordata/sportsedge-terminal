@@ -1985,6 +1985,10 @@ if(!g.playoff&&(awL10Net===null||hmL10Net===null))score+=nd*0.3;reasons.push(`Ne
     if(g.cat==='nba'){if((awF3||hmF3)&&!(awF3&&hmF3)){score+=(awF3?-1:1)*2;reasons.push(`${awF3?g.aw.nm:g.hm.nm} 3-in-4 fatigue — win rate depressed, ML value shifts`)}else if((awB2B||hmB2B)&&!(awB2B&&hmB2B)){score+=(awB2B?-1:1)*1;reasons.push(`${awB2B?g.aw.nm:g.hm.nm} back-to-back — win probability impact`)}}
   // ── Tennis: pre-score all surface/H2H/serve signals BEFORE side decision ──
   const tnSigs=[];
+  // Hoisted to function scope so the post-tennis dataGap check (line ~2203)
+  // can read them without a ReferenceError. They stay null for non-tennis
+  // games and only get assigned inside the tennis block below.
+  let awTS=null,hmTS=null,awBpL=null,hmBpL=null,awRet=null,hmRet=null,awBpConv=null,hmBpConv=null;
   if(g.cat==='tennis'){
     const _tnSurf=g.surf||getSurface(g.ven);const _tnSk=_tnSurf==='clay'?'clay':_tnSurf==='grass'?'grass':'hard';
     const _tnST=_tnSk==='clay'?'CLAY':_tnSk==='grass'?'GRASS':'HARD';
@@ -2010,10 +2014,12 @@ if(!g.playoff&&(awL10Net===null||hmL10Net===null))score+=nd*0.3;reasons.push(`Ne
     const _getTNBPConvSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.breakPointOpportunitiesGm||s.breakPointOpportunities||s.bpOpportunities||0)||0};
     const _getTNRetSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.returnPointsTotalGm||s.returnPointsOfGm||s.returnGamesGm||s.returnGames||0)||0};
     const _getTNBPSaveSample=d=>{if(!d)return 0;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});return parseInt(s.breakPointFacedGm||s.breakPointFaced||0)||0};
-    let awTS=_getTNSurf(awTnApi),hmTS=_getTNSurf(hmTnApi);
-    let awBpL=_getTNBP(awTnApi),hmBpL=_getTNBP(hmTnApi);
-    let awRet=_getTNRet(awTnApi),hmRet=_getTNRet(hmTnApi);
-    let awBpConv=_getTNBPConv(awTnApi),hmBpConv=_getTNBPConv(hmTnApi);
+    // Assign to function-scope variables (declared above the tennis block) so
+    // the post-tennis dataGap detection at line ~2203 can read them.
+    awTS=_getTNSurf(awTnApi);hmTS=_getTNSurf(hmTnApi);
+    awBpL=_getTNBP(awTnApi);hmBpL=_getTNBP(hmTnApi);
+    awRet=_getTNRet(awTnApi);hmRet=_getTNRet(hmTnApi);
+    awBpConv=_getTNBPConv(awTnApi);hmBpConv=_getTNBPConv(hmTnApi);
     // Sample-size companions — used to gate signal firing below. If counts
     // are below the per-stat noise floor, the percentage is treated as null
     // even when the API returned a value. This prevents signals from firing
