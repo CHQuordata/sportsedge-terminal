@@ -41,11 +41,11 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .sec{padding:16px 20px;border-bottom:1px solid rgba(42,42,62,.5)}
 .ind{width:3px;height:12px;border-radius:1px}
 .pick-card{background:var(--grn-bg);border:1px solid var(--grn-bdr);border-radius:4px;padding:14px 16px;margin:6px 16px}
-.pick-card.medium{background:var(--amb-bg);border-color:rgba(255,171,0,.2)}.pick-card.low{background:var(--bg2);border-color:var(--bdr)}
+.pick-card.medium{background:var(--amb-bg);border-color:rgba(255,171,0,.2)}.pick-card.low{background:var(--bg2);border-color:var(--bdr)}.pick-card.review{background:var(--bg2);border-color:rgba(0,200,255,.25);border-left:3px solid var(--cyn)}
 .pick-label{font-size:10px;font-weight:600;letter-spacing:1.2px;color:var(--grn);text-transform:uppercase;margin-bottom:6px}
-.pick-card.medium .pick-label{color:var(--amb)}.pick-card.low .pick-label{color:var(--t3)}
+.pick-card.medium .pick-label{color:var(--amb)}.pick-card.low .pick-label{color:var(--t3)}.pick-card.review .pick-label{color:var(--cyn)}
 .pick-main{font-size:15px;font-weight:700;color:var(--grn);margin-bottom:4px}
-.pick-card.medium .pick-main{color:var(--amb)}.pick-card.low .pick-main{color:var(--t2)}
+.pick-card.medium .pick-main{color:var(--amb)}.pick-card.low .pick-main{color:var(--t2)}.pick-card.review .pick-main{color:var(--cyn)}
 .pick-conf{font-size:10px;font-weight:600;margin-bottom:6px}.pick-conf.high{color:var(--grn)}.pick-conf.medium{color:var(--amb)}.pick-conf.low{color:var(--t3)}
 .pick-metrics{display:flex;gap:16px;margin:8px 0;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);flex-wrap:wrap}
 .pm{display:flex;flex-direction:column;gap:2px;min-width:65px}
@@ -1125,11 +1125,11 @@ async function selGame(idx){
   }
   // Filter sub-2.5 score picks (LOW confidence) — too weak to show as cards
   // Always show a card if it has live odds attached (evData/lineRange) — score floor only applies when there's no odds data
-  const _renderPicks=picks.filter(pk=>(pk.score??0)>=2.5||pk.tnSigs?.length>0||pk.evData!=null||pk.lineRange!=null);
+  const _renderPicks=picks.filter(pk=>(pk.score??0)>=2.5||pk.tnSigs?.length>0||pk.evData!=null||pk.lineRange!=null||pk.dataGap===true);
   if(_renderPicks.length){h+=`<div class="picks-section">`;
     _renderPicks.forEach((pk,i)=>{const noOdds=!pk.evData&&!pk.lineRange;
       const hasTnData=pk.tnSigs?.length>0;
-      const cls=noOdds&&!hasTnData?' low':pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
+      const cls=pk.conf==='REVIEW'?' review':noOdds&&!hasTnData?' low':pk.conf==='HIGH'?'':pk.conf==='MEDIUM'?' medium':' low';
       const hasMetrics=!noOdds&&(pk.evData||pk.lineRange||(pk.sharp&&pk.sharp.r>0)||kellyPct(pk.conf,pk.pick,pk.evData)>0);
       const r=isFinal?gradeResult(pk,g):null;
       const rBadge=r?`<span class="pib pib-${r}" style="float:right">${r==='W'?'\u2713 WIN':r==='L'?'\u2717 LOSS':'\u25CF PUSH'}</span>`:'';  
@@ -1425,6 +1425,24 @@ async function getTNPlayerId(tour,nm){const norm=s=>(s||'').toLowerCase().normal
   return null}
 async function fetchTNPlayerData(tour,pid){if(!TN_API_KEY||!pid)return null;const ck=`${tour}:${pid}`;if(tnPlayerCache.has(ck))return tnPlayerCache.get(ck);const parseD=r=>{if(r===null)return null;if(r.data!==undefined)return r.data;return r};try{const base=`https://${TN_HOST}/tennis/v2/${tour}`;const h=tnHdr();const[profile,stats,surface]=await Promise.all([fetch(`${base}/player/profile/${pid}?include=form`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(`${base}/player/match-stats/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null),fetch(`${base}/player/surface-summary/${pid}`,{headers:h,signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null).catch(()=>null)]);const d={profile:parseD(profile),stats:parseD(stats),surface:parseD(surface),_pid:pid,_tour:tour};tnPlayerCache.set(ck,d);return d}catch(e){return null}}
 async function fetchTNPlayerPair(sp,awNm,hmNm){if(!TN_API_KEY)return null;const tour=sp==='wta'?'wta':'atp';const[awId,hmId]=await Promise.all([getTNPlayerId(tour,awNm),getTNPlayerId(tour,hmNm)]);if(!awId&&!hmId)return null;const[awData,hmData]=await Promise.all([awId?fetchTNPlayerData(tour,awId):null,hmId?fetchTNPlayerData(tour,hmId):null]);return{awData,hmData}}
+// Tennis Abstract fallback — only fires when WORKER_URL is configured. Returns
+// a tnGameCache-shape stub that injects surface W-L into the `surface` array,
+// so the same _getTNSurf extractor path picks it up. Does NOT provide
+// RetWon%/BPconv% (TA HTML doesn't expose them reliably).
+async function fetchTAPlayerStats(name){
+  if(!WORKER_URL||!name)return null;
+  try{const r=await fetch(`${WORKER_URL}/tennis/ta?name=${encodeURIComponent(name)}`,{signal:AbortSignal.timeout(10000)});
+    if(!r.ok)return null;
+    const d=await r.json();
+    if(!d?.stats)return null;
+    // Reshape into the same structure fetchTNPlayerData returns so downstream
+    // _getTNSurf works without modification: { surface: [{ surface, wins, losses }] }
+    const surface=[];
+    ['clay','hard','grass'].forEach(sk=>{const s=d.stats[sk];if(s&&(s.w>0||s.l>0))surface.push({surface:sk,wins:s.w,losses:s.l})});
+    if(!surface.length)return null;
+    return{surface,stats:[],_taSource:true};
+  }catch(e){console.warn('[TA] fetch failed for',name,e?.message||e);return null}
+}
 async function fetchTennisMatchSummary(sp,gid,awNm,hmNm,awId,hmId){try{const awL=(awNm||'').split(' ').pop().toLowerCase(),hmL=(hmNm||'').split(' ').pop().toLowerCase();const newsUrl=sp=>id=>id?`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/athletes/${id}/news?limit=10`:`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/news?limit=30`;const sig=()=>({signal:AbortSignal.timeout(7000)});const[sum,awNews,hmNews]=await Promise.all([fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${sp}/summary?event=${gid}`,sig()).then(r=>r.ok?r.json():null).catch(()=>null),fetch(newsUrl(sp)(awId),sig()).then(r=>r.ok?r.json():null).catch(()=>null),hmId&&hmId!==awId?fetch(newsUrl(sp)(hmId),sig()).then(r=>r.ok?r.json():null).catch(()=>null):Promise.resolve(null)]);const out={};if(sum){const comp=sum.header?.competitions?.[0];const art=sum.article;if(art?.story||art?.description){out.espnStory=(art.story||art.description).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();out.espnLink=art.links?.web?.href||null;}out.espnHead=art?.headline||comp?.notes?.[0]?.headline||null;}const findArt=(feed,a,b)=>(feed?.articles||[]).find(x=>{const t=((x.headline||'')+' '+(x.description||'')).toLowerCase();return a.length>2&&b.length>2&&t.includes(a)&&t.includes(b)});const art=findArt(awNews,awL,hmL)||findArt(hmNews,hmL,awL)||findArt(awNews,hmL,awL);if(art){out.newsHead=art.headline;out.newsDesc=art.description;out.newsLink=art.links?.web?.href||null;}return Object.keys(out).length?out:null}catch(e){return null}}
 function extractTennisStats(d){if(!d)return null;return{hand:d.hand?.abbreviation||null,handFull:d.hand?.displayValue||null,age:d.age||null,country:d.birthPlace?.country?.displayName||null}}
 async function fetchNBATeamStats(tid){
@@ -1712,10 +1730,26 @@ if(awL10Net===null||hmL10Net===null)score+=nd*0.3;reasons.push(`Net rating: ${b2
     const _getTNBP=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const sv=parseInt(s.breakPointSavedGm||0),fa=parseInt(s.breakPointFacedGm||0);return fa>5?Math.round(sv/fa*100):null};
     const _getTNRet=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.returnPointsWonGm||0);return v>=20&&v<=70?parseFloat(v.toFixed(1)):null};
     const _getTNBPConv=d=>{if(!d)return null;const s=Array.isArray(d.stats)?d.stats[0]:(d.stats||{});const v=parseFloat(s.breakPointConvertedGm||0);return v>=10&&v<=80?parseFloat(v.toFixed(1)):null};
-    const awTS=_getTNSurf(awTnApi),hmTS=_getTNSurf(hmTnApi);
-    const awBpL=_getTNBP(awTnApi),hmBpL=_getTNBP(hmTnApi);
-    const awRet=_getTNRet(awTnApi),hmRet=_getTNRet(hmTnApi);
-    const awBpConv=_getTNBPConv(awTnApi),hmBpConv=_getTNBPConv(hmTnApi);
+    let awTS=_getTNSurf(awTnApi),hmTS=_getTNSurf(hmTnApi);
+    let awBpL=_getTNBP(awTnApi),hmBpL=_getTNBP(hmTnApi);
+    let awRet=_getTNRet(awTnApi),hmRet=_getTNRet(hmTnApi);
+    let awBpConv=_getTNBPConv(awTnApi),hmBpConv=_getTNBPConv(hmTnApi);
+    // ── Sackmann fallback: when matchstat (TN API) values are blank, derive from
+    //    tnH2H surface-specific serve stats (already in tennisCache). RetWon% =
+    //    opponent's opp_ret_pct; BPconv% = 100 - opponent's bp_save_pct. Same
+    //    derivation used in buildGamesContext for the LLM prompt.
+    {const _awSv=tnH2H?.awServe?.[_tnSk], _hmSv=tnH2H?.hmServe?.[_tnSk];
+     if(awRet==null && _hmSv?.opp_ret_pct){const v=parseFloat(_hmSv.opp_ret_pct);if(v>=20&&v<=70)awRet=parseFloat(v.toFixed(1))}
+     if(hmRet==null && _awSv?.opp_ret_pct){const v=parseFloat(_awSv.opp_ret_pct);if(v>=20&&v<=70)hmRet=parseFloat(v.toFixed(1))}
+     if(awBpConv==null && _hmSv?.bp_save_pct){const v=100-parseFloat(_hmSv.bp_save_pct);if(v>=10&&v<=80)awBpConv=parseFloat(v.toFixed(1))}
+     if(hmBpConv==null && _awSv?.bp_save_pct){const v=100-parseFloat(_awSv.bp_save_pct);if(v>=10&&v<=80)hmBpConv=parseFloat(v.toFixed(1))}
+     if(awBpL==null && _awSv?.bp_save_pct){awBpL=Math.round(parseFloat(_awSv.bp_save_pct))}
+     if(hmBpL==null && _hmSv?.bp_save_pct){hmBpL=Math.round(parseFloat(_hmSv.bp_save_pct))}
+     // Surface W-L fallback from Sackmann tnH2H (2023-24)
+     const _awCS=tnH2H?.awSurf?.[_tnSk], _hmCS=tnH2H?.hmSurf?.[_tnSk];
+     if(!awTS && _awCS?.tot>=5){awTS={w:_awCS.w,l:_awCS.l,pct:Math.round(_awCS.w/_awCS.tot*100)}}
+     if(!hmTS && _hmCS?.tot>=5){hmTS={w:_hmCS.w,l:_hmCS.l,pct:Math.round(_hmCS.w/_hmCS.tot*100)}}
+    }
     // 2025 surface record from TN API (highest quality)
     if(awTS&&hmTS){const d=awTS.pct-hmTS.pct;score+=d*0.15;if(Math.abs(d)>=8)tnSigs.push({k:'2025 '+_tnST,aw:`${awTS.w}-${awTS.l} (${awTS.pct}%)`,hm:`${hmTS.w}-${hmTS.l} (${hmTS.pct}%)`,edge:d>0?g.aw:g.hm,mag:Math.abs(d)})}
     else if(awTS||hmTS){const d=awTS||hmTS,pl=awTS?g.aw:g.hm;score+=(awTS?-6:6);tnSigs.push({k:'2025 '+_tnST,aw:awTS?`${d.w}-${d.l} (${d.pct}%)`:'—',hm:hmTS?`${d.w}-${d.l} (${d.pct}%)`:'—',edge:pl,mag:12})}
@@ -1816,6 +1850,18 @@ if(awL10Net===null||hmL10Net===null)score+=nd*0.3;reasons.push(`Net rating: ${b2
     else if(mlO&&mlO.price>-150)reasons.push(`Reasonable juice at ${fp(mlO.price)} makes ML viable standalone or as parlay leg`);
     if(reasons.length<=1&&mag<1&&mlO)reasons.push(`Form and fatigue data not yet loaded — analysis based on season record and line pricing only. Re-analyze after odds refresh for full confidence`);
     const _tnPickBanned=g.cat==='tennis'&&TN_BAN_LIST.some(b=>[g.aw.nm,g.hm.nm].some(n=>n.toLowerCase().includes(b)));
+    // ── Tennis data-gap detection: if RetWon% AND BPconv% are still null for
+    //    BOTH players after Sackmann fallback, AND surface W-L is missing for
+    //    both, the algo is operating on rankings + market price only. Mark for
+    //    MANUAL REVIEW so it surfaces in the UI rather than getting silently
+    //    dropped under the 2.5 score floor.
+    let _tnDataGap=false;
+    if(g.cat==='tennis'&&!_tnPickBanned){
+      const _retMissing=(awRet==null&&hmRet==null);
+      const _bpcMissing=(awBpConv==null&&hmBpConv==null);
+      const _surfMissing=(!awTS&&!hmTS);
+      if((_retMissing||_bpcMissing)&&_surfMissing)_tnDataGap=true;
+    }
     if(!_tnPickBanned&&reasons.length){
       let _fPick=`${side.nm} ML${mlPrice}`,_fLabel=g.cat==='tennis'?'TENNIS ANALYSIS':'MONEYLINE ANALYSIS',_fEv=calcEV(g,'h2h',side.nm.split(' ').pop());
       if(g.cat==='tennis'&&mlO&&mlO.price<-250){
@@ -1835,9 +1881,18 @@ if(awL10Net===null||hmL10Net===null)score+=nd*0.3;reasons.push(`Net rating: ${b2
           } else reasons.unshift(`ML at ${fp(mlO.price)} is steep — check your book for game spread or total games as better vehicles`);
         }
       }
-      picks.push({label:_fLabel,pick:_fPick,conf,score:parseFloat(mag.toFixed(1)),reasoning:reasons.slice(0,5).join('. ')+'.',
+      // Data-gap picks: don't drop, route to REVIEW. Confidence becomes REVIEW
+      // (distinct from LOW/MEDIUM/HIGH) and reasoning surfaces the missing-data
+      // root cause first.
+      const _finalConf=_tnDataGap&&mag<2.5?'REVIEW':conf;
+      const _finalReasons=_tnDataGap?[
+        `INSUFFICIENT DATA — RetWon%/BPconv% blank for both players and no surface W-L on file. Algo cannot reliably score this matchup; routing to manual review.`,
+        ...reasons.slice(0,3)
+      ]:reasons.slice(0,5);
+      picks.push({label:_fLabel,pick:_fPick,conf:_finalConf,score:parseFloat(mag.toFixed(1)),reasoning:_finalReasons.join('. ')+'.',
         evData:_fEv,lineRange:null,sharp:getSharp(mlEdges),
         tnSigs:g.cat==='tennis'?[...tnSigs].sort((a,b)=>b.mag-a.mag):null,
+        dataGap:_tnDataGap||undefined,
         gradeData:{type:'ml',isHm:side===g.hm}});
     }
   }
@@ -2801,6 +2856,22 @@ async function prefetchStatsForPicks(){
               if(!pair.hmData)console.warn('[TN] matchstat blank for:',g.hm.nm);
             }else console.warn('[TN] matchstat pair missing:',g.aw.nm,'vs',g.hm.nm);
           }catch(e){console.warn('[TN] matchstat fetch failed:',g.aw.nm,'vs',g.hm.nm,e?.message||e)}
+        }
+        // ── Tennis Abstract third-tier fallback ─────────────────────────────
+        // Fires for whichever player still has no matchstat data. Only adds
+        // surface W-L (the most reliably-scrapable TA field), never overwrites
+        // matchstat data when present.
+        if(WORKER_URL){
+          const _existing=tnGameCache.get(g.id)||{};
+          const _needAw=!_existing.awData,_needHm=!_existing.hmData;
+          if(_needAw||_needHm){
+            const[awTA,hmTA]=await Promise.all([_needAw?fetchTAPlayerStats(g.aw.nm):null,_needHm?fetchTAPlayerStats(g.hm.nm):null]);
+            if(awTA||hmTA){
+              cSet(tnGameCache,g.id,{awData:_existing.awData||awTA,hmData:_existing.hmData||hmTA});
+              if(awTA)console.warn('[TA] backfilled surface stats for:',g.aw.nm);
+              if(hmTA)console.warn('[TA] backfilled surface stats for:',g.hm.nm);
+            }
+          }
         }
       }
     }catch(e){console.warn('[FETCH] outer fail',g?.aw?.nm,'vs',g?.hm?.nm,e?.message||e)}

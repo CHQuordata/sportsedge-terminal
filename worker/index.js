@@ -38,7 +38,15 @@ export default {
         return jsonResponse(data);
       }
       if (path === '/health') {
-        return jsonResponse({ status: 'ok', version: '2.0' });
+        return jsonResponse({ status: 'ok', version: '2.1' });
+      }
+      // Tennis Abstract player stats — third-tier fallback when matchstat and
+      // Sackmann are both blank. Returns parsed surface W-L when available,
+      // null on parse failure. KV-cached 24h to be polite to TA.
+      if (path === '/tennis/ta' && request.method === 'GET') {
+        const name = url.searchParams.get('name');
+        if (!name) return jsonResponse({ error: 'Missing name' }, 400);
+        return handleTennisAbstract(name, env);
       }
       // KV read: GET /kv/:key
       if (path.startsWith('/kv/') && request.method === 'GET') {
@@ -368,6 +376,72 @@ function gradePickFromScore(pick, games) {
   }
 
   return null;
+}
+
+// ── Tennis Abstract scraper ───────────────────────────────────────────────────
+// Best-effort parser. TA's HTML can change without notice — parser is
+// conservative (returns null on failure) and never throws. Successful parses
+// include surface W-L (current year) extracted from the "Match Results" view.
+
+function taSlug(name) {
+  // TA URL convention: First + Last (capitalized), no spaces, no diacritics.
+  // Compound surnames concatenated. e.g. "Carlos Alcaraz" -> "CarlosAlcaraz".
+  return (name || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z\s-]/g, '')
+    .split(/\s+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('');
+}
+
+function parseTAHtml(html) {
+  // Extract surface W-L from inline JS variables. TA stores recent stats in
+  // patterns like: var clayHist = "2024: 12-3 ..."; or in tables. This parser
+  // tries a few known patterns and returns whatever it finds. Anything missing
+  // stays undefined — caller treats as "no data".
+  const out = {};
+  const yearRow = (label, key) => {
+    const re = new RegExp(label + '[\\s\\S]{0,400}?(\\d{4})[^\\d]+(\\d+)\\s*-\\s*(\\d+)', 'i');
+    const m = html.match(re);
+    if (m) out[key] = { year: +m[1], w: +m[2], l: +m[3] };
+  };
+  yearRow('Clay', 'clay');
+  yearRow('Hard', 'hard');
+  yearRow('Grass', 'grass');
+  // Career W-L summary near top of page
+  const careerM = html.match(/Career[\s\S]{0,200}?(\d+)\s*-\s*(\d+)/i);
+  if (careerM) out.career = { w: +careerM[1], l: +careerM[2] };
+  return Object.keys(out).length ? out : null;
+}
+
+async function handleTennisAbstract(name, env) {
+  const slug = taSlug(name);
+  if (!slug) return jsonResponse({ error: 'Bad name' }, 400);
+  const cacheKey = `ta:${slug}`;
+  // KV cache — 24h. TA stats only update once daily.
+  if (env.LEARNING_STORE) {
+    try {
+      const cached = await env.LEARNING_STORE.get(cacheKey);
+      if (cached) return jsonResponse({ name: slug, cached: true, ...JSON.parse(cached) });
+    } catch (_) {}
+  }
+  try {
+    const r = await fetch(`https://www.tennisabstract.com/cgi-bin/player-classic.cgi?p=${slug}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (sportsedge-terminal)' },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return jsonResponse({ name: slug, stats: null, reason: `TA ${r.status}` });
+    const html = await r.text();
+    if (!html || html.length < 500) return jsonResponse({ name: slug, stats: null, reason: 'empty' });
+    const stats = parseTAHtml(html);
+    const payload = { name: slug, stats };
+    if (env.LEARNING_STORE && stats) {
+      try { await env.LEARNING_STORE.put(cacheKey, JSON.stringify(payload), { expirationTtl: 86400 }); } catch (_) {}
+    }
+    return jsonResponse(payload);
+  } catch (e) {
+    return jsonResponse({ name: slug, stats: null, reason: e.message || 'fetch failed' });
+  }
 }
 
 // ── Pinnacle ──────────────────────────────────────────────────────────────────
