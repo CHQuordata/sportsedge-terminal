@@ -703,24 +703,39 @@ async function oddsFetch(sk,force=false){
   const rem=r.headers.get('x-requests-remaining');if(rem!=null){_oddsEverOk=true;$('apiCalls').textContent=`${parseInt(rem).toLocaleString()} calls left`;$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   const data=await r.json();_oddsCache.set(sk,{data,ts:Date.now()});return data;}catch(e){return cached?.data||[]}}
 
-// Pinnacle worker session-level circuit breaker. If the worker returns 500
-// (typically Pinnacle creds expired/revoked or upstream API down), trip the
-// breaker so we don't keep firing requests across multiple sport keys.
-// Resets on next page load — user redeploys worker or fixes creds, refreshes.
-let _pinnacleWorkerDown=false;
-let _pinnacleLastError='';
+// Pinnacle worker session + persistent circuit breaker. Pinnacle blocks US
+// bettors so most users never have creds set. After the first failure with
+// reason "creds missing", we remember that PERMANENTLY (localStorage) so
+// every future session skips Pinnacle calls without hitting the network.
+// Other 5xx errors (creds-set-but-rejected, upstream down) only break for
+// the current session — those may recover.
+//
+// To re-enable Pinnacle later (if you set creds): from DevTools console run
+//   localStorage.removeItem('et_pinnacle_disabled')
+// then reload.
+let _pinnacleWorkerDown=localStorage.getItem('et_pinnacle_disabled')==='1';
+let _pinnacleLastError=localStorage.getItem('et_pinnacle_last_error')||'';
 async function injectPinnacleOdds(){
   if(!WORKER_URL||_pinnacleWorkerDown)return;
   const spMap={basketball_nba:'nba',icehockey_nhl:'nhl',baseball_mlb:'mlb'};
   await Promise.allSettled(Object.keys(spMap).map(async sk=>{
     try{
       const r=await fetch(`${WORKER_URL}/pinnacle/odds?sport=${sk}`,{signal:AbortSignal.timeout(6000)});
-      // Trip breaker on 500 — likely auth/upstream issue, won't recover
-      // on retry within this session. Stash error for status display.
+      // Trip breaker on 500. If the error reason indicates missing creds
+      // (user is in a Pinnacle-blocked region), persist the disable flag so
+      // we never call Pinnacle again on future sessions. For other errors
+      // (auth rejected after being set, upstream issues), session-only.
       if(r.status>=500){
         _pinnacleWorkerDown=true;
         try{const errBody=await r.json();_pinnacleLastError=errBody?.error||`Worker returned ${r.status}`}catch(_){_pinnacleLastError=`Worker returned ${r.status}`}
-        console.warn('[Pinnacle] worker error — breaker engaged for session:',_pinnacleLastError);
+        const credsMissing=/creds missing|PINNACLE_USER|PINNACLE_PWD/i.test(_pinnacleLastError);
+        if(credsMissing){
+          localStorage.setItem('et_pinnacle_disabled','1');
+          localStorage.setItem('et_pinnacle_last_error',_pinnacleLastError);
+          console.warn('[Pinnacle] disabled permanently — no Pinnacle creds set on worker. Other sharp books (Circa, BookMaker, BetOnline) cover the sharp signal. To re-enable: localStorage.removeItem("et_pinnacle_disabled") then reload.');
+        }else{
+          console.warn('[Pinnacle] worker error — breaker engaged for session:',_pinnacleLastError);
+        }
         return;
       }
       if(!r.ok)return;
