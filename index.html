@@ -4589,22 +4589,174 @@ async function aiAnalyzeGame(gid){
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:4000,
         system:`You are a sharp sports betting analyst acting as a second opinion on algo-generated picks. ALL data provided in the user message (records, odds, stats, line moves) is live current-season data pulled directly from ESPN and sportsbooks — treat it as ground truth. NEVER question, caveat, or second-guess the provided records or stats based on your training data; your training cutoff means you do not know this season's standings. If the game is marked as a PLAYOFF GAME, apply playoff-specific reasoning only — seeding is irrelevant, load management does not exist, ignore pace and rest signals that apply in regular season. Your job: validate, challenge, or add nuance to algo picks using only the numbers given. Agree with specific reasons, flag what the algo missed, or flip the pick if the data warrants it. Be concise, cite actual numbers. CONFIDENCE RULE: Only assign a confidence score if it is 2.5 or higher — if your honest score for a pick is below 2.5, do not include that pick in your output at all. If MISSING DATA is flagged in the input, explicitly state what data would change your analysis and reduce your overall confidence score accordingly. INJURY POLICY: Injury data is context only — NEVER reduce confidence or challenge a pick solely due to injury. Injury is already priced into the market line. For tennis specifically, if a match is on the slate both players are healthy enough to compete — never cite injury absence as a data gap or confidence reducer for tennis. NHL POLICY: SH% is high-variance noise — never cite it as an offensive edge. Real NHL edges are PP%/PK% gaps, GAA, GF/G. NBA POLICY: Season-average PPG/FG% are already priced in. Net rating is NOT provided separately — the L10 margin in the context IS the net rating equivalent and is the primary defensive efficiency signal. Never flag net rating as missing if L10 margin data is present. Real edges: L10 margin divergence ≥4pts, fatigue (B2B/3-in-4), pace mismatch ≥4 poss/48. TENNIS POLICY: Seeds and season W-L records are noise. True signals in order: RetWon% ≥42%, BPconv% gap, 2ndWon% <50% vulnerability, surface win%, days rest gap ≥2, BPsave% gap.${rules?'\n\nLEARNED RULES:\n'+rules:''}${bySp?(bySp.w||0)+(bySp.l||0)>0?'\n\nYour record in '+g.cat.toUpperCase()+': '+(bySp.w||0)+'-'+(bySp.l||0):'':''}`,
-        messages:[{role:'user',content:ctx+'\n\nProvide: 1) Verdict on algo pick(s) — agree/challenge/flip and why (2-3 sentences), 2) What the algo likely missed or what data would change this, 3) Final confidence (HIGH/MEDIUM/LOW) with score 1-10. Skip any pick you cannot score 2.5+.'}]})});
+        messages:[{role:'user',content:ctx+`
+
+Provide BOTH:
+
+PART 1 — Free-form analysis:
+1) Verdict on algo pick(s) — agree/challenge/flip and why (2-3 sentences)
+2) What the algo likely missed or what data would change this
+3) Final confidence (HIGH/MEDIUM/LOW) with score 1-10
+
+PART 2 — Structured output (REQUIRED, append at end after a line of three dashes "---"):
+
+\`\`\`json
+{"verdicts":[{"algo_pick":"<the algo's original pick string>","my_verdict":"AGREE|CHALLENGE|FLIP","my_pick":"<your final pick string with side+line+price>","confidence":"HIGH|MEDIUM|LOW","score":<1-10>,"reasoning":"<one sentence>"}]}
+\`\`\`
+
+Skip any pick you cannot score 2.5+. The structured block lets your verdicts be tracked over time so the system can measure whether your AI ANALYZE deep-dives are actually adding value vs. the algo alone.`}]})});
     if(!resp.ok)throw new Error('API error');
     const data=await resp.json();
     const txt=data.content[0].text;
-    const safeTxt=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Parse the trailing JSON block and save the verdicts to picks history.
+    // Free-form text (above the ---) is what the user reads; structured JSON
+    // (below) is what gets persisted + graded + tracked. Both come from the
+    // same model call so no double-cost.
+    const verdicts=_parseAIAnalyzeVerdicts(txt);
+    // Run ensemble verification (Haiku) on the verdicts so AI ANALYZE picks
+    // get the same MODEL CONFLICT detection that GENERATE PICKS gets.
+    if(verdicts.length){
+      try{await _runAIAnalyzeEnsemble(verdicts,ctx)}catch(e){console.warn('[ai-analyze] ensemble failed:',e?.message||e)}
+    }
+    // Persist to et_picks_history with source='ai_analyze' so cron grades them
+    // and they show up in CLV / calibration / signal performance like any
+    // other pick. Source flag lets us filter "AI ANALYZE only" stats later.
+    if(verdicts.length)_saveAIAnalyzeVerdicts(g,verdicts);
+    // Build the rendered analysis: free-form text + ensemble badge + saved-pick confirmation
+    const visibleText=txt.split(/\n---/)[0]||txt;
+    const safeTxt=visibleText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const existing=$('aiGameAnalysis');
     const div=existing||document.createElement('div');
     div.id='aiGameAnalysis';
     div.className='sec';
     div.style.borderLeft='3px solid var(--amb)';
     div.style.background='var(--bg0)';
-    div.innerHTML=`<div class="sec-title"><div class="ind" style="background:var(--amb)"></div>⚡ AI GAME ANALYSIS <span class="tx4">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div><div class="sc-bd"><div class="tx2" style="white-space:pre-wrap">${safeTxt}</div></div>`;
+    // Verdict + ensemble summary header
+    let vH='';
+    if(verdicts.length){
+      vH='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+      verdicts.forEach(v=>{
+        const vClr=v.my_verdict==='AGREE'?'var(--grn)':v.my_verdict==='FLIP'?'var(--red)':'var(--amb)';
+        const cClr=v.confidence==='HIGH'?'var(--grn)':v.confidence==='MEDIUM'?'var(--amb)':'var(--t3)';
+        const eBadge=v.secondary_verdict==='AGREE'?'<span style="font-size:8px;color:var(--grn);background:rgba(0,230,118,.1);padding:1px 4px;border-radius:2px;margin-left:4px">✓ HAIKU AGREES</span>':
+          v.secondary_verdict==='DISAGREE'?'<span style="font-size:8px;color:var(--red);background:rgba(255,71,87,.1);padding:1px 4px;border-radius:2px;margin-left:4px">⚠ HAIKU DISAGREES</span>':
+          v.secondary_verdict==='UNSURE'?'<span style="font-size:8px;color:var(--t3);background:var(--bg3);padding:1px 4px;border-radius:2px;margin-left:4px">◐ HAIKU UNSURE</span>':'';
+        vH+=`<div style="background:var(--bg2);border-left:3px solid ${vClr};padding:6px 10px;border-radius:3px;flex:1;min-width:240px"><div style="font-size:9px;color:${vClr};font-weight:700;letter-spacing:.5px">${v.my_verdict}${eBadge}</div><div style="font-size:11px;color:var(--t1);margin-top:2px">${v.my_pick||v.algo_pick||''}</div><div style="font-size:9px;color:${cClr};margin-top:2px">${v.confidence||'?'} · score ${v.score||'?'}</div></div>`;
+      });
+      vH+='</div><div style="font-size:9px;color:var(--t4);margin-bottom:6px">↓ verdicts saved to history · will grade overnight · source: ai_analyze</div>';
+    }
+    div.innerHTML=`<div class="sec-title"><div class="ind" style="background:var(--amb)"></div>⚡ AI GAME ANALYSIS <span class="tx4">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div><div class="sc-bd">${vH}<div class="tx2" style="white-space:pre-wrap">${safeTxt}</div></div>`;
     cSet(aiAnalysisCache,g.id,div.innerHTML,20);
     if(!existing){const panel=$('detailPanel');const firstSec=panel.querySelector('.sec,.picks-section');if(firstSec)panel.insertBefore(div,firstSec);else panel.appendChild(div)}
   }catch(e){if(btn){btn.textContent='⚡ AI ANALYZE';btn.disabled=false}return}
   if(btn){btn.textContent='✓ ANALYZED';setTimeout(()=>{if(btn){btn.textContent='⚡ RE-ANALYZE';btn.disabled=false}},2000)}
+}
+
+// Extract structured verdicts from the AI ANALYZE response. Looks for the
+// fenced JSON block we asked the model to emit. Returns [] on parse failure
+// so the analysis still renders (graceful degrade).
+function _parseAIAnalyzeVerdicts(txt){
+  if(!txt)return[];
+  // Try fenced ```json ... ``` first
+  const fence=txt.match(/```(?:json)?\s*(\{[\s\S]+?\})\s*```/);
+  let raw=fence?fence[1]:null;
+  // Fallback: any JSON-looking object after a "---" separator
+  if(!raw){const sep=txt.split(/\n---/);if(sep.length>=2){const m=sep[1].match(/(\{[\s\S]+\})/);if(m)raw=m[1]}}
+  if(!raw)return[];
+  try{const j=JSON.parse(raw);return Array.isArray(j.verdicts)?j.verdicts:[]}catch(_){return[]}
+}
+
+// Save AI ANALYZE verdicts as tracked picks under et_picks_history with
+// source='ai_analyze' so they grade overnight + show in CLV/calibration.
+// Each verdict becomes its own pick object alongside the GENERATE PICKS
+// entries; the source flag lets us filter "AI ANALYZE only" stats.
+function _saveAIAnalyzeVerdicts(g,verdicts){
+  if(!verdicts.length)return;
+  const today=new Date().toISOString().split('T')[0];
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  let slate=history.find(s=>s.date===today);
+  if(!slate){slate={date:today,picks:[]};history.unshift(slate)}
+  if(!slate.picks)slate.picks=[];
+  verdicts.forEach(v=>{
+    const pick=v.my_pick||v.algo_pick||'';
+    if(!pick)return;
+    // Avoid duplicating: if a pick with same source+pick+matchup already
+    // exists for today, replace it (RE-ANALYZE shouldn't bloat history)
+    const matchup=`${g.aw.nm} vs ${g.hm.nm}`;
+    const existing=slate.picks.findIndex(p=>p.source==='ai_analyze'&&p.pick===pick&&p.matchup===matchup);
+    const oddsM=pick.match(/\(([+-]?\d{2,4})\)/);
+    const obj={
+      source:'ai_analyze',
+      sport:g.cat,
+      matchup,
+      pick,
+      confidence:(v.confidence||'').toUpperCase(),
+      score:Number(v.score)||null,
+      reasoning:v.reasoning||'',
+      filters:[],
+      result:'?',
+      logged:new Date().toISOString(),
+      // Track the verdict type so we can later analyze: are FLIPs profitable?
+      ai_analyze_verdict:v.my_verdict,
+      // Enrichment for CLV
+      odds_api_game_id:g.odds?.id||undefined,
+      entry_odds:oddsM?parseInt(oddsM[1]):undefined,
+      entry_at:new Date().toISOString(),
+      // Ensemble result if Haiku ran
+      secondary_verdict:v.secondary_verdict||undefined,
+      secondary_note:v.secondary_note||undefined,
+      consensus:v.secondary_verdict==='AGREE'||undefined
+    };
+    if(existing>=0)slate.picks[existing]=obj;else slate.picks.push(obj);
+  });
+  localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));
+  // Sync to KV so the cron sees it tonight
+  if(WORKER_URL){
+    fetch(`${WORKER_URL}/kv/et_picks_history`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({value:localStorage.getItem('et_picks_history')}),
+      signal:AbortSignal.timeout(4000)
+    }).catch(()=>{});
+  }
+}
+
+// Haiku ensemble verifier for AI ANALYZE — same pattern as GENERATE PICKS,
+// just on a single game's verdicts. Adds ~$0.05 per AI ANALYZE click.
+async function _runAIAnalyzeEnsemble(verdicts,ctx){
+  if(!verdicts.length||!CLAUDE_KEY)return;
+  const picksList=verdicts.map((v,i)=>`${i+1}. [${v.confidence||'?'}] ${v.my_pick||v.algo_pick} (${v.my_verdict})`).join('\n');
+  const prompt=`A primary sharp betting analyst issued the verdicts below for one specific game. Your job is to flag verdicts where you significantly disagree.
+
+For each numbered verdict, output ONE of:
+- AGREE: you'd reach the same conclusion
+- DISAGREE: you would flip the verdict (other side has the edge)
+- UNSURE: insufficient data or coin flip
+
+Output STRICT JSON only:
+{"verdicts":[{"i":1,"v":"AGREE","note":"brief reason"},...]}
+
+VERDICTS:
+${picksList}
+
+GAME CONTEXT:
+${ctx.slice(0,5000)}`;
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',signal:AbortSignal.timeout(40000),
+    headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5',temperature:0,max_tokens:1000,
+      system:'You are a sharp sports betting verifier. Catch verdicts the primary analyst got wrong. Output raw JSON only.',
+      messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok)return;
+  const data=await resp.json();
+  const t=data.content?.[0]?.text||'';
+  const m=t.match(/\{[\s\S]+\}/);if(!m)return;
+  let res;try{res=JSON.parse(m[0])?.verdicts}catch(_){return}
+  if(!Array.isArray(res))return;
+  res.forEach(r=>{const i=r.i-1;if(i<0||i>=verdicts.length)return;
+    verdicts[i].secondary_verdict=r.v;
+    verdicts[i].secondary_note=(r.note||'').slice(0,140);
+  });
 }
 
 // ── PIN GATE ──────────────────────────────────────────────────────────────
