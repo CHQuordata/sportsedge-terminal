@@ -706,6 +706,8 @@ async function init(){
   if(CLAUDE_KEY){$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY'}
   if(TN_API_KEY){$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY';_tnRenderRate()}
   if(BANKROLL>0){const btn=$('bankrollBtn');if(btn)btn.textContent='$'+BANKROLL.toLocaleString()}
+  // Pull bets + rules from KV so desktop-logged bets appear on mobile (and vice versa)
+  syncFromKV();
   await refreshAll()}
 function showSetup(){$('setupModal').style.display='flex';$('apiKeyInput').focus()}
 function connectApi(){const k=$('apiKeyInput').value.trim();if(!k)return;AK=k;localStorage.setItem('odds_api_key',k);$('setupModal').style.display='none';$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED';refreshAll()}
@@ -2692,6 +2694,7 @@ function saveLoggedBet(){
   const manual=JSON.parse(localStorage.getItem('et_manual_bets')||'[]');
   manual.unshift(bet);
   localStorage.setItem('et_manual_bets',JSON.stringify(manual.slice(0,200)));
+  syncToKV(); // push to KV so other devices (mobile) see this bet immediately
   if(['W','L','P'].includes(result))updateCumulativeRecord();
   renderDashboardStats();
   renderPicksLeaderboard();renderPicksOverview();_updateConfFilterAvailability();
@@ -3161,6 +3164,7 @@ function cycleManualBetResult(encodedLogged){
   const b=bets.find(x=>x.logged===logged);
   if(b){b.result=cycle[b.result]||'?';
     localStorage.setItem('et_manual_bets',JSON.stringify(bets));
+    syncToKV(); // push updated result to KV
     updateCumulativeRecord();renderDashboardStats();renderPicksOverview();
     renderPortfolio();renderCalibration();_refreshMyBetsMobIfOpen();
   }
@@ -4174,14 +4178,32 @@ async function syncFromKV(){
   if(!WORKER_URL)return;
   try{
     const keys=['et_learned_rules','et_cumulative','et_picks_history','et_completed_games','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl','et_signal_performance'];
-    const results=await Promise.allSettled(keys.map(k=>fetch(`${WORKER_URL}/kv/${k}`,{signal:AbortSignal.timeout(4000)}).then(r=>r.ok?r.json():null)));
-    results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value?.value!=null)localStorage.setItem(keys[i],r.value.value)});
+    const allKeys=[...keys,'et_manual_bets'];
+    const results=await Promise.allSettled(allKeys.map(k=>fetch(`${WORKER_URL}/kv/${k}`,{signal:AbortSignal.timeout(4000)}).then(r=>r.ok?r.json():null)));
+    results.forEach((r,i)=>{
+      if(r.status!=='fulfilled'||r.value?.value==null)return;
+      const k=allKeys[i];
+      if(k==='et_manual_bets'){
+        // Merge remote bets with local — union by logged timestamp so bets
+        // added on either device while offline are both preserved.
+        try{
+          const remote=JSON.parse(r.value.value)||[];
+          const local=JSON.parse(localStorage.getItem('et_manual_bets')||'[]');
+          const seen=new Set(local.map(b=>b.logged));
+          const merged=[...local,...remote.filter(b=>!seen.has(b.logged))];
+          merged.sort((a,b)=>new Date(b.logged)-new Date(a.logged));
+          localStorage.setItem('et_manual_bets',JSON.stringify(merged.slice(0,200)));
+        }catch(_){}
+      }else{
+        localStorage.setItem(k,r.value.value);
+      }
+    });
   }catch(_){}
 }
 async function syncToKV(){
   if(!WORKER_URL)return;
   try{
-    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl'];
+    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl','et_manual_bets'];
     await Promise.allSettled(keys.map(k=>{const v=localStorage.getItem(k);if(!v)return Promise.resolve();return fetch(`${WORKER_URL}/kv/${k}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:v}),signal:AbortSignal.timeout(4000)})}));
   }catch(_){}
 }
