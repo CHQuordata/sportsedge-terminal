@@ -1055,18 +1055,23 @@ async function snapshotClosingOdds(env) {
       sports.push(...tennis);
     }
   } catch (_) {}
-  // Pull odds for games starting in next 4 hours (these are about to close)
+  // Pull odds for games starting in next 12 hours (these are about to close).
+  // Wider than 4h covers evening + late-night MLB/NBA + early AM tennis.
+  // Format timestamps to match what the frontend uses — ISO string truncated
+  // to seconds, NOT encoded. Encoding the colons via encodeURIComponent
+  // breaks the Odds API time filter (returns 422).
   const now = new Date();
-  const fourHr = new Date(now.getTime() + 4 * 3600 * 1000);
-  const tf = now.toISOString();
-  const tt = fourHr.toISOString();
+  const horizon = new Date(now.getTime() + 12 * 3600 * 1000);
+  const _fmt = d => d.toISOString().split('.')[0] + 'Z'; // strip millis
+  const tf = _fmt(now);
+  const tt = _fmt(horizon);
   let captured = 0;
   const breakdown = {};
   await Promise.allSettled(sports.map(async sport => {
     breakdown[sport] = { count: 0, status: null };
     try {
       const r = await fetch(
-        `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${env.ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&commenceTimeFrom=${encodeURIComponent(tf)}&commenceTimeTo=${encodeURIComponent(tt)}`,
+        `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${env.ODDS_API_KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&commenceTimeFrom=${tf}&commenceTimeTo=${tt}`,
         { signal: AbortSignal.timeout(10000) }
       );
       breakdown[sport].status = r.status;
