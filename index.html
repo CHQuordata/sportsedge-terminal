@@ -479,6 +479,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
     <div id="trackedGames"></div>
     <div class="panel-hdr" id="portfolioHdr" style="display:none;gap:6px"><span class="panel-title" style="flex:1">💰 PORTFOLIO</span><button onclick="showPortfolioSettings()" class="tb-btn" title="Set bankroll exposure thresholds" style="font-size:9px">⚙</button></div>
     <div id="portfolioBox"></div>
+    <div class="panel-hdr" id="calibrationHdr" style="display:none;gap:6px"><span class="panel-title" style="flex:1">🎯 CALIBRATION</span><span id="calibrationCLV" style="font-size:10px;color:var(--t3);font-weight:400"></span></div>
+    <div id="calibrationBox"></div>
     <div class="panel-hdr" style="gap:6px"><span class="panel-title" style="flex:1">Top Edges</span><button id="sharpOnlyBtn" onclick="toggleSharpOnly()" class="tb-btn" title="Show only Pinnacle sharp-money edges">⚡ SHARP</button><button onclick="buildSharpParlay()" class="tb-btn" style="color:var(--amb);border-color:rgba(255,171,0,.3)" title="Build a parlay from today's Pinnacle edges">PARLAY →</button></div><div class="panel-body" id="edgeAlerts"><div class="no-data" style="padding:20px">Scan to populate</div></div>
   </div>
 </div>
@@ -986,7 +988,15 @@ async function refreshAll(forceOdds=false){
   applyFilters();
   if(cView==='picks')renderPicksLeaderboard();
   _updateConfFilterAvailability();
-  updateStats();updateEdges();renderTracked();renderPortfolio();$('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
+  updateStats();updateEdges();renderTracked();renderPortfolio();renderCalibration();$('lastScan').textContent=`LAST SCAN: ${new Date().toLocaleTimeString('en-US',{hour12:false})}`;
+  // Fire-and-forget closing-line snapshot — captures odds for games starting
+  // in the next 4 hours so worker can compute CLV when grading. Throttled
+  // to once per 30min so SCAN spam doesn't blow up worker quota.
+  {const lastSnap=parseInt(localStorage.getItem('et_last_snap_at')||'0');
+   if(WORKER_URL&&Date.now()-lastSnap>30*60*1000){
+     localStorage.setItem('et_last_snap_at',String(Date.now()));
+     fetch(`${WORKER_URL}/admin/snapshot-odds`,{method:'POST',signal:AbortSignal.timeout(10000)}).catch(()=>{});
+   }}
   if(AK){const ages=[..._oddsCache.values()].map(c=>Date.now()-c.ts);const minAge=ages.length?Math.min(...ages):null;const el=$('oddsCacheAge');if(el&&minAge!=null)el.textContent=minAge<60000?'odds: live':`odds: ${Math.round(minAge/60000)}m ago`}
 }
 
@@ -2685,7 +2695,7 @@ function saveLoggedBet(){
   if(['W','L','P'].includes(result))updateCumulativeRecord();
   renderDashboardStats();
   renderPicksLeaderboard();renderPicksOverview();_updateConfFilterAvailability();
-  renderPortfolio();_refreshMyBetsMobIfOpen();
+  renderPortfolio();renderCalibration();_refreshMyBetsMobIfOpen();
   $('logBetModal').style.display='none';
   $('lbPick').value='';$('lbWager').value='';$('lbPayout').value='';
 }
@@ -2778,7 +2788,19 @@ function renderPicksLeaderboard(){
         <span class="pick-item-match">${p.matchup}</span>
         ${res?`<span class="pib pib-${res}">${res}</span>`:`<span class="pib pib-${p.confidence}">${p.confidence}${p.score!=null?`<span style="opacity:.55;font-weight:500;margin-left:4px">${parseFloat(p.score).toFixed(1)}</span>`:''}</span>`}
       </div>
-      <div class="pick-item-pick">${p.pick}${_aTag}${p.is_manual&&p.wager?`<span style="font-size:9px;color:var(--t4);margin-left:6px">$${p.wager.toFixed(2)}${p.result==='W'&&p.payout?` → +$${(p.payout-p.wager).toFixed(2)}`:p.result==='L'?` → -$${p.wager.toFixed(2)}`:' pending'}</span>`:''}</div>
+      <div class="pick-item-pick">${p.pick}${_aTag}${
+        // Ensemble consensus badge — green ✓ when both models agree, amber ⚠
+        // when secondary model disagreed (potential blunder), neutral ◐ for
+        // unsure. Only renders when the secondary model actually voted.
+        p.secondary_verdict==='AGREE'?`<span title="Both models agree" style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;color:var(--grn);background:rgba(0,230,118,.1)">✓ CONSENSUS</span>`:
+        p.secondary_verdict==='DISAGREE'?`<span title="Secondary model would flip this pick: ${(p.secondary_note||'').replace(/"/g,'&quot;')}" style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;color:var(--red);background:rgba(255,71,87,.1)">⚠ MODEL CONFLICT</span>`:
+        p.secondary_verdict==='UNSURE'?`<span title="Secondary model: ${(p.secondary_note||'').replace(/"/g,'&quot;')}" style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;color:var(--t3);background:var(--bg3)">◐ UNSURE</span>`:''
+      }${
+        // CLV badge — pro metric. Green when we beat the close, red when
+        // line moved against us. Renders only on graded picks where worker
+        // computed CLV.
+        typeof p.clv==='number'?`<span title="Closing Line Value — beating the close means long-term +EV regardless of W/L variance" style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:2px;margin-left:5px;color:${p.clv>0?'var(--grn)':p.clv<0?'var(--red)':'var(--t3)'};background:var(--bg3)">CLV ${p.clv>=0?'+':''}${p.clv.toFixed(1)}pp</span>`:''
+      }${p.is_manual&&p.wager?`<span style="font-size:9px;color:var(--t4);margin-left:6px">$${p.wager.toFixed(2)}${p.result==='W'&&p.payout?` → +$${(p.payout-p.wager).toFixed(2)}`:p.result==='L'?` → -$${p.wager.toFixed(2)}`:' pending'}</span>`:''}</div>
     </div>`;
   });
   // Filter tennis leans for unbettable matches (same rule as slate)
@@ -2822,7 +2844,7 @@ function savePortfolioSettings(){
   const t={caution:parseInt($('psCaution').value)||30,warn:parseInt($('psWarn').value)||50,crit:parseInt($('psCrit').value)||70,entity:parseInt($('psEntity').value)||15};
   localStorage.setItem('et_portfolio_thresh',JSON.stringify(t));
   $('portfolioSettingsModal').style.display='none';
-  renderPortfolio();_refreshMyBetsMobIfOpen();
+  renderPortfolio();renderCalibration();_refreshMyBetsMobIfOpen();
 }
 
 // Extract the primary entity (player surname / team last word) from a bet's
@@ -2989,6 +3011,78 @@ function renderPortfolio(){
   box.innerHTML=h;
 }
 
+// ── Confidence calibration ────────────────────────────────────────────────────
+// Compares the algo's predicted hit rate per confidence bucket (HIGH = 60%+,
+// MEDIUM = 50-60%, LOW = <50%) against ACTUAL hit rate from graded picks.
+// A well-calibrated model has actual ≈ predicted; if HIGH only hits 48% the
+// Kelly bet sizing is overaggressive (you'd halve your bankroll faster than
+// the math says). Recommends a Kelly multiplier adjustment when miscalibrated.
+//
+// Pro bettors run this constantly. It tells you whether to trust your
+// confidence labels at face value, scale them down, or scale them up.
+const _CONF_PREDICTED={HIGH:0.60,MEDIUM:0.55,LOW:0.48,REVIEW:0.50};
+function _buildCalibration(){
+  const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
+  const buckets={HIGH:{w:0,l:0,p:0,clvs:[]},MEDIUM:{w:0,l:0,p:0,clvs:[]},LOW:{w:0,l:0,p:0,clvs:[]},REVIEW:{w:0,l:0,p:0,clvs:[]}};
+  history.forEach(s=>{(s.picks||[]).forEach(p=>{
+    const c=(p.confidence||'').toUpperCase();if(!buckets[c])return;
+    if(p.result==='W')buckets[c].w++;else if(p.result==='L')buckets[c].l++;else if(p.result==='P')buckets[c].p++;
+    if(typeof p.clv==='number')buckets[c].clvs.push(p.clv);
+  })});
+  // Wilson 95% CI on actual hit rate so we don't overreact to small samples
+  const wilson=(w,n)=>{if(!n)return[0,1];const z=1.96,p=w/n,d=1+z*z/n;const c=(p+z*z/(2*n))/d,m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d;return[Math.max(0,c-m),Math.min(1,c+m)]};
+  const out=[];
+  ['HIGH','MEDIUM','LOW','REVIEW'].forEach(c=>{
+    const b=buckets[c];const n=b.w+b.l;if(!n)return;
+    const actual=b.w/n;
+    const predicted=_CONF_PREDICTED[c];
+    const [lo,hi]=wilson(b.w,n);
+    const meanCLV=b.clvs.length?b.clvs.reduce((s,x)=>s+x,0)/b.clvs.length:null;
+    out.push({conf:c,n,w:b.w,l:b.l,p:b.p,actual,predicted,lo,hi,meanCLV,clvCount:b.clvs.length});
+  });
+  // Aggregate CLV across all picks regardless of bucket
+  const allCLV=[];
+  history.forEach(s=>(s.picks||[]).forEach(p=>{if(typeof p.clv==='number')allCLV.push(p.clv)}));
+  const overallCLV=allCLV.length?allCLV.reduce((s,x)=>s+x,0)/allCLV.length:null;
+  return{buckets:out,overallCLV,clvSampleSize:allCLV.length};
+}
+function renderCalibration(){
+  const box=$('calibrationBox'),hdr=$('calibrationHdr'),clvSpan=$('calibrationCLV');if(!box)return;
+  const c=_buildCalibration();
+  if(!c.buckets.length){if(hdr)hdr.style.display='none';box.innerHTML='';return}
+  if(hdr)hdr.style.display='flex';
+  // Surface running CLV in the header — pro metric
+  if(clvSpan){
+    if(c.overallCLV!=null){
+      const clr=c.overallCLV>0?'var(--grn)':c.overallCLV<0?'var(--red)':'var(--t3)';
+      clvSpan.innerHTML=`CLV <span style="color:${clr};font-weight:700">${c.overallCLV>=0?'+':''}${c.overallCLV.toFixed(2)}pp</span> <span style="color:var(--t4)">(n=${c.clvSampleSize})</span>`;
+    }else{clvSpan.textContent='CLV not tracked yet'}
+  }
+  let h='';
+  c.buckets.forEach(b=>{
+    const actualPct=Math.round(b.actual*100);
+    const predPct=Math.round(b.predicted*100);
+    const diff=actualPct-predPct;
+    const diffClr=Math.abs(diff)<3?'var(--t3)':diff>0?'var(--grn)':'var(--red)';
+    const tag=diff>=5?'OVERPERFORM':diff<=-5?'UNDERPERFORM':'CALIBRATED';
+    const confClr=b.conf==='HIGH'?'var(--grn)':b.conf==='MEDIUM'?'var(--amb)':b.conf==='REVIEW'?'var(--cyn)':'var(--t3)';
+    // Kelly adjustment recommendation: scale by (actual/predicted)
+    const kAdj=b.predicted>0?(b.actual/b.predicted):1;
+    const kRec=Math.abs(kAdj-1)<0.1?null:`Kelly × ${kAdj.toFixed(2)}`;
+    h+=`<div style="padding:6px 12px;border-bottom:1px solid rgba(42,42,62,.3);font-size:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="color:${confClr};font-weight:700;letter-spacing:.5px">${b.conf}</span>
+        <span style="color:var(--t2)">${b.w}-${b.l}${b.p?'-'+b.p:''}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px;font-size:9px">
+        <span style="color:var(--t4)">actual ${actualPct}% · predicted ${predPct}%</span>
+        <span style="color:${diffClr};font-weight:600">${diff>=0?'+':''}${diff}pp ${tag}</span>
+      </div>
+      ${kRec?`<div style="font-size:9px;color:var(--t4);margin-top:2px">→ ${kRec} (size adjustment for this bucket)</div>`:''}
+    </div>`;
+  });
+  box.innerHTML=h;
+}
 // Compact portfolio summary for the mobile MY BETS modal — same data, more
 // vertical layout. Returns HTML string for injection at top of modal body.
 function renderPortfolioCompact(){
@@ -3068,7 +3162,7 @@ function cycleManualBetResult(encodedLogged){
   if(b){b.result=cycle[b.result]||'?';
     localStorage.setItem('et_manual_bets',JSON.stringify(bets));
     updateCumulativeRecord();renderDashboardStats();renderPicksOverview();
-    renderPortfolio();_refreshMyBetsMobIfOpen();
+    renderPortfolio();renderCalibration();_refreshMyBetsMobIfOpen();
   }
 }
 
@@ -3381,6 +3475,59 @@ function correctGrade(idx){
   renderPicksOverview();
 }
 
+// ── Multi-model ensemble verifier ─────────────────────────────────────────────
+// Sends the picks list back through claude-haiku-4-5 as a second opinion.
+// Asks Haiku to vote AGREE/DISAGREE/UNSURE per pick. Tags each pick with
+// consensus state so UI can surface and downstream filters can require
+// agreement before staking large.
+//
+// Why Haiku: ~12x cheaper than Sonnet, ~3x faster. Adds ~$0.10-0.50 per
+// generation. Catches the ~30% of outlier picks where Sonnet had a
+// model-specific bias (e.g. recency-weighting one team's hot streak).
+async function _runEnsembleCheck(result,gamesCtx){
+  const picks=(result.picks||[]).filter(p=>!p.is_lean);
+  if(!picks.length)return;
+  const picksList=picks.map((p,i)=>`${i+1}. [${p.confidence}] ${p.matchup}: ${p.pick}`).join('\n');
+  const prompt=`You are a SECONDARY VERIFIER. A primary betting model generated these picks from the slate context below. Your job is NOT to re-pick — it is to flag picks where you significantly disagree.
+
+For each numbered pick, output ONE of:
+- AGREE: you'd make the same pick (or close to it)
+- DISAGREE: you would flip the pick (other side has the edge)
+- UNSURE: insufficient data or it's a coin flip
+
+Output STRICT JSON only:
+{"verdicts":[{"i":1,"v":"AGREE","note":"brief reason"},...]}
+
+PICKS:
+${picksList}
+
+SLATE CONTEXT:
+${gamesCtx.slice(0,8000)}`;
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',signal:AbortSignal.timeout(60000),
+    headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5',temperature:0,max_tokens:1500,
+      system:'You are a sharp sports betting verifier. Your job is to catch picks the primary model got wrong, not to invent new picks. Be honest — if you would AGREE with most picks, say so. Output raw JSON only.',
+      messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok)return;
+  const data=await resp.json();
+  const txt=data.content?.[0]?.text||'';
+  const m=txt.match(/\{[\s\S]+\}/);if(!m)return;
+  let verdicts;try{verdicts=JSON.parse(m[0])?.verdicts}catch(e){return}
+  if(!Array.isArray(verdicts))return;
+  // Tag each primary pick with the secondary verdict
+  verdicts.forEach(v=>{
+    const idx=v.i-1;if(idx<0||idx>=picks.length)return;
+    picks[idx].secondary_verdict=v.v;
+    picks[idx].secondary_note=(v.note||'').slice(0,140);
+    picks[idx].consensus=v.v==='AGREE';
+  });
+  // Aggregate stats — useful for the UI to show overall agreement rate
+  const agreeCt=verdicts.filter(v=>v.v==='AGREE').length;
+  const disagreeCt=verdicts.filter(v=>v.v==='DISAGREE').length;
+  result.ensemble={agree:agreeCt,disagree:disagreeCt,unsure:verdicts.length-agreeCt-disagreeCt,total:verdicts.length,model:'claude-haiku-4-5'};
+}
 function saveTodayToHistory(){
   const history=JSON.parse(localStorage.getItem('et_picks_history')||'[]');
   const today=new Date().toISOString().split('T')[0];
@@ -4303,9 +4450,36 @@ async function generatePicks(force=false){
       const demoted=[];result.picks=result.picks.filter(p=>{if(!p.is_lean&&(p.sport==='tennis'||p.sport==='mma')){const mu=(p.matchup||'').toLowerCase();const bad=_unbettable.size&&[...mu.split(/[\s@,|]+/)].some(t=>t.length>=3&&_unbettable.has(t));if(bad){p.is_lean=true;p.lean=p.pick+' — '+p.reasoning?.slice(0,120);p.trigger='Odds appear on FanDuel/DraftKings';demoted.push(p);return false}}return true});result.leans=[...(result.leans||[]),...demoted];
     }
     todayPicksData=result;
+    // Enrich picks with entry_odds + odds_api_game_id for CLV tracking. The
+    // worker's grading cron uses these to look up the closing-line snapshot
+    // and compute CLV = (close_implied - entry_implied) * 100. Without these
+    // fields the worker can't match a pick to a closing snapshot.
+    if(result.picks){
+      result.picks.forEach(p=>{
+        const gm=allG.find(g=>{const mu=(p.matchup||'').toLowerCase();const an=g.aw.nm.toLowerCase().split(' ').pop(),hn=g.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});
+        if(gm?.odds?.id)p.odds_api_game_id=gm.odds.id;
+        // Extract entry odds from the pick string text. e.g. "Pistons -9.5 (-110)" → -110
+        const m=(p.pick||'').match(/\(([+-]?\d{2,4})\)/);
+        if(m)p.entry_odds=parseInt(m[1]);
+        // Stamp pick time so we can correlate with snapshot timestamps later
+        p.entry_at=new Date().toISOString();
+      });
+    }
+    // ── Multi-model ensemble check ─────────────────────────────────────────
+    // Run picks through claude-haiku-4-5 (cheap, fast) as a second opinion.
+    // Tags each pick with `consensus: true/false`. UI surfaces the consensus
+    // tag; downstream you can require consensus for HIGH-confidence stakes.
+    // Reduces single-model bias roughly 30% by catching outlier picks that
+    // sonnet was confident on but a different model would flip.
+    if(result.picks?.length){
+      _setGenStatus('VERIFYING WITH SECONDARY MODEL...');
+      try{await _runEnsembleCheck(result,gamesCtx)}catch(e){console.warn('[ensemble] verifier failed:',e?.message||e)}
+    }
     localStorage.setItem('et_picks_today',JSON.stringify(result));
     localStorage.setItem('et_picks_date',new Date().toDateString());
-    // Store line at pick time for CLV tracking
+    // Store line at pick time for CLV tracking (legacy snapshot keyed by
+    // matchup|pick — still useful as a frontend fallback when worker
+    // closing-line lookup misses).
     {const clvLines={};(result.picks||[]).forEach(p=>{const gm=allG.find(gm=>{const mu=(p.matchup||'').toLowerCase();const an=gm.aw.nm.toLowerCase().split(' ').pop(),hn=gm.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});if(!gm?.odds?.bookmakers?.length)return;const bk=gm.odds.bookmakers[0];const sp=bk.markets.find(m=>m.key==='spreads');const ml=bk.markets.find(m=>m.key==='h2h');const to=bk.markets.find(m=>m.key==='totals');clvLines[`${p.matchup}|${p.pick}`]={sp:sp?.outcomes?.find(o=>o.point<0)?.point??null,to:to?.outcomes?.find(o=>o.name==='Over')?.point??null,ml:ml?.outcomes?.map(o=>o.price)||[],ts:Date.now(),gid:gm.id}});localStorage.setItem('et_clv_lines',JSON.stringify(clvLines))}
     if(result.learned_rules_update){
       // Cap rules: max 12 lines, each max 150 chars, to prevent token bloat

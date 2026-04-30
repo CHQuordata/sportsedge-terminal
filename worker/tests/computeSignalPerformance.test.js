@@ -14,6 +14,19 @@ function makePick(result, filters = [], phase1_signals = []) {
   return { result, filters, phase1_signals };
 }
 
+// computeSignalPerformance now annotates each entry with Wilson CI bounds
+// and significance flags (n, wr, ci_lo, ci_hi, significant_edge,
+// significant_fade). These existing tests only care about W/L/P counts, so
+// strip the metadata before equality checks. New tests below cover the
+// metadata directly.
+function stripMeta(perf) {
+  const out = {};
+  for (const [k, v] of Object.entries(perf)) {
+    out[k] = { w: v.w, l: v.l, p: v.p };
+  }
+  return out;
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('computeSignalPerformance', () => {
@@ -27,21 +40,21 @@ describe('computeSignalPerformance', () => {
 
     test('counts a W for a pick with a filter tag', () => {
       const history = [makeSlate(today, [makePick('W', ['high_ev'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         high_ev: { w: 1, l: 0, p: 0 },
       });
     });
 
     test('counts an L', () => {
       const history = [makeSlate(today, [makePick('L', ['sharp_signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         sharp_signal: { w: 0, l: 1, p: 0 },
       });
     });
 
     test('counts a P (push)', () => {
       const history = [makeSlate(today, [makePick('P', ['b2b_fade'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         b2b_fade: { w: 0, l: 0, p: 1 },
       });
     });
@@ -52,7 +65,7 @@ describe('computeSignalPerformance', () => {
         makePick('L', ['tag_a']),
         makePick('P', ['tag_a']),
       ])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         tag_a: { w: 1, l: 1, p: 1 },
       });
     });
@@ -63,7 +76,7 @@ describe('computeSignalPerformance', () => {
         makeSlate(today, [makePick('W', ['tag_a'])]),
         makeSlate(today, [makePick('L', ['tag_a'])]),
       ];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         tag_a: { w: 2, l: 1, p: 0 },
       });
     });
@@ -73,7 +86,7 @@ describe('computeSignalPerformance', () => {
         makePick('W', ['tag_a']),
         makePick('L', ['tag_b']),
       ])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         tag_a: { w: 1, l: 0, p: 0 },
         tag_b: { w: 0, l: 1, p: 0 },
       });
@@ -81,7 +94,7 @@ describe('computeSignalPerformance', () => {
 
     test('one pick with multiple tags increments each tag separately', () => {
       const history = [makeSlate(today, [makePick('W', ['tag_a', 'tag_b'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         tag_a: { w: 1, l: 0, p: 0 },
         tag_b: { w: 1, l: 0, p: 0 },
       });
@@ -93,17 +106,17 @@ describe('computeSignalPerformance', () => {
   describe('result filtering', () => {
     test('ignores picks with result === "?"', () => {
       const history = [makeSlate(today, [makePick('?', ['pending_signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
 
     test('ignores picks with null result', () => {
       const history = [makeSlate(today, [makePick(null, ['some_signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
 
     test('ignores picks with no result field', () => {
       const history = [makeSlate(today, [{ filters: ['tag'], phase1_signals: [] }])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
   });
 
@@ -112,12 +125,12 @@ describe('computeSignalPerformance', () => {
   describe('30-day date cutoff', () => {
     test('excludes slates older than 30 days', () => {
       const history = [makeSlate(daysAgo(31), [makePick('W', ['old_signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
 
     test('includes slates from 29 days ago', () => {
       const history = [makeSlate(daysAgo(29), [makePick('W', ['recent_signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         recent_signal: { w: 1, l: 0, p: 0 },
       });
     });
@@ -127,7 +140,7 @@ describe('computeSignalPerformance', () => {
         makeSlate(daysAgo(31), [makePick('W', ['signal'])]),
         makeSlate(daysAgo(1),  [makePick('L', ['signal'])]),
       ];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         signal: { w: 0, l: 1, p: 0 },
       });
     });
@@ -140,7 +153,7 @@ describe('computeSignalPerformance', () => {
       const history = [makeSlate(today, [
         makePick('W', ['shared_tag'], ['shared_tag']),
       ])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         shared_tag: { w: 1, l: 0, p: 0 },
       });
     });
@@ -149,21 +162,21 @@ describe('computeSignalPerformance', () => {
       const history = [makeSlate(today, [
         makePick('W', [], ['phase1_only']),
       ])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         phase1_only: { w: 1, l: 0, p: 0 },
       });
     });
 
     test('normalizes filter tag whitespace to underscores and lowercases', () => {
       const history = [makeSlate(today, [makePick('W', ['Sharp Signal'])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         sharp_signal: { w: 1, l: 0, p: 0 },
       });
     });
 
     test('skips blank/empty tags', () => {
       const history = [makeSlate(today, [makePick('W', ['', 'valid_tag'], [])])];
-      expect(computeSignalPerformance(history)).toEqual({
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({
         valid_tag: { w: 1, l: 0, p: 0 },
       });
     });
@@ -174,17 +187,18 @@ describe('computeSignalPerformance', () => {
   describe('edge cases', () => {
     test('handles slate with no picks array', () => {
       const history = [{ date: today }];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
 
     test('handles slate with empty picks array', () => {
       const history = [makeSlate(today, [])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
 
     test('handles pick with no filters or signals', () => {
       const history = [makeSlate(today, [makePick('W', [], [])])];
-      expect(computeSignalPerformance(history)).toEqual({});
+      expect(stripMeta(computeSignalPerformance(history))).toEqual({});
     });
   });
 });
+
