@@ -463,6 +463,18 @@ OUTPUT REQUIREMENTS:
 Output format (all 4 sport fields required even if unchanged):
 {"tennis_rules":"rule1\\nrule2\\n...","nba_rules":"...","mlb_rules":"...","nhl_rules":"..."}`;
 
+  // Log learning agent failures to KV so they're queryable via
+  // /kv/et_learning_agent_err. Silences the outer try-catch without
+  // hiding the actual failure reason from operators.
+  const _logLearningErr = async (reason, detail = '') => {
+    try {
+      await env.LEARNING_STORE.put('et_learning_agent_err', JSON.stringify({
+        ts: Date.now(), iso: new Date().toISOString(), reason,
+        detail: String(detail).slice(0, 500)
+      }), { expirationTtl: 60 * 60 * 24 * 14 });
+    } catch (_) {}
+  };
+
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -480,11 +492,11 @@ Output format (all 4 sport fields required even if unchanged):
       signal: AbortSignal.timeout(30000)
     });
 
-    if (!resp.ok) return;
+    if (!resp.ok) { await _logLearningErr('api_error', `HTTP ${resp.status}`); return; }
     const data = await resp.json();
     const text = data.content?.[0]?.text || '';
     const raw = (text.match(/(\{[\s\S]+\})/) || [])[1] || text.trim();
-    if (!raw.startsWith('{')) return;
+    if (!raw.startsWith('{')) { await _logLearningErr('parse_error', `response: ${raw.slice(0, 200)}`); return; }
 
     const result = JSON.parse(raw);
 
@@ -495,13 +507,18 @@ Output format (all 4 sport fields required even if unchanged):
       nhl_rules:    'et_learned_rules_nhl'
     };
 
+    // null/undefined = field absent from response → keep existing KV rules unchanged
+    // "" = model explicitly cleared all rules for this sport → delete the KV key
+    // anything else = new rule text → overwrite
     await Promise.allSettled(
       Object.entries(ruleKeyMap).map(([field, kvKey]) => {
-        if (!result[field]) return Promise.resolve();
-        return env.LEARNING_STORE.put(kvKey, result[field], { expirationTtl: 60 * 60 * 24 * 365 });
+        const val = result[field];
+        if (val == null) return Promise.resolve();
+        if (val === '') return env.LEARNING_STORE.delete(kvKey);
+        return env.LEARNING_STORE.put(kvKey, val, { expirationTtl: 60 * 60 * 24 * 365 });
       })
     );
-  } catch (_) {}
+  } catch (e) { await _logLearningErr('exception', e?.message || String(e)); }
 }
 
 // ── Score fetching ────────────────────────────────────────────────────────────
