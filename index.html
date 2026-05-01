@@ -4655,7 +4655,7 @@ Skip any pick you cannot score 2.5+. The structured block lets your verdicts be 
     // other pick. Source flag lets us filter "AI ANALYZE only" stats later.
     if(verdicts.length)_saveAIAnalyzeVerdicts(g,verdicts);
     // Build the rendered analysis: free-form text + ensemble badge + saved-pick confirmation
-    const visibleText=txt.split(/\n---\s*\n```(?:json)?/)[0].trim()||txt;
+    const visibleText=(txt.replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/g,'').replace(/\n---\s*$/,'').trim())||txt;
     const safeTxt=visibleText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const existing=$('aiGameAnalysis');
     const div=existing||document.createElement('div');
