@@ -4242,7 +4242,7 @@ async function fetchCompletedScores(){
 // same game uniquely.
 const _AMBIG_TOKS_FE=new Set(['la','ny','sf','st','nj','tb','nb','ne','sd','gs','was','wsh','nyc','los','new','san','the']);
 function _normNameFE(s){return(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()}
-function _findGameFE(matchup,games){
+function _findGameFE(matchup,games,pickDate){
   const m=_normNameFE(matchup);if(!m)return null;
   const parts=m.split(/\s+(?:@|vs|v)\s+|\s*,\s*|\s*\|\s*/).filter(Boolean);
   if(parts.length<2){const alt=m.split(/\s+at\s+/);if(alt.length===2)parts.push(...alt)}
@@ -4251,7 +4251,17 @@ function _findGameFE(matchup,games){
   const _toks=s=>s.split(/\s+/).filter(w=>w.length>=3&&!_AMBIG_TOKS_FE.has(w));
   const sideMatches=(side,team)=>{const t=_normNameFE(team);const sT=_toks(side);if(sT.some(w=>t.includes(w)))return true;const tL=t.split(/\s+/).pop();return!!(tL&&tL.length>=3&&!_AMBIG_TOKS_FE.has(tL)&&side.includes(tL))};
   const cand=games.filter(g=>(sideMatches(s1,g.home_team)&&sideMatches(s2,g.away_team))||(sideMatches(s1,g.away_team)&&sideMatches(s2,g.home_team)));
-  return cand.length===1?cand[0]:null;
+  if(cand.length===0)return null;
+  if(cand.length===1)return cand[0];
+  // Multiple candidates (series play) — disambiguate by pick date, mirroring worker logic
+  if(pickDate){
+    const exact=cand.filter(g=>(g.commence_time||'').slice(0,10)===pickDate);
+    if(exact.length>=1)return exact[0];
+    const target=new Date(pickDate+'T12:00:00Z').getTime();
+    const sorted=cand.map(g=>({g,dt:new Date(g.commence_time||0).getTime()})).filter(x=>x.dt<=target+24*3600*1000).sort((a,b)=>Math.abs(a.dt-target)-Math.abs(b.dt-target));
+    if(sorted.length)return sorted[0].g;
+  }
+  return cand.sort((a,b)=>new Date(b.commence_time||0)-new Date(a.commence_time||0))[0];
 }
 function _pickSideHomeFE(pickStr,game){
   const ht=_normNameFE(game.home_team),at=_normNameFE(game.away_team),p=_normNameFE(pickStr);
@@ -4263,9 +4273,9 @@ function _pickSideHomeFE(pickStr,game){
   if(aL&&aL.length>=3&&!_AMBIG_TOKS_FE.has(aL)&&p.includes(aL))return false;
   return null;
 }
-function gradePickFromScore(pick,games){
+function gradePickFromScore(pick,games,pickDate){
   const pt=pick.pick||'',matchup=pick.matchup||'';
-  const game=_findGameFE(matchup,games);
+  const game=_findGameFE(matchup,games,pickDate||pick.date);
   if(!game?.scores?.length)return null;
   // Tennis routes through dedicated grader regardless of score format
   if((pick.sport||'').toLowerCase()==='tennis')return _gradeTennisPickFE(pick,game);
@@ -4355,7 +4365,7 @@ function autoGradeFromScores(completedGames){
     const regrade=slateAge<48*60*60*1000;
     (slate.picks||[]).forEach(pick=>{
       if(!regrade&&pick.result&&pick.result!=='?')return;
-      const r=gradePickFromScore(pick,completedGames);
+      const r=gradePickFromScore(pick,completedGames,slate.date);
       if(r&&r!==pick.result){pick.result=r;changed=true;}
     });
   });
@@ -4387,7 +4397,7 @@ async function generatePicks(force=false){
       let out='';
       // Inject signal performance track record so Phase 1 can self-calibrate signal weights
       const _perfRaw=localStorage.getItem('et_signal_performance');
-      if(_perfRaw){try{const _perf=JSON.parse(_perfRaw);const _lines=Object.entries(_perf).filter(([,v])=>v.w+v.l>=3).sort(([,a],[,b])=>(b.w+b.l)-(a.w+a.l)).slice(0,15).map(([tag,v])=>{const tot=v.w+v.l+v.p;const wr=tot>0?Math.round(v.w/(v.w+v.l)*100):0;return `  ${tag}: ${v.w}-${v.l}${v.p?'-'+v.p:''} (${wr}% WR, ${tot} picks)`});if(_lines.length)out+=`SIGNAL TRACK RECORD (last 30 days — calibrate weights accordingly):\n${_lines.join('\n')}\n\n`}catch(_){}}
+      if(_perfRaw){try{const _perf=JSON.parse(_perfRaw);const _lines=Object.entries(_perf).filter(([,v])=>v.w+v.l>=3).sort(([,a],[,b])=>(b.w+b.l)-(a.w+a.l)).slice(0,15).map(([tag,v])=>{const tot=v.w+v.l+v.p;const wr=tot>0?Math.round(v.w/(v.w+v.l)*100):0;const flag=v.significant_edge?'[EDGE]':v.significant_fade?'[FADE]':'[NOISE]';return `  ${flag} ${tag}: ${v.w}-${v.l}${v.p?'-'+v.p:''} (${wr}% WR, ${tot} picks)`});if(_lines.length)out+=`SIGNAL TRACK RECORD (last 30 days — [EDGE]=statistically real, [FADE]=losing, [NOISE]=insufficient sample):\n${_lines.join('\n')}\n\n`}catch(_){}}
       const r=localStorage.getItem(k);if(r)out+=`LEARNED RULES (${sport} — apply these first, highest priority):\n${r}\n\n`;
       return out;
     };
@@ -4406,7 +4416,7 @@ async function generatePicks(force=false){
     // Phase 2 — Main picks call
     const gamesCtx=buildGamesContext(true); // full slate — tennis included for parlay context
     const yPicks=getYesterdayPicks(3);
-    const rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;
+    let rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;['tennis','nba','mlb','nhl'].forEach(s=>{const r=localStorage.getItem(`et_learned_rules_${s}`);if(r)rules+=`\n\n${s.toUpperCase()} SPECIFIC RULES (learned last 30d — highest priority for this sport):\n${r}`;});
     const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',signal:AbortSignal.timeout(120000),
