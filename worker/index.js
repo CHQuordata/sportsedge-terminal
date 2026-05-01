@@ -2,6 +2,11 @@ const ALLOWED_ORIGIN = 'https://chquordata.github.io';
 const PINNACLE_MMA_SPORT = 7;
 const PINNACLE_TENNIS_SPORT = 33;
 const CRON_SPORTS = ['basketball_nba', 'icehockey_nhl', 'baseball_mlb'];
+
+// Rolling-window durations used across grading, signal performance, and the
+// learning agent. Centralised here so tuning one threshold changes all callers.
+const MS_30D = 30 * 24 * 60 * 60 * 1000;
+const MS_7D  =  7 * 24 * 60 * 60 * 1000;
 const PINNACLE_SPORT_IDS = {
   basketball_nba: 4,
   icehockey_nhl: 19,
@@ -303,7 +308,7 @@ function _wilsonInterval(w, n) {
 // can gate on statistical significance rather than raw win rate.
 function computeSignalPerformance(history) {
   const perf = {};
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - MS_30D;
   history.forEach(slate => {
     if (new Date(slate.date).getTime() < cutoff) return;
     (slate.picks || []).forEach(pick => {
@@ -353,7 +358,7 @@ async function runLearningAgent(env, history) {
   if (!env.CLAUDE_API_KEY) return;
 
   // Collect picks from the last 7 days with confirmed results
-  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - MS_7D;
   const recentBySport = { tennis: [], nba: [], mlb: [], nhl: [] };
   history.forEach(slate => {
     if (new Date(slate.date).getTime() < cutoff) return;
