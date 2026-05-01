@@ -8,6 +8,7 @@ function mockEnv(store = {}) {
     LEARNING_STORE: {
       get: vi.fn(key => Promise.resolve(store[key] ?? null)),
       put: vi.fn((key, value) => { store[key] = value; return Promise.resolve(); }),
+      delete: vi.fn(key => { delete store[key]; return Promise.resolve(); }),
     },
   };
 }
