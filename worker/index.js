@@ -549,6 +549,9 @@ async function fetchTennisScoresFromESPN(daysBack = 7) {
   // ESPN tennis scoreboard returns tournament-level events where individual
   // matches live inside event.groupings[].competitions[] — not event.competitions[].
   // Per-set game counts are in competitor.linescores[].value (one entry per set).
+  // Each date's response includes the full tournament history, so the same match
+  // appears across multiple date fetches — deduplicate by ESPN competition ID.
+  const seen = new Set();
   await Promise.allSettled(leagues.flatMap(league =>
     dates.map(async date => {
       try {
@@ -562,6 +565,8 @@ async function fetchTennisScoresFromESPN(daysBack = 7) {
           (event.groupings || []).forEach(grp => {
             (grp.competitions || []).forEach(comp => {
               if (!comp?.status?.type?.completed) return;
+              if (seen.has(comp.id)) return;
+              seen.add(comp.id);
               const [c1, c2] = comp.competitors || [];
               if (!c1 || !c2) return;
               const name1 = c1.athlete?.displayName || '';
@@ -887,6 +892,13 @@ function gradeTennisPick(pick, game) {
     const inA = words.some(w => at.includes(w));
     if (inH && !inA) return true;
     if (inA && !inH) return false;
+    // Both matched — shared first name (e.g. "Alexander Zverev" vs "Alexander Blockx").
+    // Break tie using the last (family) name which is unique.
+    const pLast = p.split(/\s+/).pop();
+    if (pLast && pLast.length >= 3) {
+      if (ht.includes(pLast) && !at.includes(pLast)) return true;
+      if (at.includes(pLast) && !ht.includes(pLast)) return false;
+    }
     return null;
   };
 
