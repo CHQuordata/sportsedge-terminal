@@ -877,23 +877,41 @@ function taSlug(name) {
 }
 
 function parseTAHtml(html) {
-  // Extract surface W-L from inline JS variables. TA stores recent stats in
-  // patterns like: var clayHist = "2024: 12-3 ..."; or in tables. This parser
-  // tries a few known patterns and returns whatever it finds. Anything missing
-  // stays undefined — caller treats as "no data".
-  const out = {};
-  const yearRow = (label, key) => {
-    const re = new RegExp(label + '[\\s\\S]{0,400}?(\\d{4})[^\\d]+(\\d+)\\s*-\\s*(\\d+)', 'i');
-    const m = html.match(re);
-    if (m) out[key] = { year: +m[1], w: +m[2], l: +m[3] };
-  };
-  yearRow('Clay', 'clay');
-  yearRow('Hard', 'hard');
-  yearRow('Grass', 'grass');
-  // Career W-L summary near top of page
-  const careerM = html.match(/Career[\s\S]{0,200}?(\d+)\s*-\s*(\d+)/i);
-  if (careerM) out.career = { w: +careerM[1], l: +careerM[2] };
-  return Object.keys(out).length ? out : null;
+  // TA stores all match results in a JS array: var matchmx = [[date, event, surface, tour, result, ...], ...]
+  // surface is index 2 ('Clay'|'Hard'|'Grass'), result is index 4 ('W'|'L'), date is index 0 (YYYYMMDD).
+  // We tally W/L per surface per year and return the most recent year for each surface.
+  try {
+    const m = html.match(/var matchmx\s*=\s*(\[[\s\S]*?\]);/);
+    if (!m) return null;
+    const matchmx = JSON.parse(m[1]);
+    if (!Array.isArray(matchmx) || !matchmx.length) return null;
+    const bySurface = {};
+    let cw = 0, cl = 0;
+    for (const row of matchmx) {
+      const result = row[4];
+      if (result === 'W') cw++;
+      else if (result === 'L') cl++;
+      else continue;
+      const surf = String(row[2] || '').toLowerCase();
+      if (surf !== 'clay' && surf !== 'hard' && surf !== 'grass') continue;
+      const year = String(row[0] || '').slice(0, 4);
+      if (year.length !== 4) continue;
+      if (!bySurface[surf]) bySurface[surf] = {};
+      if (!bySurface[surf][year]) bySurface[surf][year] = { w: 0, l: 0 };
+      if (result === 'W') bySurface[surf][year].w++;
+      else bySurface[surf][year].l++;
+    }
+    const out = {};
+    for (const [surf, years] of Object.entries(bySurface)) {
+      const keys = Object.keys(years).sort();
+      const mostRecent = keys[keys.length - 1];
+      if (mostRecent) out[surf] = { year: +mostRecent, ...years[mostRecent] };
+    }
+    if (cw + cl > 0) out.career = { w: cw, l: cl };
+    return Object.keys(out).length ? out : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function handleTennisAbstract(name, env) {
