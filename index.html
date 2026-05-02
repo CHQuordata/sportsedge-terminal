@@ -3615,6 +3615,7 @@ Injury data is background context ONLY. Follow these rules strictly:
 
 ## CRITICAL RULES
 - Max 8 graded picks (is_lean:false). Extras go to leans.
+- Graded picks are HIGH or MEDIUM only. LOW confidence = automatic lean (is_lean:true). Never output a graded pick with confidence LOW.
 - Max 4 MEDIUM picks. Demote weakest if exceeded.
 - Never 2+ graded picks on same game.
 - NEVER make a graded pick or lean on any game tagged [BETTING BAN — DO NOT PICK EITHER SIDE]. Skip it entirely — do not mention it in picks, leans, or analysis.
