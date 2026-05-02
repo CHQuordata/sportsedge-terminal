@@ -190,8 +190,14 @@ async function runNightlyCron(env) {
   // organically as the user refreshes the dashboard pre-game.
   await snapshotClosingOdds(env).catch(() => {});
 
-  // 1. Fetch completed scores across all active sports
-  const completedGames = await fetchAllCompletedScores(env.ODDS_API_KEY);
+  // 1. Fetch completed scores across all active sports + ESPN tennis (parallel)
+  // Odds API tennis score coverage is sparse — ESPN fills the gap reliably
+  // for both ATP and WTA without requiring a key.
+  const [completedGames, espnTennisGames] = await Promise.all([
+    fetchAllCompletedScores(env.ODDS_API_KEY),
+    fetchTennisScoresFromESPN()
+  ]);
+  completedGames.push(...espnTennisGames);
 
   // Extract diagnostic info before storing (it's attached to the array)
   const breakdown = completedGames._breakdown || {};
@@ -527,6 +533,59 @@ Output format (all 4 sport fields required even if unchanged):
 }
 
 // ── Score fetching ────────────────────────────────────────────────────────────
+
+// ESPN public scoreboard API — free, no key, covers ATP + WTA with per-set
+// linescores. Used as primary tennis scoring source since Odds API tennis
+// score coverage is sparse (typically returns 0 completed matches mid-tournament).
+// Fetches the last 7 days so all pending tennis picks are in range.
+async function fetchTennisScoresFromESPN(daysBack = 7) {
+  const games = [];
+  const leagues = ['atp', 'wta'];
+  const dates = [];
+  for (let i = 0; i <= daysBack; i++) {
+    const d = new Date(Date.now() - i * 24 * 3600 * 1000);
+    dates.push(d.toISOString().slice(0, 10).replace(/-/g, ''));
+  }
+  await Promise.allSettled(leagues.flatMap(league =>
+    dates.map(async date => {
+      try {
+        const r = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/tennis/${league}/scoreboard?dates=${date}`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (!r.ok) return;
+        const data = await r.json();
+        (data.events || []).forEach(event => {
+          const comp = event.competitions?.[0];
+          if (!comp?.status?.type?.completed) return;
+          const [c1, c2] = comp.competitors || [];
+          if (!c1 || !c2) return;
+          const name1 = c1.athlete?.displayName || '';
+          const name2 = c2.athlete?.displayName || '';
+          if (!name1 || !name2) return;
+          // Prefer per-set linescores (needed for game spread + totals grading).
+          // Falls back to sets-won string which still grades ML picks correctly.
+          const scoreStr = c => c.linescores?.length
+            ? c.linescores.map(s => s.value ?? s.displayValue ?? '').join(',')
+            : String(c.score || '');
+          games.push({
+            sport: 'tennis',
+            id: `espn_${event.id}`,
+            home_team: name1,
+            away_team: name2,
+            commence_time: comp.date || event.date,
+            completed: true,
+            scores: [
+              { name: name1, score: scoreStr(c1) },
+              { name: name2, score: scoreStr(c2) }
+            ]
+          });
+        });
+      } catch (_) {}
+    })
+  ));
+  return games;
+}
 
 async function fetchAllCompletedScores(apiKey) {
   const sports = [...CRON_SPORTS];
