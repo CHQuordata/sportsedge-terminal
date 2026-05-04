@@ -145,6 +145,38 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 /* ── Visual polish ── */
 .pick-reasoning{font-size:11px;color:var(--t2);line-height:1.7}
 .det-header{padding:16px;border-bottom:1px solid var(--bdr);background:var(--bg2);border-top:2px solid var(--bdr)}
+/* ── Multi-agent review gate ── */
+.review-gate{position:absolute;inset:0;background:var(--bg0);z-index:100;display:flex;flex-direction:column;overflow:hidden}
+.rg-header{padding:14px 18px;border-bottom:1px solid var(--bdr);background:var(--bg1);flex-shrink:0}
+.rg-title{font-size:12px;font-weight:700;letter-spacing:1px;color:var(--t1);display:flex;align-items:center;gap:8px}
+.rg-subtitle{font-size:10px;color:var(--t4);margin-top:3px}
+.rg-picks-list{flex:1;overflow-y:auto;padding:10px}
+.rg-pick-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:5px;margin-bottom:10px;overflow:hidden;transition:border-color .2s,opacity .2s}
+.rg-pick-card.approved{border-color:var(--grn)}
+.rg-pick-card.skipped{opacity:.4;border-color:rgba(255,71,87,.3)}
+.rg-pick-card.flipped{border-color:var(--cyn)}
+.rg-pick-top{padding:10px 12px;border-bottom:1px solid rgba(42,42,62,.4)}
+.rg-pick-match{font-size:10px;color:var(--t3);margin-bottom:2px}
+.rg-pick-call{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px}
+.rg-pick-reason{font-size:10px;color:var(--t3);line-height:1.5}
+.rg-judge-row{display:flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(0,0,0,.25);border-bottom:1px solid rgba(42,42,62,.3)}
+.rg-judge-verdict{font-size:8px;font-weight:700;letter-spacing:.8px;padding:2px 6px;border-radius:2px;white-space:nowrap}
+.rg-judge-verdict.APPROVE{color:var(--grn);background:var(--grn-bg)}
+.rg-judge-verdict.FLAG{color:var(--amb);background:var(--amb-bg)}
+.rg-judge-verdict.REJECT{color:var(--red);background:var(--red-bg)}
+.rg-judge-note{font-size:9px;color:var(--t4);flex:1;line-height:1.4}
+.rg-btn-row{display:flex;gap:6px;padding:8px 10px}
+.rg-btn{flex:1;padding:6px 0;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.7px;border:1px solid;border-radius:3px;cursor:pointer;background:transparent;transition:all .15s}
+.rg-btn.approve{color:var(--grn);border-color:var(--grn)}.rg-btn.approve.active,.rg-btn.approve:hover{background:var(--grn);color:var(--bg0)}
+.rg-btn.skip{color:var(--t4);border-color:var(--bdr)}.rg-btn.skip.active,.rg-btn.skip:hover{background:var(--bg3);color:var(--t2)}
+.rg-btn.flip{color:var(--cyn);border-color:var(--cyn)}.rg-btn.flip.active,.rg-btn.flip:hover{background:var(--cyn);color:var(--bg0)}
+.rg-publish-bar{flex-shrink:0;padding:10px 14px;background:var(--bg1);border-top:1px solid var(--bdr);display:flex;gap:8px;align-items:center}
+.agent-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;font-size:8px;font-weight:700;border-radius:2px;letter-spacing:.6px;white-space:nowrap}
+.agent-badge.supervisor{color:var(--cyn);background:rgba(0,229,255,.1)}
+.agent-badge.subagent{color:var(--t3);background:var(--bg3)}
+.agent-badge.judge{color:var(--amb);background:var(--amb-bg)}
+.agent-badge.human{color:var(--grn);background:var(--grn-bg)}
+.phase-log-row{padding:4px 14px;font-size:9px;color:var(--t4);border-bottom:1px solid rgba(42,42,62,.15);font-family:var(--mono);display:flex;gap:6px;align-items:center}
 .sec-title{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--t4);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 /* ── Mobile back button (hidden on desktop) ── */
 .mob-back-btn{display:none}
@@ -562,6 +594,7 @@ Object.assign(window, { aimp, kellyPct, getBookTier, detectEdges, calcEV, getLin
 </script>
 <script>
 let AK=localStorage.getItem('odds_api_key')||'',cSport='atp',selIdx=-1,allG=[],fG=[],allE=[],tennisForm=new Map(),cSharpOnly=false;
+let pendingPicksData=null,_rgApprovals={};
 let trackedIds=new Set(JSON.parse(localStorage.getItem('et_tracked')||'[]'));
 let _oddsEverOk=false; // true once any successful API call confirms the key works
 const _oddsCache=new Map(),ODDS_TTL=5*60*1000;
@@ -3368,7 +3401,7 @@ Games tagged [DOUBLES] in the slate have no individual player stats. For doubles
 }`;
 }
 
-function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis){
+function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,agentAnalysis){
   let msg=gamesCtx;
   if(yesterdayPicks.length){
     msg+=`\nRECENT GRADED RESULTS (last 3 days — already graded, use for learned_rules_update only, do NOT re-grade):\n`;
@@ -3386,8 +3419,22 @@ function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis){
     });
     msg+='\n';
   }
-  // Inject pre-locked tennis conclusions from Phase 1
-  if(tennisAnalysis?.tennis_analysis?.length){
+  // Preferred: inject structured subagent pre-analysis (new architecture)
+  if(agentAnalysis?.length){
+    const actionable=agentAnalysis.filter(a=>a&&a.confidence!=='SKIP'&&a.edge_strength!=='NONE');
+    if(actionable.length){
+      msg+=`\n## SUBAGENT PRE-ANALYSIS — SIGNAL REPORTS (parallel Haiku analysis — synthesize into picks)\n`;
+      actionable.forEach(a=>{
+        const sigs=(a.key_signals||[]).join(', ')||'insufficient data';
+        const flags=a.flags?.length?` | FLAGS: ${a.flags.join(', ')}`:'';
+        msg+=`${a.matchup}: EDGE_SIDE=${a.edge_side} | STRENGTH=${a.edge_strength} | VEHICLE=${a.vehicle} | CONF=${a.confidence} | ${sigs}${flags}\n`;
+      });
+      const skipped=agentAnalysis.filter(a=>a&&(a.confidence==='SKIP'||a.edge_strength==='NONE'));
+      if(skipped.length)msg+=`SKIPPED (no edge found): ${skipped.map(a=>a.matchup).join(', ')}\n`;
+      msg+='\nThese are subagent signal reports. Use them as your analytical foundation. Override with stronger evidence from stats if available.\n\n';
+    }
+  } else if(tennisAnalysis?.tennis_analysis?.length){
+    // Fallback: legacy Phase 1 format
     const actionable=tennisAnalysis.tennis_analysis.filter(ta=>ta.winner!=='PASS'&&ta.vehicle!=='PASS'&&ta.has_us_odds);
     if(actionable.length){
       msg+=`\n## TENNIS PRE-ANALYSIS — LOCKED CONCLUSIONS (do not re-derive, incorporate exactly)\n`;
@@ -3823,6 +3870,234 @@ function autoGradeFromScores(completedGames){
   if(changed){localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));updateCumulativeRecord();}
 }
 
+// ── Multi-agent architecture ──────────────────────────────────────────────────
+
+// SUPERVISOR: Pure-JS match classification — no API call.
+// Returns {deep, quick, skip} arrays based on data richness.
+function supervisorClassify(matches){
+  const deep=[],quick=[],skip=[];
+  const today=new Date().toDateString();
+  matches.forEach(g=>{
+    if(g.tm.toDateString()!==today){skip.push(g);return;}
+    if(g.isDoubles){quick.push(g);return;} // doubles: ML only → quick classification
+    const hasOdds=!!(g.odds?.bookmakers?.length);
+    const hasTNStats=tnGameCache.has(g.id);
+    const hasH2H=tennisCache.has(g.id);
+    const rankGap=g.aw.rank&&g.hm.rank?Math.abs((g.aw.rank||999)-(g.hm.rank||999)):0;
+    // DEEP: live odds + (matchstat data OR H2H OR meaningful rank gap)
+    if(hasOdds&&(hasTNStats||hasH2H||rankGap>=15)){deep.push(g);return;}
+    if(hasOdds){quick.push(g);return;}
+    quick.push(g); // no odds yet — still worth a quick look
+  });
+  return{deep,quick,skip};
+}
+
+// SUBAGENT: Per-match Haiku call. Returns structured signal object.
+async function runMatchAgent(g){
+  if(!CLAUDE_KEY)return null;
+  let ctx=`MATCH: [${g.spL}${g.isDoubles?' DOUBLES':''}] ${g.aw.nm} vs ${g.hm.nm}\n`;
+  if(g.surf)ctx+=`SURFACE: ${g.surf}\n`;
+  if(g.aw.rank||g.hm.rank)ctx+=`RANKINGS: ${g.aw.nm} #${g.aw.rank||'?'} vs ${g.hm.nm} #${g.hm.rank||'?'}\n`;
+  // Market odds
+  if(g.odds?.bookmakers?.length){
+    const bk=g.odds.bookmakers[0];
+    const ml=bk.markets?.find(m=>m.key==='h2h');
+    if(ml?.outcomes?.length===2){
+      const o0=ml.outcomes[0],o1=ml.outcomes[1];
+      ctx+=`ML: ${o0.name} ${o0.price>0?'+':''}${o0.price} | ${o1.name} ${o1.price>0?'+':''}${o1.price}\n`;
+    }
+    const sp=bk.markets?.find(m=>m.key==='spreads');
+    if(sp?.outcomes?.length){ctx+=`SPREAD: ${sp.outcomes.map(o=>`${o.name} ${o.point>0?'+':''}${o.point} (${o.price>0?'+':''}${o.price})`).join(' | ')}\n`;}
+  }
+  // Matchstat stats (TN API)
+  const tn=tnGameCache.get(g.id);
+  if(tn&&!g.isDoubles){
+    const{awData:a,hmData:h}=tn;
+    if(a)ctx+=`${g.aw.nm} STATS: RetWon%=${a.returnPointsWon??'N/A'} BPconv%=${a.breakPointsConverted??'N/A'} 1stIn%=${a.firstServeIn??'N/A'} SurfaceWin%=${a.surfaceWinPct??'N/A'}\n`;
+    if(h)ctx+=`${g.hm.nm} STATS: RetWon%=${h.returnPointsWon??'N/A'} BPconv%=${h.breakPointsConverted??'N/A'} 1stIn%=${h.firstServeIn??'N/A'} SurfaceWin%=${h.surfaceWinPct??'N/A'}\n`;
+  }
+  // H2H
+  const h2h=tennisCache.get(g.id);
+  if(h2h?.summary)ctx+=`H2H: ${h2h.summary}\n`;
+  if(g.isDoubles)ctx+=`NOTE: Doubles match — ML betting only. No individual serve/return stats available.\n`;
+  const prompt=`Classify this tennis match for betting edge. Output strict JSON only — no markdown.
+
+${ctx}
+
+Output:
+{"matchup":"${g.aw.nm} vs ${g.hm.nm}","edge_side":"${g.aw.nm}|${g.hm.nm}|NONE","edge_strength":"STRONG|MODERATE|WEAK|NONE","vehicle":"ML|-1.5g|-2.5g|Over|Under|SKIP","key_signals":["signal1"],"flags":[],"confidence":"HIGH|MEDIUM|LOW|SKIP"}`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',signal:AbortSignal.timeout(28000),
+      headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5',temperature:0,max_tokens:350,
+        system:'You are a tennis betting signal classifier. Given match data, identify if there is a genuine betting edge. Be conservative — NONE/SKIP when evidence is thin. Output raw JSON only.',
+        messages:[{role:'user',content:prompt}]})
+    });
+    if(!resp.ok)return null;
+    const data=await resp.json();
+    const txt=data.content?.[0]?.text||'';
+    const m=txt.match(/\{[\s\S]+\}/);if(!m)return null;
+    const res=JSON.parse(_repairJSON(m[0]));
+    res.game_id=g.id;
+    res.is_deep=!!(tn||h2h);
+    return res;
+  }catch(e){return null;}
+}
+
+// JUDGE: Adversarial pick reviewer (Haiku). Replaces _runEnsembleCheck.
+// Returns APPROVE / FLAG / REJECT per pick — shown in the review gate UI.
+async function runJudgeReflection(result,gamesCtx){
+  const picks=(result.picks||[]).filter(p=>!p.is_lean);
+  if(!picks.length||!CLAUDE_KEY)return;
+  const picksList=picks.map((p,i)=>`${i+1}. [${p.confidence}] ${p.matchup}: ${p.pick}\n   Reasoning: ${(p.reasoning||'').slice(0,180)}`).join('\n\n');
+  const prompt=`You are an ADVERSARIAL JUDGE reviewing tennis betting picks before they ship to the user.
+
+Your mandate:
+- APPROVE: Signal is solid, reasoning is coherent, no red flags, you'd back this
+- FLAG: Concern exists but pick may still have value (thin data, surface mismatch, weak signal)
+- REJECT: Do NOT ship — bad logic, inverse signal, fabricated stats, or pure ranking bet with no surface evidence
+
+Default bias: FLAG or REJECT anything that lacks a concrete signal beyond ranking gap alone.
+
+Output strict JSON: {"verdicts":[{"i":1,"v":"APPROVE|FLAG|REJECT","note":"max 100 chars"},...]}
+
+PICKS TO JUDGE:
+${picksList}
+
+SLATE CONTEXT (first 5500 chars):
+${gamesCtx.slice(0,5500)}`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',signal:AbortSignal.timeout(55000),
+      headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5',temperature:0,max_tokens:1200,
+        system:'You are an adversarial tennis betting judge. Flag suspicious picks aggressively. Output raw JSON only.',
+        messages:[{role:'user',content:prompt}]})
+    });
+    if(!resp.ok)return;
+    const data=await resp.json();
+    const txt=data.content?.[0]?.text||'';
+    const m=txt.match(/\{[\s\S]+\}/);if(!m)return;
+    let verdicts;try{verdicts=JSON.parse(_repairJSON(m[0]))?.verdicts}catch(e){return;}
+    if(!Array.isArray(verdicts))return;
+    verdicts.forEach(v=>{
+      const idx=v.i-1;if(idx<0||idx>=picks.length)return;
+      picks[idx].judge_verdict=v.v;
+      picks[idx].judge_note=(v.note||'').slice(0,130);
+      picks[idx].consensus=v.v==='APPROVE';
+      picks[idx].secondary_verdict=v.v==='APPROVE'?'AGREE':v.v==='REJECT'?'DISAGREE':'UNSURE';
+      picks[idx].secondary_note=picks[idx].judge_note;
+    });
+    const ac=verdicts.filter(v=>v.v==='APPROVE').length;
+    const fc=verdicts.filter(v=>v.v==='FLAG').length;
+    const rc=verdicts.filter(v=>v.v==='REJECT').length;
+    result.ensemble={approve:ac,flag:fc,reject:rc,agree:ac,disagree:rc,unsure:fc,total:verdicts.length,model:'claude-haiku-4-5'};
+  }catch(e){console.warn('[judge] reflection failed:',e?.message||e);}
+}
+
+// HUMAN REVIEW GATE: renders per-pick approval UI before publishing
+function showReviewGate(result){
+  pendingPicksData=result;
+  _rgApprovals={};
+  const picks=(result.picks||[]).filter(p=>!p.is_lean);
+  const el=$('detailPanel');if(!el)return;
+  // Pre-fill approvals from judge verdicts
+  picks.forEach((p,i)=>{
+    if(p.judge_verdict==='APPROVE')_rgApprovals[i]='approve';
+    else if(p.judge_verdict==='REJECT')_rgApprovals[i]='skip';
+    // FLAG → leave blank for human to decide
+  });
+  const cards=picks.map((p,i)=>{
+    const jv=p.judge_verdict||'FLAG';
+    const confC=p.confidence==='HIGH'?'var(--grn)':p.confidence==='MEDIUM'?'var(--amb)':'var(--t4)';
+    return `<div class="rg-pick-card" id="rgc-${i}">
+      <div class="rg-pick-top">
+        <div class="rg-pick-match">${p.matchup||''} <span class="pib pib-${p.confidence}">${p.confidence}</span></div>
+        <div class="rg-pick-call">${p.pick||''}</div>
+        <div class="rg-pick-reason">${(p.reasoning||'').slice(0,260)}</div>
+      </div>
+      <div class="rg-judge-row">
+        <span class="agent-badge judge">⚖ JUDGE</span>
+        <span class="rg-judge-verdict ${jv}">${jv}</span>
+        <span class="rg-judge-note">${p.judge_note||''}</span>
+      </div>
+      <div class="rg-btn-row">
+        <button class="rg-btn approve" id="rgb-approve-${i}" onclick="rgVote(${i},'approve')">✓ APPROVE</button>
+        <button class="rg-btn skip" id="rgb-skip-${i}" onclick="rgVote(${i},'skip')">— SKIP</button>
+        <button class="rg-btn flip" id="rgb-flip-${i}" onclick="rgVote(${i},'flip')">↔ FLIP</button>
+      </div>
+    </div>`;
+  }).join('');
+  const autoCount=Object.values(_rgApprovals).filter(v=>v==='approve').length;
+  el.innerHTML=`<div class="review-gate">
+    <div class="rg-header">
+      <div class="rg-title"><span class="agent-badge supervisor">⬡ SUPERVISOR</span> HUMAN REVIEW GATE</div>
+      <div class="rg-subtitle">${picks.length} pick${picks.length!==1?'s':''} staged — approve, skip, or flip before publishing</div>
+    </div>
+    <div class="rg-picks-list" id="rgPicksList">${cards}</div>
+    <div class="rg-publish-bar">
+      <span style="font-size:10px;color:var(--t3);flex:1"><span id="rgCountNum">${autoCount}</span>/${picks.length} approved</span>
+      <button class="rg-btn skip" style="flex:0;padding:7px 12px;white-space:nowrap" onclick="rgAutoApprove()">AUTO-APPROVE</button>
+      <button class="gen-btn" style="padding:8px 18px;flex:0;white-space:nowrap" onclick="publishApproved()">PUBLISH →</button>
+    </div>
+  </div>`;
+  // Apply pre-fills visually
+  Object.entries(_rgApprovals).forEach(([i,vote])=>_rgHighlight(parseInt(i),vote));
+}
+
+function rgVote(idx,vote){
+  _rgApprovals[idx]=vote;
+  _rgHighlight(idx,vote);
+  const ac=Object.values(_rgApprovals).filter(v=>v==='approve').length;
+  const el=$('rgCountNum');if(el)el.textContent=ac;
+}
+
+function _rgHighlight(idx,vote){
+  const card=$(`rgc-${idx}`);if(!card)return;
+  card.classList.remove('approved','skipped','flipped');
+  if(vote==='approve')card.classList.add('approved');
+  else if(vote==='skip')card.classList.add('skipped');
+  else if(vote==='flip')card.classList.add('flipped');
+  ['approve','skip','flip'].forEach(v=>{const b=$(`rgb-${v}-${idx}`);if(b)b.classList.toggle('active',vote===v);});
+}
+
+function rgAutoApprove(){
+  const picks=(pendingPicksData?.picks||[]).filter(p=>!p.is_lean);
+  picks.forEach((p,i)=>{rgVote(i,p.judge_verdict==='REJECT'?'skip':'approve');});
+}
+
+function publishApproved(){
+  if(!pendingPicksData)return;
+  const picks=(pendingPicksData.picks||[]).filter(p=>!p.is_lean);
+  picks.forEach((p,i)=>{
+    const vote=_rgApprovals[i];
+    if(vote==='skip'){p.human_decision='skip';p.is_lean=true;}
+    else if(vote==='flip'){p.human_decision='flip';p.human_flipped=true;}
+    else{p.human_decision=vote||'approve';}
+  });
+  // Only keep non-skipped as graded picks; demoted picks become leans
+  const skippedAsLeans=picks.filter(p=>p.human_decision==='skip'&&p.confidence!=='LOW')
+    .map(p=>({...p,is_lean:true}));
+  pendingPicksData.picks=picks.filter(p=>p.human_decision!=='skip');
+  pendingPicksData.leans=[...(pendingPicksData.leans||[]),...skippedAsLeans];
+  todayPicksData=pendingPicksData;
+  pendingPicksData=null;_rgApprovals={};
+  localStorage.setItem('et_picks_today',JSON.stringify(todayPicksData));
+  localStorage.setItem('et_picks_date',new Date().toDateString());
+  // CLV snapshot
+  {const clvLines={};(todayPicksData.picks||[]).forEach(p=>{const gm=allG.find(gm=>{const mu=(p.matchup||'').toLowerCase();const an=gm.aw.nm.toLowerCase().split(' ').pop(),hn=gm.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});if(!gm?.odds?.bookmakers?.length)return;const bk=gm.odds.bookmakers[0];const sp=bk.markets.find(m=>m.key==='spreads');const ml=bk.markets.find(m=>m.key==='h2h');const to=bk.markets.find(m=>m.key==='totals');clvLines[`${p.matchup}|${p.pick}`]={sp:sp?.outcomes?.find(o=>o.point<0)?.point??null,to:to?.outcomes?.find(o=>o.name==='Over')?.point??null,ml:ml?.outcomes?.map(o=>o.price)||[],ts:Date.now(),gid:gm.id}});localStorage.setItem('et_clv_lines',JSON.stringify(clvLines));}
+  if(todayPicksData.learned_rules_update){
+    const trimmedRules=todayPicksData.learned_rules_update.split('\n').map(r=>r.trim()).filter(Boolean).slice(0,12).map(r=>r.length>150?r.slice(0,147)+'…':r).join('\n');
+    localStorage.setItem('et_learned_rules',trimmedRules);
+  }
+  saveTodayToHistory();
+  syncToKV();
+  isGenerating=false;
+  renderPicksLeaderboard();
+  renderPicksOverview();
+}
+
 async function generatePicks(force=false){
   if(!CLAUDE_KEY){showPicksSetup();return}
   if(isGenerating)return;
@@ -3832,63 +4107,65 @@ async function generatePicks(force=false){
   isGenerating=true;_setGenStatus('STARTING...');renderPicksLeaderboard();renderPicksOverview();
   await new Promise(r=>setTimeout(r,50));
   try{
+    // ── Step 1: Sync + grade ──────────────────────────────────────────────────
     _setGenStatus('SYNCING DATA...');
     const [,scoresResult]=await Promise.allSettled([syncFromKV(),fetchCompletedScores()]);
     const completed=scoresResult.status==='fulfilled'?scoresResult.value:[];
     if(completed.length)autoGradeFromScores(completed);
+    // ── Step 2: Warm stats cache ──────────────────────────────────────────────
     _setGenStatus('FETCHING STATS...');
     await prefetchStatsForPicks();
-    // Phase 1 — Tennis signal analysis
     const _todayStr=new Date().toDateString();
-    const _hasTennis=allG.some(g=>g.cat==='tennis'&&g.tm.toDateString()===_todayStr);
-    const _mkRules=(k,sport)=>{
-      let out='';
-      // Inject signal performance track record so Phase 1 can self-calibrate signal weights
-      const _perfRaw=localStorage.getItem('et_signal_performance');
-      if(_perfRaw){try{const _perf=JSON.parse(_perfRaw);const _lines=Object.entries(_perf).filter(([,v])=>v.w+v.l>=3).sort(([,a],[,b])=>(b.w+b.l)-(a.w+a.l)).slice(0,15).map(([tag,v])=>{const tot=v.w+v.l+v.p;const wr=tot>0?Math.round(v.w/(v.w+v.l)*100):0;const flag=v.significant_edge?'[EDGE]':v.significant_fade?'[FADE]':'[NOISE]';return `  ${flag} ${tag}: ${v.w}-${v.l}${v.p?'-'+v.p:''} (${wr}% WR, ${tot} picks)`});if(_lines.length)out+=`SIGNAL TRACK RECORD (last 30 days — [EDGE]=statistically real, [FADE]=losing, [NOISE]=insufficient sample):\n${_lines.join('\n')}\n\n`}catch(_){}}
-      const r=localStorage.getItem(k);if(r)out+=`LEARNED RULES (${sport} — apply these first, highest priority):\n${r}\n\n`;
-      return out;
-    };
-    _setGenStatus('ANALYZING SLATE...');
-    const [tennisResult]=await Promise.allSettled([
-      _hasTennis?runTennisAnalysis(_mkRules('et_learned_rules_tennis','tennis')+buildGamesContext(true,g=>g.cat==='tennis')):Promise.resolve(null)
-    ]);
-    const tennisAnalysis=tennisResult.status==='fulfilled'?tennisResult.value:null;
-    _setGenStatus('GENERATING PICKS...');
-    // Phase 2 — Main picks call
-    const gamesCtx=buildGamesContext(true); // full slate — tennis included for parlay context
+    // ── Step 3: SUPERVISOR — classify today's matches ─────────────────────────
+    _setGenStatus('SUPERVISOR: CLASSIFYING SLATE...');
+    const _todayMatches=allG.filter(g=>g.cat==='tennis'&&g.tm.toDateString()===_todayStr);
+    const {deep,quick,skip:_skipped}=supervisorClassify(_todayMatches);
+    const _agentTargets=[...deep,...quick];
+    console.log(`[supervisor] DEEP=${deep.length} QUICK=${quick.length} SKIP=${_skipped.length}`);
+    // ── Step 4: SUBAGENTS — parallel per-match Haiku analysis ─────────────────
+    let agentResults=[];
+    if(_agentTargets.length&&CLAUDE_KEY){
+      _setGenStatus(`AGENTS: ANALYZING ${_agentTargets.length} MATCH${_agentTargets.length!==1?'ES':''}...`);
+      const _settled=await Promise.allSettled(_agentTargets.map(g=>runMatchAgent(g)));
+      agentResults=_settled.map(r=>r.status==='fulfilled'?r.value:null).filter(Boolean);
+      console.log(`[subagents] ${agentResults.length}/${_agentTargets.length} returned signals`);
+    }
+    // ── Step 5: SYNTHESIZER — Sonnet picks from structured pre-analysis ───────
+    _setGenStatus('SYNTHESIZING PICKS...');
+    const gamesCtx=buildGamesContext(true);
     const yPicks=getYesterdayPicks(3);
-    let rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;{const r=localStorage.getItem('et_learned_rules_tennis');if(r)rules+=`\n\nTENNIS SPECIFIC RULES (learned last 30d — highest priority):\n${r}`;}
+    let rules=localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES;
+    {const r=localStorage.getItem('et_learned_rules_tennis');if(r)rules+=`\n\nTENNIS SPECIFIC RULES (learned last 30d — highest priority):\n${r}`;}
+    // Inject signal performance track record into rules context
+    {const _perfRaw=localStorage.getItem('et_signal_performance');if(_perfRaw){try{const _perf=JSON.parse(_perfRaw);const _lines=Object.entries(_perf).filter(([,v])=>v.w+v.l>=3).sort(([,a],[,b])=>(b.w+b.l)-(a.w+a.l)).slice(0,15).map(([tag,v])=>{const tot=v.w+v.l+v.p;const wr=tot>0?Math.round(v.w/(v.w+v.l)*100):0;const flag=v.significant_edge?'[EDGE]':v.significant_fade?'[FADE]':'[NOISE]';return `  ${flag} ${tag}: ${v.w}-${v.l}${v.p?'-'+v.p:''} (${wr}% WR, ${tot} picks)`});if(_lines.length)rules+=`\n\nSIGNAL TRACK RECORD:\n${_lines.join('\n')}`}catch(_){}}}
     const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',signal:AbortSignal.timeout(120000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:8000,system:buildSystemPrompt(rules,rec),messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,tennisAnalysis)}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:8000,
+        system:buildSystemPrompt(rules,rec),
+        messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,null,agentResults)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
     const text=data.content[0].text;
-    // Extract JSON: fence block first, then outermost {…} (greedy — first { to last })
+    // Extract JSON: fence block first, then outermost {…}
     const fenceM=text.match(/```json\s*([\s\S]+?)\s*```/);
     const raw=fenceM?fenceM[1]:(text.match(/(\{[\s\S]+\})/)||[])[1]||text;
     if(!raw||raw===text&&!raw.trim().startsWith('{'))throw new Error('No JSON in response');
     // Parse strategy: try raw → repaired → filters-stripped → partial extract → error
     function _tryParse(s){try{return JSON.parse(s)}catch(e){return null}}
     function _stripFilters(s){return s.replace(/"filters"\s*:\s*\[[^\]]*\]/g,'"filters":[]')}
-    // Last-resort: balanced-bracket array extraction — survives any top-level JSON breakage
     function _partialExtract(s){
       try{
-        // Normalize \" → " so \"picks\" style keys are found by the key regex
         const sn=s.replace(/\\"/g,'"');
         const _arr=key=>{
           const km=sn.match(new RegExp('"'+key+'"\\s*:\\s*\\['));
           if(!km)return[];
-          const start=sn.indexOf('[',km.index+km[0].length-1);
-          if(start<0)return[];
+          const start=sn.indexOf('[',km.index+km[0].length-1);if(start<0)return[];
           let depth=0,end=-1;
           for(let i=start;i<sn.length;i++){if(sn[i]==='[')depth++;else if(sn[i]===']'){depth--;if(!depth){end=i;break;}}}
           if(end>=0){try{return JSON.parse(_repairJSON(sn.slice(start,end+1)))||[]}catch(e){return[]}}
-          // Truncated array (hit max_tokens): find last complete {...} object and close the array
           let lastEnd=start,od=0;
           for(let i=start;i<sn.length;i++){if(sn[i]==='{')od++;else if(sn[i]==='}'){od--;if(od===0)lastEnd=i+1;}}
           if(lastEnd<=start)return[];
@@ -3902,7 +4179,6 @@ async function generatePicks(force=false){
       }catch(e){return null}
     }
     const repaired=_repairJSON(raw);
-    // Log parse failures to localStorage for debugging
     let result=_tryParse(raw)||_tryParse(repaired)||_tryParse(_stripFilters(repaired))||_tryParse(_stripFilters(raw))||_partialExtract(repaired)||_partialExtract(raw);
     if(!result){
       let pe;try{JSON.parse(repaired)}catch(e){pe=e}
@@ -3912,74 +4188,47 @@ async function generatePicks(force=false){
       throw new Error(`JSON: ${pe?.message} — near: ...${snip}...`)
     }
     if(result.analyst_note==='(partial parse — some response data recovered)'){
-      // Log what was/wasn't recovered
       let pe;try{JSON.parse(repaired)}catch(e){pe=e}
       const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);
       const snip=repaired.slice(Math.max(0,pos-60),pos+80);
       localStorage.setItem('et_last_parse_error',JSON.stringify({ts:new Date().toISOString(),msg:'partial:'+pe?.message,near:snip,picks:result.picks?.length||0,leans:result.leans?.length||0,grading:result.grading?.length||0,raw:raw.slice(0,500)}));
     }
-    // No unbettable demotion — all tennis matches are fair game, user picks their book
-    todayPicksData=result;
-    // Enrich picks with entry_odds + odds_api_game_id for CLV tracking. The
-    // worker's grading cron uses these to look up the closing-line snapshot
-    // and compute CLV = (close_implied - entry_implied) * 100. Without these
-    // fields the worker can't match a pick to a closing snapshot.
+    // ── Enrich picks with CLV fields (entry odds, game id, timestamp) ──────────
     if(result.picks){
       result.picks.forEach(p=>{
         const gm=allG.find(g=>{const mu=(p.matchup||'').toLowerCase();const an=g.aw.nm.toLowerCase().split(' ').pop(),hn=g.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});
         if(gm?.odds?.id)p.odds_api_game_id=gm.odds.id;
-        // Extract entry odds from the pick string text. e.g. "Pistons -9.5 (-110)" → -110
         const m=(p.pick||'').match(/\(([+-]?\d{2,4})\)/);
         if(m)p.entry_odds=parseInt(m[1]);
-        // Stamp pick time so we can correlate with snapshot timestamps later
         p.entry_at=new Date().toISOString();
       });
     }
-    // ── Multi-model ensemble check ─────────────────────────────────────────
-    // Run picks through claude-haiku-4-5 (cheap, fast) as a second opinion.
-    // Tags each pick with `consensus: true/false`. UI surfaces the consensus
-    // tag; downstream you can require consensus for HIGH-confidence stakes.
-    // Reduces single-model bias roughly 30% by catching outlier picks that
-    // sonnet was confident on but a different model would flip.
-    if(result.picks?.length){
-      _setGenStatus('VERIFYING WITH SECONDARY MODEL...');
-      try{await _runEnsembleCheck(result,gamesCtx)}catch(e){console.warn('[ensemble] verifier failed:',e?.message||e)}
-    }
-    localStorage.setItem('et_picks_today',JSON.stringify(result));
-    localStorage.setItem('et_picks_date',new Date().toDateString());
-    // Store line at pick time for CLV tracking (legacy snapshot keyed by
-    // matchup|pick — still useful as a frontend fallback when worker
-    // closing-line lookup misses).
-    {const clvLines={};(result.picks||[]).forEach(p=>{const gm=allG.find(gm=>{const mu=(p.matchup||'').toLowerCase();const an=gm.aw.nm.toLowerCase().split(' ').pop(),hn=gm.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});if(!gm?.odds?.bookmakers?.length)return;const bk=gm.odds.bookmakers[0];const sp=bk.markets.find(m=>m.key==='spreads');const ml=bk.markets.find(m=>m.key==='h2h');const to=bk.markets.find(m=>m.key==='totals');clvLines[`${p.matchup}|${p.pick}`]={sp:sp?.outcomes?.find(o=>o.point<0)?.point??null,to:to?.outcomes?.find(o=>o.name==='Over')?.point??null,ml:ml?.outcomes?.map(o=>o.price)||[],ts:Date.now(),gid:gm.id}});localStorage.setItem('et_clv_lines',JSON.stringify(clvLines))}
-    if(result.learned_rules_update){
-      // Cap rules: max 12 lines, each max 150 chars, to prevent token bloat
-      const trimmedRules=result.learned_rules_update.split('\n')
-        .map(r=>r.trim()).filter(Boolean)
-        .slice(0,12)
-        .map(r=>r.length>150?r.slice(0,147)+'…':r)
-        .join('\n');
-      localStorage.setItem('et_learned_rules',trimmedRules);
-    }
-    // Enrich picks with Phase 1 vote context so the learning agent has signal attribution
-    if(result.picks?.length){
-      const _p1pool=[];
-      const _sigNames=a=>(a.signals||[]).map(s=>(s.name||'').toLowerCase().replace(/\s+/g,'_')).filter(Boolean);
-      (tennisAnalysis?.tennis_analysis||[]).forEach(a=>_p1pool.push({mu:(a.matchup||'').toLowerCase().replace(/[^a-z0-9]/g,''),votes:a.votes,sigs:_sigNames(a)}));
+    // ── Enrich picks with subagent signal attribution ─────────────────────────
+    if(result.picks?.length&&agentResults.length){
       result.picks.forEach(p=>{
         const pmu=(p.matchup||'').toLowerCase().replace(/[^a-z0-9]/g,'');
         const tokens=(p.matchup||'').toLowerCase().match(/[a-z]{4,}/g)||[];
-        const hit=_p1pool.find(x=>x.mu===pmu)||_p1pool.find(x=>tokens.some(t=>x.mu.includes(t)));
-        if(hit?.votes)p.phase1_votes=hit.votes;
-        if(hit?.sigs?.length)p.phase1_signals=hit.sigs;
+        const hit=agentResults.find(a=>{
+          const amu=(a.matchup||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+          return amu===pmu||tokens.some(t=>amu.includes(t));
+        });
+        if(hit){p.agent_edge=hit.edge_side;p.agent_strength=hit.edge_strength;p.agent_signals=hit.key_signals||[];}
       });
     }
-    saveTodayToHistory();
-    syncToKV(); // fire-and-forget: push updated rules + record + history to KV
+    // ── Step 6: JUDGE — adversarial reflection before human gate ─────────────
+    if(result.picks?.length){
+      _setGenStatus('JUDGE: REVIEWING PICKS...');
+      try{await runJudgeReflection(result,gamesCtx)}catch(e){console.warn('[judge] failed:',e?.message||e);}
+    }
+    // ── Step 7: HUMAN REVIEW GATE ─────────────────────────────────────────────
+    _setGenStatus('REVIEW READY — AWAITING YOUR APPROVAL');
+    showReviewGate(result);
+    // publishApproved() handles save → render when user clicks PUBLISH
   }catch(e){
     $('detailPanel').innerHTML=`<div class="pick-gen-state"><div style="font-size:28px">⚠️</div><div style="font-size:11px;color:var(--red);margin-top:8px">GENERATION FAILED</div><div style="font-size:10px;color:var(--t4);margin-top:6px;max-width:280px;line-height:1.6">${e.message}</div><button class="gen-btn" style="margin-top:16px" onclick="generatePicks()">RETRY</button></div>`;
     isGenerating=false;return;
   }
-  isGenerating=false;renderPicksLeaderboard();renderPicksOverview();
+  // Note: isGenerating stays true until publishApproved() — prevents re-runs during review
 }
 
 async function aiAnalyzeGame(gid){
