@@ -1629,7 +1629,31 @@ async function fetchLWOTArticle(awNm,hmNm){
   }catch(e){return null}
 }
 
-function mobBack(){document.body.classList.remove('mob-detail-open')}
+function mobBack(){
+  document.body.classList.remove('mob-detail-open');
+  // If we backed out during pick review, render the re-entry banner on slate
+  if(pendingPicksData?.picks?.length)_renderReviewPendingBanner();
+}
+function _renderReviewPendingBanner(){
+  const slateList=$('slateList');if(!slateList)return;
+  // Don't double-render
+  if(document.getElementById('rgReturnBanner'))return;
+  const picks=(pendingPicksData?.picks||[]).filter(p=>!p.is_lean);
+  if(!picks.length)return;
+  const banner=document.createElement('div');
+  banner.id='rgReturnBanner';
+  banner.style.cssText='position:sticky;top:0;z-index:10;padding:10px 14px;background:linear-gradient(90deg,var(--cyn) 0%,#00b8d4 100%);color:var(--bg0);font-size:11px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,229,255,.3)';
+  banner.innerHTML=`<span style="font-size:14px">⚡</span><span style="flex:1">${picks.length} PICK${picks.length!==1?'S':''} AWAITING YOUR REVIEW</span><span>OPEN →</span>`;
+  banner.onclick=()=>{
+    document.body.classList.add('mob-detail-open');
+    if(pendingPicksData)showReviewGate(pendingPicksData);
+  };
+  slateList.parentNode.insertBefore(banner,slateList);
+}
+function _clearReviewPendingBanner(){
+  const b=document.getElementById('rgReturnBanner');if(b)b.remove();
+  document.body.classList.remove('mob-review-pending');
+}
 
 async function selGame(idx){
   // Update selection highlight without full slate rebuild
@@ -4823,6 +4847,13 @@ function showReviewGate(result){
   _rgApprovals={};
   const picks=(result.picks||[]).filter(p=>!p.is_lean);
   const el=$('detailPanel');if(!el)return;
+  // Mobile: detail panel is off-screen by default. Slide it in so the user
+  // can actually see and interact with the review gate. Without this, picks
+  // generate but mobile users have no path to review/publish them.
+  if(window.innerWidth<=768){
+    document.body.classList.add('mob-detail-open');
+    document.body.classList.add('mob-review-pending'); // marker for re-entry
+  }
   // Pre-fill approvals from judge verdicts
   picks.forEach((p,i)=>{
     if(p.judge_verdict==='APPROVE')_rgApprovals[i]='approve';
@@ -4923,6 +4954,13 @@ function publishApproved(){
   saveTodayToHistory();
   syncToKV();
   isGenerating=false;
+  // Clear mobile review state — picks are published, banner no longer needed
+  _clearReviewPendingBanner();
+  // Mobile: route the user to the picks view so they see what they just published
+  if(window.innerWidth<=768){
+    document.body.classList.remove('mob-detail-open');
+    if(typeof switchToPicksView==='function')switchToPicksView();
+  }
   renderPicksLeaderboard();
   renderPicksOverview();
 }
