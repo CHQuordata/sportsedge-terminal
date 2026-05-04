@@ -958,8 +958,117 @@ function fairPrice(g){
     fair_over:Math.round(overGames*1000)/1000,
     fair_under:Math.round((1-overGames)*1000)/1000,
     mean_margin:Math.round(meanMargin*10)/10,
-    spreads:spreadProbs.map(s=>({line:s.line,pA:Math.round(s.pA*1000)/1000,fair_odds:toAmerican(s.pA)}))
+    spreads:spreadProbs.map(s=>({line:s.line,pA:Math.round(s.pA*1000)/1000,fair_odds:toAmerican(s.pA)})),
+    // Raw distributions retained for computeMatchEdges() — lets the quant
+    // layer evaluate edges at ANY book line (not just our pre-computed midpoints)
+    _totalGamesDist:sim.dist.totalGames,
+    _marginDist:sim.dist.margins
   };
+}
+
+// ── Quant desk: edge classification + Kelly sizing ───────────────────────────
+// Compares math-model fair prices against every book market and produces a
+// trading-desk-style decision per match. Mirrors how a quant operation
+// thinks about tennis: math derives the fair price; book lines are compared;
+// edges above threshold get auto-included; small edges get LLM judgment;
+// no-edge gets passed unless qualitative signals override.
+
+function _americanToImplied(p){if(p==null)return null;return p>0?100/(p+100):Math.abs(p)/(Math.abs(p)+100);}
+function _americanToDecimal(p){if(p==null)return null;return p>0?(p/100)+1:(100/Math.abs(p))+1;}
+// Kelly fraction = (b*p - q) / b, capped at 0 (never negative size).
+// We report quarter-Kelly since edge estimates have variance — full Kelly is
+// brutal under uncertainty.
+function _kellyFraction(fairProb,bookOdds){
+  if(!bookOdds||fairProb<=0||fairProb>=1)return 0;
+  const dec=_americanToDecimal(bookOdds);if(!dec||dec<=1)return 0;
+  const b=dec-1,p=fairProb,q=1-p;
+  const k=(b*p-q)/b;
+  return Math.max(0,k);
+}
+
+// Compute every actionable edge for a match given the math model's fair price.
+// Returns an array of {market, side, fairProb, bookProb, edge, fairOdds, bookOdds, kelly_q}.
+// Markets covered: ML (each side), Total Games (over/under), Game Spread (each line).
+function computeMatchEdges(g,fp){
+  const out=[];
+  if(!fp||fp.error||!g.odds?.bookmakers?.length)return out;
+  // Aggregate best book line across all bookmakers (sharp move: take best price)
+  const bestPrices={};
+  g.odds.bookmakers.forEach(bk=>{
+    (bk.markets||[]).forEach(mk=>{
+      (mk.outcomes||[]).forEach(o=>{
+        const key=`${mk.key}|${o.name}|${o.point??''}`;
+        if(!bestPrices[key]||(o.price>bestPrices[key].price))bestPrices[key]={...o,book:bk.key};
+      });
+    });
+  });
+  // ── ML edges ────────────────────────────────────────────────────────────
+  const mlA=Object.values(bestPrices).find(o=>o.name===g.aw.nm||(g.aw.nm.toLowerCase().includes(o.name?.toLowerCase().split(' ').pop()||'__')));
+  const mlB=Object.values(bestPrices).find(o=>o.name===g.hm.nm||(g.hm.nm.toLowerCase().includes(o.name?.toLowerCase().split(' ').pop()||'__')));
+  if(mlA){const bookProb=_americanToImplied(mlA.price);const edge=fp.fair_pA-bookProb;out.push({market:'ML',side:g.aw.nm,fairProb:fp.fair_pA,bookProb,edge,fairOdds:fp.fair_ml_a,bookOdds:mlA.price,book:mlA.book,kelly_q:_kellyFraction(fp.fair_pA,mlA.price)/4});}
+  if(mlB){const bookProb=_americanToImplied(mlB.price);const fairB=1-fp.fair_pA;const edge=fairB-bookProb;out.push({market:'ML',side:g.hm.nm,fairProb:fairB,bookProb,edge,fairOdds:fp.fair_ml_b,bookOdds:mlB.price,book:mlB.book,kelly_q:_kellyFraction(fairB,mlB.price)/4});}
+  // ── Totals (game total over/under) ──────────────────────────────────────
+  Object.values(bestPrices).filter(o=>o.name==='Over'||o.name==='Under').forEach(o=>{
+    const line=parseFloat(o.point);if(isNaN(line))return;
+    // Reuse simulator's total-games distribution to get fair Over% at this exact line
+    if(!fp._totalGamesDist)return; // distribution not retained — only have midpoint
+    const overCount=fp._totalGamesDist.filter(t=>t>line).length;
+    const fairOver=overCount/fp._totalGamesDist.length;
+    const isOver=o.name==='Over';
+    const fairProb=isOver?fairOver:1-fairOver;
+    const bookProb=_americanToImplied(o.price);
+    const edge=fairProb-bookProb;
+    out.push({market:`Total ${line}`,side:o.name,fairProb,bookProb,edge,fairOdds:null,bookOdds:o.price,book:o.book,kelly_q:_kellyFraction(fairProb,o.price)/4});
+  });
+  // ── Game Spreads ────────────────────────────────────────────────────────
+  Object.values(bestPrices).filter(o=>o.point!=null&&o.name!=='Over'&&o.name!=='Under'&&!isNaN(parseFloat(o.point))).forEach(o=>{
+    const point=parseFloat(o.point);if(isNaN(point)||Math.abs(point)<0.5)return;
+    // Identify which player this spread is for
+    const lastA=g.aw.nm.toLowerCase().split(' ').pop();
+    const lastB=g.hm.nm.toLowerCase().split(' ').pop();
+    const oNm=(o.name||'').toLowerCase();
+    const isA=oNm.includes(lastA);
+    const isB=oNm.includes(lastB);
+    if(!isA&&!isB)return;
+    if(!fp._marginDist)return; // need full margin distribution
+    // Spread point of -1.5 for A means A wins by ≥2 (margin > 1.5)
+    // Spread point of +1.5 for A means A loses by less than 1.5 (margin > -1.5)
+    const targetMargin=isA?-point:point; // for B the margin is reversed
+    const subset=isA?fp._marginDist:fp._marginDist.map(m=>-m);
+    const wins=subset.filter(m=>m>targetMargin).length;
+    const fairProb=wins/subset.length;
+    const bookProb=_americanToImplied(o.price);
+    const edge=fairProb-bookProb;
+    out.push({market:`Spread ${point>0?'+':''}${point}g`,side:isA?g.aw.nm:g.hm.nm,fairProb,bookProb,edge,fairOdds:null,bookOdds:o.price,book:o.book,kelly_q:_kellyFraction(fairProb,o.price)/4});
+  });
+  return out;
+}
+
+// Quant desk classification per match. Returns one of:
+//   AUTOPICK    — math edge ≥ 3% on best market; pick is mandated
+//   BORDERLINE  — math edge 1–3%; LLM judgment decides pick vs lean
+//   QUANT_PASS  — math edge < 1%; LLM can still surface qualitative signals
+//   NO_QUANT    — fair price unavailable (unranked player); LLM-only call
+function quantClassify(g){
+  const fp=fairPrice(g);
+  if(!fp)return{match:g,classification:'NO_QUANT',reason:'no fair price'};
+  if(fp.error==='unranked')return{match:g,classification:'NO_QUANT',reason:'unranked',fp};
+  const edges=computeMatchEdges(g,fp);
+  if(!edges.length)return{match:g,classification:'NO_QUANT',reason:'no book lines',fp};
+  edges.sort((a,b)=>b.edge-a.edge);
+  const best=edges[0];
+  let classification;
+  if(best.edge>=0.03)classification='AUTOPICK';
+  else if(best.edge>=0.01)classification='BORDERLINE';
+  else classification='QUANT_PASS';
+  return{match:g,classification,fp,edges,bestEdge:best};
+}
+
+// Compact human-readable line for a single edge — used in synthesizer prompt
+function _formatEdge(e,maxLen=160){
+  const odd=n=>n==null?'—':(n>0?'+':'')+n;
+  const pct=v=>(v*100).toFixed(1)+'%';
+  return `${e.market}/${e.side}: fair ${pct(e.fairProb)} (${odd(e.fairOdds)}) vs book ${pct(e.bookProb)} (${odd(e.bookOdds)}) → edge ${(e.edge*100).toFixed(2)}% | qK=${(e.kelly_q*100).toFixed(2)}%`.slice(0,maxLen);
 }
 
 const E={
@@ -3841,8 +3950,17 @@ Injury data is background context ONLY. Follow these rules strictly:
 - Games tagged [ODDS LOADING] have no bookmaker data yet — still pick freely using stats, form, and situational context.
 - Every pick and lean MUST have "sport":"tennis" and "matchup" must contain BOTH player last names exactly as shown in the slate so picks map to the correct game.
 
+## YOUR ROLE — READ FIRST, INTERNALIZE BEFORE EVERYTHING ELSE
+You are NOT the price model. You are an analyst on a quant-style tennis betting desk. The QUANT DESK FAIR-PRICE TABLE in the user message is the OUTPUT of a closed-form mathematical model (sElo + Monte Carlo simulator). It is the PRIMARY signal for picks. Your job is:
+  1. Faithfully convert AUTOPICK math edges into graded picks (do not second-guess the math).
+  2. Adjudicate BORDERLINE matches by weighing subagent reports for/against the math.
+  3. Surface unstructured signals (injury news, coaching changes, weather, motivational context) for QUANT_PASS matches — these are signals the math can't capture.
+  4. Fall back to standard LLM signal voting only on NO_QUANT matches (unranked players).
+
+The fair-price math is ALWAYS upstream of your judgment. If math says +4% edge on Sinner -1.5g and you "feel" it should be Sinner ML, the math wins. Trust the model.
+
 ## PRE-ANALYSIS (TENNIS)
-When the user message contains "TENNIS PRE-ANALYSIS" sections, those picks have already been derived from signal vote tallies by dedicated analysts. Incorporate them exactly as provided — do not re-examine raw data, do not override conclusions, do not change vehicles or sides. Your job is to slot them into the picks array and use them for parlay construction. If a pre-analysis pick conflicts with what you might otherwise choose, the pre-analysis wins.
+When the user message contains "TENNIS PRE-ANALYSIS" sections, those picks have already been derived from signal vote tallies by dedicated analysts. Incorporate them exactly as provided — do not re-examine raw data, do not override conclusions, do not change vehicles or sides. Your job is to slot them into the picks array and use them for parlay construction. If a pre-analysis pick conflicts with what you might otherwise choose, the pre-analysis wins. NOTE: when the QUANT DESK TABLE is also present, the QUANT TABLE supersedes pre-analysis on conflicts (math beats vote-tallying).
 
 ## TENNIS PRIORITY (ATP/WTA SEASON ACTIVE)
 This is a tennis-only terminal. ALL matches on the slate are fair game regardless of book availability — the user decides where to place their bet.
@@ -3889,8 +4007,49 @@ Games tagged [DOUBLES] in the slate have no individual player stats. For doubles
 }`;
 }
 
-function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,agentAnalysis,priorPicks){
+function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,agentAnalysis,priorPicks,quantClassifications){
   let msg=gamesCtx;
+  // ── QUANT DESK FAIR-PRICE TABLE ─────────────────────────────────────────────
+  // PRIMARY SIGNAL. Math-derived edges from sElo + Monte Carlo simulator. Math
+  // is upstream of LLM judgment. AUTOPICK candidates MUST appear in graded picks.
+  if(quantClassifications?.length){
+    const buckets={AUTOPICK:[],BORDERLINE:[],QUANT_PASS:[],NO_QUANT:[]};
+    quantClassifications.forEach(qc=>buckets[qc.classification].push(qc));
+    msg+=`\n## QUANT DESK FAIR-PRICE TABLE — PRIMARY SIGNAL (math-model derived)\nThis table is the OUTPUT of a closed-form sElo + Monte Carlo simulator. Math derives the fair price; book lines are compared. Edges below are post-vig.\n\nSYNTHESIS RULES (enforce strictly):\n  1. Every AUTOPICK match (edge ≥3%) MUST be a graded pick. Confidence: HIGH if edge ≥5%, MEDIUM otherwise. Reasoning must cite the math edge as primary justification.\n  2. BORDERLINE matches (edge 1–3%) become graded picks ONLY if the matching subagent signal report agrees with the math (same edge_side or same vehicle). Otherwise downgrade to lean.\n  3. QUANT_PASS matches (edge <1%) are skipped UNLESS a subagent surfaces a strong unstructured signal (injury news, coaching change, weather) that the math doesn't capture.\n  4. NO_QUANT matches (unranked players, no fair price) fall back to standard subagent-driven LLM analysis.\n  5. Do NOT invent picks for matches not classified above. Do NOT override a math AUTOPICK with LLM gut.\n\n`;
+    if(buckets.AUTOPICK.length){
+      msg+=`### AUTOPICK (${buckets.AUTOPICK.length}) — math edge ≥3%, mandatory graded picks\n`;
+      buckets.AUTOPICK.forEach(qc=>{
+        msg+=`▸ ${qc.match.aw.nm} vs ${qc.match.hm.nm} [${qc.match.spL} ${qc.match.surf||'?'}] — sElo: ${qc.fp.eloA} vs ${qc.fp.eloB}\n`;
+        // Top 3 edges per match
+        qc.edges.slice(0,3).forEach(e=>{msg+=`    ${_formatEdge(e)}\n`;});
+      });
+      msg+='\n';
+    }
+    if(buckets.BORDERLINE.length){
+      msg+=`### BORDERLINE (${buckets.BORDERLINE.length}) — math edge 1–3%, LLM tiebreak required\n`;
+      buckets.BORDERLINE.forEach(qc=>{
+        msg+=`▸ ${qc.match.aw.nm} vs ${qc.match.hm.nm} [${qc.match.spL} ${qc.match.surf||'?'}]\n`;
+        msg+=`    ${_formatEdge(qc.bestEdge)}\n`;
+      });
+      msg+='\n';
+    }
+    if(buckets.QUANT_PASS.length){
+      msg+=`### QUANT_PASS (${buckets.QUANT_PASS.length}) — math says no edge; pick only if unstructured signal demands\n`;
+      buckets.QUANT_PASS.slice(0,15).forEach(qc=>{
+        msg+=`▸ ${qc.match.aw.nm} vs ${qc.match.hm.nm} [${qc.match.spL}] — best edge ${qc.bestEdge?(qc.bestEdge.edge*100).toFixed(2)+'% on '+qc.bestEdge.market+'/'+qc.bestEdge.side:'n/a'}\n`;
+      });
+      if(buckets.QUANT_PASS.length>15)msg+=`  …and ${buckets.QUANT_PASS.length-15} more\n`;
+      msg+='\n';
+    }
+    if(buckets.NO_QUANT.length){
+      msg+=`### NO_QUANT (${buckets.NO_QUANT.length}) — fair price unavailable (unranked / no book lines), fall back to standard LLM analysis\n`;
+      buckets.NO_QUANT.slice(0,10).forEach(qc=>{
+        msg+=`▸ ${qc.match.aw.nm} vs ${qc.match.hm.nm} [${qc.match.spL}] — ${qc.reason}\n`;
+      });
+      if(buckets.NO_QUANT.length>10)msg+=`  …and ${buckets.NO_QUANT.length-10} more\n`;
+      msg+='\n';
+    }
+  }
   // Prior pick anchor — when a previous pick set exists for this slate,
   // instruct the model to KEEP those picks unless the slate has materially
   // changed. Eliminates LLM drift where temperature-0 still produces
@@ -4726,6 +4885,16 @@ async function generatePicks(force=false){
     const {deep,quick,skip:_skipped}=supervisorClassify(_todayMatches);
     const _agentTargets=[...deep,...quick].sort((a,b)=>(a.id||'').localeCompare(b.id||'')); // deterministic order
     console.log(`[supervisor] DEEP=${deep.length} QUICK=${quick.length} SKIP=${_skipped.length}`);
+    // ── Step 3.5: QUANT DESK — math-derived fair prices + edge classification ──
+    // sElo + Monte Carlo simulator produces fair prices for every market.
+    // Compared to live book lines, this yields a desk-style edge map that
+    // becomes the PRIMARY signal for graded picks. LLM is downstream advisory.
+    _setGenStatus('QUANT DESK: COMPUTING FAIR PRICES...');
+    if(!_seloData)await loadSElo();
+    const quantClassifications=_agentTargets.map(quantClassify);
+    const _qBuckets={AUTOPICK:[],BORDERLINE:[],QUANT_PASS:[],NO_QUANT:[]};
+    quantClassifications.forEach(qc=>_qBuckets[qc.classification].push(qc));
+    console.log(`[quant] AUTOPICK=${_qBuckets.AUTOPICK.length} BORDERLINE=${_qBuckets.BORDERLINE.length} PASS=${_qBuckets.QUANT_PASS.length} NO_QUANT=${_qBuckets.NO_QUANT.length}`);
     // ── Step 4: SUBAGENTS — parallel per-match Haiku analysis (with cache) ────
     const agentCache=_loadAgentCache();
     let agentResults=[];
@@ -4766,7 +4935,7 @@ async function generatePicks(force=false){
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:8000,
         system:buildSystemPrompt(rules,rec),
-        messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,null,agentResults,_priorPicks)}]})
+        messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,null,agentResults,_priorPicks,quantClassifications)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
@@ -4814,6 +4983,70 @@ async function generatePicks(force=false){
       const pos=+(pe?.message.match(/position (\d+)/)?.[1]||0);
       const snip=repaired.slice(Math.max(0,pos-60),pos+80);
       localStorage.setItem('et_last_parse_error',JSON.stringify({ts:new Date().toISOString(),msg:'partial:'+pe?.message,near:snip,picks:result.picks?.length||0,leans:result.leans?.length||0,grading:result.grading?.length||0,raw:raw.slice(0,500)}));
+    }
+    // ── QUANT ENFORCEMENT: every AUTOPICK match must appear in graded picks ──
+    // Math wins on conflicts. If Sonnet dropped or downgraded an AUTOPICK
+    // match, we inject a math-derived graded pick directly. This is the
+    // backstop that makes the system actually quant-driven rather than
+    // LLM-with-quant-flavor.
+    if(result.picks&&quantClassifications?.length){
+      const _qAutopicks=quantClassifications.filter(qc=>qc.classification==='AUTOPICK');
+      const _picksByMatch=new Map();
+      result.picks.forEach(p=>{
+        const muN=(p.matchup||'').toLowerCase();
+        _qAutopicks.forEach(qc=>{
+          const aL=qc.match.aw.nm.toLowerCase().split(' ').pop();
+          const bL=qc.match.hm.nm.toLowerCase().split(' ').pop();
+          if(muN.includes(aL)&&muN.includes(bL))_picksByMatch.set(qc.match.id,p);
+        });
+      });
+      let injected=0;
+      _qAutopicks.forEach(qc=>{
+        if(_picksByMatch.has(qc.match.id))return; // synthesizer included this one ✓
+        // Synthesizer dropped this AUTOPICK. Inject from math.
+        const e=qc.bestEdge;
+        const odd=n=>n==null?'':(n>0?'+':'')+n;
+        // Generate pick string from market + side
+        let pickStr='';
+        if(e.market==='ML')pickStr=`${e.side} ML (${odd(e.bookOdds)})`;
+        else if(e.market.startsWith('Total '))pickStr=`${e.side} ${e.market.replace('Total ','')} (${odd(e.bookOdds)})`;
+        else if(e.market.startsWith('Spread '))pickStr=`${e.side} ${e.market.replace('Spread ','')} (${odd(e.bookOdds)})`;
+        else pickStr=`${e.side} ${e.market} (${odd(e.bookOdds)})`;
+        const conf=e.edge>=0.05?'HIGH':'MEDIUM';
+        result.picks.push({
+          rank:result.picks.length+1,
+          sport:'tennis',
+          matchup:`${qc.match.aw.nm} vs ${qc.match.hm.nm}`,
+          pick:pickStr,
+          confidence:conf,
+          score:Math.round(e.edge*100*10)/10,
+          odds:e.bookOdds,
+          reasoning:`QUANT AUTOPICK (math-injected). sElo ${qc.fp.eloA} vs ${qc.fp.eloB} on ${qc.fp.surface}. Fair ${(e.fairProb*100).toFixed(1)}% vs book ${(e.bookProb*100).toFixed(1)}% → ${(e.edge*100).toFixed(2)}% edge. Quarter-Kelly sizing: ${(e.kelly_q*100).toFixed(2)}% of bankroll.`,
+          filters:['quant_autopick','selo','sim'],
+          is_lean:false,
+          quant_injected:true,
+          quant_edge:e.edge,
+          quant_kelly_q:e.kelly_q
+        });
+        injected++;
+      });
+      if(injected)console.warn(`[quant-enforce] injected ${injected} AUTOPICK pick(s) the LLM dropped`);
+      // Tag picks the LLM kept that came from quant signals
+      result.picks.forEach(p=>{
+        if(p.quant_injected)return;
+        const muN=(p.matchup||'').toLowerCase();
+        const qc=quantClassifications.find(qc=>{
+          const aL=qc.match.aw.nm.toLowerCase().split(' ').pop();
+          const bL=qc.match.hm.nm.toLowerCase().split(' ').pop();
+          return muN.includes(aL)&&muN.includes(bL);
+        });
+        if(qc){
+          p.quant_classification=qc.classification;
+          p.quant_best_edge=qc.bestEdge?qc.bestEdge.edge:null;
+          p.selo_a=qc.fp?.eloA;
+          p.selo_b=qc.fp?.eloB;
+        }
+      });
     }
     // ── Enrich picks with CLV fields (entry odds, game id, timestamp) ──────────
     if(result.picks){
