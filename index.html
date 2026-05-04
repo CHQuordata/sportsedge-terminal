@@ -2967,13 +2967,13 @@ function renderPicksOverview(){
   const ov=rec.overall||{w:0,l:0,p:0};const total=ov.w+ov.l+(ov.p||0);
   const hr=total?((ov.w/total)*100).toFixed(1)+'%':'—';
   let h='';
-  if(todayPicksData.analyst_note){const note=todayPicksData.analyst_note.replace(/systemic.*?alert[^\n.]*/gi,'').trim();if(note)h+=`<div class="analyst-note">📊 ${note.slice(0,220)}</div>`;}
+  if(todayPicksData.analyst_note){const note=todayPicksData.analyst_note.replace(/systemic.*?alert[^\n.]*/gi,'').trim();if(note)h+=`<div class="analyst-note">📊 ${note}</div>`;}
   // Record strip
   h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--amb)"></div>RECORD</div>
     <div class="rec-stat"><span class="rec-lbl">OVERALL</span><span class="rec-val ${ov.w>ov.l?'rv-pos':ov.w<ov.l?'rv-neg':'rv-neu'}">${ov.w}-${ov.l}${ov.p?' ('+ov.p+'P)':''}</span></div>
     <div class="rec-stat"><span class="rec-lbl">HIT RATE</span><span class="rec-val ${parseFloat(hr)>=55?'rv-pos':parseFloat(hr)<45&&total>0?'rv-neg':'rv-neu'}">${hr}</span></div>`;
   if(rec.by_confidence){['HIGH','MEDIUM','LOW'].forEach(c=>{const cr=rec.by_confidence[c]||{};if((cr.w||0)+(cr.l||0)>0)h+=`<div class="rec-stat"><span class="rec-lbl">${c}</span><span class="rec-val ${(cr.w||0)>(cr.l||0)?'rv-pos':(cr.w||0)<(cr.l||0)?'rv-neg':'rv-neu'}">${cr.w||0}-${cr.l||0}</span></div>`})}
-  if(rec.by_sport){const sp=Object.entries(rec.by_sport).filter(([,r])=>(r.w||0)+(r.l||0)>0);if(sp.length){h+=`<div style="padding:4px 12px 2px;font-size:9px;color:var(--t4);letter-spacing:1px">BY SPORT</div>`;sp.forEach(([s,r])=>{const ic=s==='tennis'?'🎾':s==='nba'?'🏀':s==='nhl'?'🏒':s==='mlb'?'⚾':s==='mma'?'🥊':'⚡';h+=`<div class="rec-stat"><span class="rec-lbl">${ic} ${s.toUpperCase()}</span><span class="rec-val ${(r.w||0)>(r.l||0)?'rv-pos':(r.w||0)<(r.l||0)?'rv-neg':'rv-neu'}">${r.w||0}-${r.l||0}</span></div>`})}}
+  if(rec.by_sport){const sp=Object.entries(rec.by_sport).filter(([s,r])=>['tennis','parlay'].includes(s)&&(r.w||0)+(r.l||0)>0);if(sp.length){h+=`<div style="padding:4px 12px 2px;font-size:9px;color:var(--t4);letter-spacing:1px">BY SPORT</div>`;sp.forEach(([s,r])=>{const ic=s==='tennis'?'🎾':'⚡';h+=`<div class="rec-stat"><span class="rec-lbl">${ic} ${s.toUpperCase()}</span><span class="rec-val ${(r.w||0)>(r.l||0)?'rv-pos':(r.w||0)<(r.l||0)?'rv-neg':'rv-neu'}">${r.w||0}-${r.l||0}</span></div>`})}}
   h+='</div>';
   h+=renderMyBetsSection();
   // Grading — reads from et_picks_history (algorithmic grades), not Claude output
@@ -2994,12 +2994,7 @@ function renderPicksOverview(){
     todayPicksData.parlays.forEach(p=>{h+=`<div class="parlay-card"><div class="parlay-title">${p.type||'Parlay'}</div>`;(p.legs||[]).forEach(leg=>{h+=`<div class="parlay-leg">${leg}</div>`});if(p.note)h+=`<div style="font-size:9px;color:var(--t4);margin-top:6px;font-style:italic">${p.note}</div>`;h+=`</div>`});
     h+='</div>';
   }
-  // Inactive sports
-  if(todayPicksData.inactive_sports?.length){
-    h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--t4)"></div>INACTIVE SPORTS</div><table class="dtable"><thead><tr><th>SPORT</th><th>STATUS</th></tr></thead><tbody>`;
-    todayPicksData.inactive_sports.forEach(s=>{h+=`<tr><td>${s.sport}</td><td style="color:var(--t3)">${s.status}</td></tr>`});
-    h+='</tbody></table></div>';
-  }
+  // Inactive sports — omitted on tennis-only terminal
   // Learned rules
   const rules=(localStorage.getItem('et_learned_rules')||DEFAULT_LEARNED_RULES).split('\n').filter(r=>r.trim());
   h+=`<div class="sec"><div class="sec-title"><div class="ind" style="background:var(--grn)"></div>LEARNED RULES (${rules.length})</div>`;
@@ -3366,11 +3361,10 @@ Games tagged [DOUBLES] in the slate have no individual player stats. For doubles
 {
   "date":"YYYY-MM-DD",
   "learned_rules_update":"ONLY include if adding/changing a rule — output full updated list, max 12 rules, each max 20 words. Omit this field entirely if no changes.",
-  "picks":[{"rank":1,"sport":"nba","matchup":"Team A vs Team B","pick":"Team A -4.5 (-110)","confidence":"HIGH","score":8.2,"odds":-110,"reasoning":"Multi-sentence analysis covering key edges","filters":["net_rating","rest_edge"],"is_lean":false}],
+  "picks":[{"rank":1,"sport":"tennis","matchup":"Player A vs Player B","pick":"Player A -1.5 games (-115)","confidence":"HIGH","score":8.2,"odds":-115,"reasoning":"Multi-sentence analysis covering key edges","filters":["surface_record","ranking_gap"],"is_lean":false}],
   "parlays":[{"type":"2-Leg Conservative","legs":["leg1","leg2"],"note":"why these combine"}],
   "leans":[{"matchup":"...","lean":"side and why","trigger":"what would promote to graded pick"}],
-  "inactive_sports":[{"sport":"NFL","status":"Offseason — returns September 2026"}],
-  "analyst_note":"1-2 sentence slate quality note only — NO system alerts, grading complaints, or data warnings"
+  "analyst_note":"1-2 sentence slate quality note — describe today's tennis slate (surface, depth, odds confidence). NO system alerts, grading complaints, or data warnings"
 }`;
 }
 
