@@ -2,9 +2,9 @@
 
 ## PROJECT OVERVIEW
 
-Single-file Bloomberg Terminal-style sports betting dashboard. All logic lives in `index.html` (~2,800 lines). Zero dependencies, no build step. Deployed on GitHub Pages at `https://chquordata.github.io/sportsedge-terminal/`.
+Single-file Bloomberg Terminal-style sports betting dashboard. All logic lives in `index.html` (~3,200 lines). Zero dependencies, no build step. Deployed on GitHub Pages at `https://chquordata.github.io/sportsedge-terminal/`.
 
-- **Worker proxy:** `worker/index.js` — Cloudflare Worker for Pinnacle API (Tennis #33, MMA #7) to bypass CORS
+- **Worker proxy:** `worker/index.js` — Cloudflare Worker for Pinnacle API (Tennis #33) to bypass CORS
 - **Dev server:** `npx serve -p 3000 .` (configured in `.claude/launch.json`)
 
 ---
@@ -21,12 +21,8 @@ Never stop at commit. The live site only updates on push (GitHub Pages).
 
 | Sport | Key | Markets |
 |-------|-----|---------|
-| NBA | `basketball_nba` | h2h, spreads, totals, props |
-| NHL | `icehockey_nhl` | h2h, spreads, totals |
-| MLB | `baseball_mlb` | h2h, spreads, totals, 1st-5-innings |
-| NFL | `american_football_nfl` | h2h, spreads, totals |
-| Tennis | `_tennis` (ATP/WTA) | h2h, spreads, totals |
-| MMA | UFC via Pinnacle Worker | h2h |
+| Tennis (ATP) | `tennis_atp` | h2h, spreads, totals |
+| Tennis (WTA) | `tennis_wta` | h2h, spreads, totals |
 
 ---
 
@@ -145,32 +141,10 @@ If the dog has a concrete structural edge on the current surface (better surface
 - Never cite ranking tier ("top 10"), seed number, or season W-L record as a pick reason
 - LIMITED DATA tag: use ranking + market price ONLY — never invent surface records or playing style
 
-**MLB:**
-- ERA alone is not a signal without WHIP validation: ERA <4.0 with WHIP ≥1.35 = ERA is lying (lean OVER); ERA ≤3.50 with WHIP <1.15 = true ace (UNDER lean amplified)
-- SP W-L record is meaningless — reflects run support, not pitcher quality. Never use it
-- K/9 is context only unless combined ERA ≤8.5 confirms both pitchers are actually suppressing runs
-
-**NBA:**
-- L10 net rating divergence ≥4pts overrides season averages
-- Season-average PPG, FG%, 3P% are fully priced — never use as standalone pick reason
-- B2B teams cover 44% ATS and undershoot total by 4.5 pts vs rested; 3-in-4 nights = primary fade
-- Pace mismatch ≥4 poss/48 = structural UNDER when slow team controls tempo
-
-**NHL:**
-- SH% is HIGH-VARIANCE noise — never use as offensive edge signal
-- Goalie save% gap ≥0.010 = single sharpest spread signal
-- Totals: combined save% ≥.920 = UNDER lean, ≤.900 = OVER lean
-
-**Playoffs (NBA/NHL):**
-- Series context OVERRIDES regular-season signals
-- Signal hierarchy: (1) Reversion to mean after ≥15pt blowout, (2) Series home record, (3) Series dominance, (4) Elimination pressure, (5) Desperation vs complacency
-- Ignore in playoffs: road trip depth, season-average pace, L10 net from regular season, seeding
-
 **Injury policy:**
 - Injury is background context — already priced into the market line
 - Never downgrade confidence or skip a pick solely because of an injury listing
-- Exception: confirmed OUT (status O) for team's #1/#2 scorer/pitcher/goalie with no replacement data
-- Tennis specifically: if a match is on the slate, both players are healthy enough to compete. Never cite injury as a reason to skip or downgrade a tennis pick
+- If a match is on the slate, both players are healthy enough to compete. Never cite injury as a reason to skip or downgrade a tennis pick
 
 ---
 
@@ -187,7 +161,6 @@ If the dog has a concrete structural edge on the current surface (better surface
 | Source | Purpose |
 |--------|---------|
 | The Odds API | Live odds, 10+ sportsbooks (500 req/mo free) |
-| ESPN Sports API | Schedule, scores, injuries, records (primary fallback) |
-| Pinnacle API (CF Worker) | Sharp money reference — Tennis, MMA |
+| Pinnacle API (CF Worker) | Sharp money reference — Tennis |
 | Tennis News API (TheSportsDB) | Player profiles, H2H records, ATP/WTA rankings |
 | GitHub / Jeff Sackmann | ATP/WTA historical match data 2021–2024 (surface stats) |
