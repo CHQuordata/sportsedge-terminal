@@ -610,22 +610,64 @@ const tnPlayerCache=new Map(),tnGameCache=new Map(),_tnFixCache=new Map();
 const TN_BAN_LIST=['nakashima','tsitsipas','bublik','haddad maia','rublev'];
 const tennisCache=new Map(),gameFormCache=new Map();
 const tennisRankings=new Map(); // ESPN athlete id (string) → WTA/ATP rank number
+// Tour membership sets for defensive validation. A name lives in exactly
+// one tour set (or neither, when the player isn't ranked in the top ~300
+// of either tour). Used by validateTennisTours() after ingestion to catch
+// source-level misclassifications (e.g. The Odds API filing a WTA quali
+// under tennis_atp_italian_open).
+const _atpPlayers=new Set(),_wtaPlayers=new Set();
+const _normName=s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 async function fetchTennisRankings(){
   try{
     const [wtaR,atpR]=await Promise.all([
       fetch('https://site.api.espn.com/apis/site/v2/sports/tennis/wta/rankings?limit=300',{signal:AbortSignal.timeout(6000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch('https://site.api.espn.com/apis/site/v2/sports/tennis/atp/rankings?limit=300',{signal:AbortSignal.timeout(6000)}).then(r=>r.ok?r.json():null).catch(()=>null)
     ]);
-    [wtaR,atpR].forEach(d=>{
+    const _addNames=(d,set)=>{
       if(!d)return;
       const rows=d.rankings?.[0]?.ranks||d.ranks||[];
       rows.forEach(row=>{
         const id=String(row.athlete?.id||row.competitor?.id||'');
         const rank=parseInt(row.current??row.rank??0)||0;
         if(id&&rank)tennisRankings.set(id,rank);
+        const dn=_normName(row.athlete?.displayName||row.athlete?.fullName||'');
+        const ln=_normName(row.athlete?.lastName||'');
+        if(dn)set.add(dn);
+        if(ln&&ln.length>=3)set.add(ln);
       });
-    });
+    };
+    _addNames(wtaR,_wtaPlayers);
+    _addNames(atpR,_atpPlayers);
   }catch(e){}
+}
+// Defensive tour validator — runs after all ingestion. Cross-checks each
+// tennis match's player names against ATP/WTA ranking sets. If both names
+// clearly belong to the opposite tour, flip the match. Logs any flips so
+// we can see source-level misclassifications.
+function validateTennisTours(){
+  if(!_atpPlayers.size||!_wtaPlayers.size)return; // rankings not loaded yet
+  let flipped=0;
+  allG.forEach(g=>{
+    if(g.cat!=='tennis'||g.isDoubles)return;
+    const _membership=nm=>{
+      const n=_normName(nm);if(!n)return null;
+      const ln=n.split(' ').pop();
+      const inA=_atpPlayers.has(n)||(ln.length>=3&&_atpPlayers.has(ln));
+      const inW=_wtaPlayers.has(n)||(ln.length>=3&&_wtaPlayers.has(ln));
+      if(inA&&!inW)return'atp';
+      if(inW&&!inA)return'wta';
+      return null; // unknown or in both (rare collision — leave as-is)
+    };
+    const aw=_membership(g.aw.nm),hm=_membership(g.hm.nm);
+    // Only flip when BOTH players agree on the opposite tour — single-player
+    // mismatch is too risky (could be a name collision or unranked player).
+    if(aw&&hm&&aw===hm&&aw!==g.sp){
+      console.warn(`[tour-validate] FLIPPING ${g.spL}→${aw.toUpperCase()}: ${g.aw.nm} vs ${g.hm.nm}`);
+      g.sp=aw;g.spL=aw==='wta'?'WTA':'ATP';
+      flipped++;
+    }
+  });
+  if(flipped)console.warn(`[tour-validate] ${flipped} match${flipped!==1?'es':''} reclassified after source ingestion`);
 }
 const E={
   atp:{s:'tennis',l:'atp',lb:'ATP',ic:'\u{1F3BE}',ha:0,cat:'tennis',isTeam:false},
@@ -924,6 +966,10 @@ async function refreshAll(forceOdds=false){
     await injectPinnacleOdds();
     allE=detectEdges(allG.filter(g=>g.odds));
   }
+
+  // Defensive tour validation — flips matches mis-tagged at source by
+  // cross-checking player names against ATP/WTA rankings.
+  validateTennisTours();
 
   // Deduplicate — ESPN returns MMA/tennis fights across multiple event objects
   {const seen=new Map();allG.forEach(g=>{const k=g.isTeam?g.id:g.cat+'_'+[g.aw.nm,g.hm.nm].sort().join('|');if(!seen.has(k)||(g.odds&&!seen.get(k).odds))seen.set(k,g)});allG=[...seen.values()]}
