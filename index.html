@@ -768,8 +768,32 @@ function _negCacheSet(key,status){_negFetchCache.set(key,{status,ts:Date.now()})
 
 
 async function init(){
-  // Migrate stale rules if version outdated
-  const RULES_V='v5';if(localStorage.getItem('et_rules_version')!==RULES_V){localStorage.removeItem('et_learned_rules');localStorage.setItem('et_rules_version',RULES_V)}
+  // Migrate stale rules if version outdated. v6 wipes the leftover NBA/NHL/MLB
+  // rule blob carried over from the multi-sport era of this terminal.
+  const RULES_V='v6';
+  if(localStorage.getItem('et_rules_version')!==RULES_V){
+    localStorage.removeItem('et_learned_rules');
+    // Also clear the dead-sport rule caches so KV sync can't repopulate them.
+    ['et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl'].forEach(k=>localStorage.removeItem(k));
+    localStorage.setItem('et_rules_version',RULES_V);
+  }
+  // Defensive scrub: strip any non-tennis rule that slips through (KV sync,
+  // older clients writing back, etc.). A rule is non-tennis if it contains
+  // NBA/NHL/MLB/NFL keywords without any tennis context.
+  {const raw=localStorage.getItem('et_learned_rules')||'';
+    if(raw){
+      const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+      const tennisOnly=lines.filter(l=>{
+        const u=l.toUpperCase();
+        const nonTennis=/\b(NBA|NHL|MLB|NFL|HOCKEY|BASKETBALL|BASEBALL|FOOTBALL|PUCK LINE|RUN LINE|B2B\s+(?:TEAMS|GAME)|GOALIE|PITCHER|QUARTERBACK)\b/.test(u);
+        return!nonTennis;
+      });
+      if(tennisOnly.length!==lines.length){
+        localStorage.setItem('et_learned_rules',tennisOnly.join('\n'));
+        console.warn(`[rules-scrub] removed ${lines.length-tennisOnly.length} non-tennis learned rule(s)`);
+      }
+    }
+  }
   if(AK){$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED'}
   if(CLAUDE_KEY){$('aiDot').classList.add('ok');$('aiSt').textContent='AI READY'}
   if(TN_API_KEY){$('tnDot').classList.add('ok');$('tnSt').textContent='TN READY';_tnRenderRate()}
@@ -3822,7 +3846,7 @@ async function runTennisAnalysis(tennisCtx){
 async function syncFromKV(){
   if(!WORKER_URL)return;
   try{
-    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_completed_games','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl','et_signal_performance'];
+    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_completed_games','et_learned_rules_tennis','et_signal_performance'];
     const allKeys=[...keys,'et_manual_bets'];
     const results=await Promise.allSettled(allKeys.map(k=>fetch(`${WORKER_URL}/kv/${k}`,{signal:AbortSignal.timeout(4000)}).then(r=>r.ok?r.json():null)));
     results.forEach((r,i)=>{
@@ -3848,7 +3872,7 @@ async function syncFromKV(){
 async function syncToKV(){
   if(!WORKER_URL)return;
   try{
-    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_learned_rules_tennis','et_learned_rules_nba','et_learned_rules_mlb','et_learned_rules_nhl','et_manual_bets'];
+    const keys=['et_learned_rules','et_cumulative','et_picks_history','et_learned_rules_tennis','et_manual_bets'];
     await Promise.allSettled(keys.map(k=>{const v=localStorage.getItem(k);if(!v)return Promise.resolve();return fetch(`${WORKER_URL}/kv/${k}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:v}),signal:AbortSignal.timeout(4000)})}));
   }catch(_){}
 }
