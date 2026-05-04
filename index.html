@@ -692,6 +692,276 @@ function validateTennisTours(){
   });
   if(flipped)console.warn(`[tour-validate] ${flipped} match${flipped!==1?'es':''} reclassified after source ingestion`);
 }
+
+// ── Surface-specific Elo (sElo) — the canonical baseline rating ──────────────
+// Loaded from worker (Tennis Abstract scrape, daily refresh). 24h localStorage
+// cache. Replaces ATP/WTA rankings as the predictive baseline because:
+//   - updated after every match (vs. weekly for rankings)
+//   - weighted by opponent quality (vs. equal weight in rankings)
+//   - separate ratings per surface (vs. single rolling for rankings)
+let _seloData=null,_seloLoading=null;
+async function loadSElo(forceRefresh=false){
+  if(_seloData&&!forceRefresh)return _seloData;
+  // localStorage cache — 24h TTL
+  if(!forceRefresh){
+    try{
+      const cached=JSON.parse(localStorage.getItem('et_selo_cache')||'null');
+      if(cached?.ts&&Date.now()-cached.ts<24*60*60*1000){
+        _seloData=cached.data;
+        return _seloData;
+      }
+    }catch(_){}
+  }
+  if(_seloLoading)return _seloLoading;
+  if(!WORKER_URL)return null;
+  _seloLoading=fetch(`${WORKER_URL}/tennis/selo`,{signal:AbortSignal.timeout(8000)})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      if(d?.atp&&d?.wta){
+        _seloData=d;
+        try{localStorage.setItem('et_selo_cache',JSON.stringify({ts:Date.now(),data:d}));}catch(_){}
+        const _ct=t=>['hard','clay','grass'].reduce((a,s)=>a+Object.keys(d[t][s]||{}).length,0);
+        console.log(`[sElo] loaded — ATP=${_ct('atp')} WTA=${_ct('wta')}`);
+      }
+      _seloLoading=null;
+      return _seloData;
+    })
+    .catch(e=>{console.warn('[sElo] load failed:',e?.message||e);_seloLoading=null;return null;});
+  return _seloLoading;
+}
+// Lookup sElo for a player on a given surface. Tries normalized full name,
+// then last name. Returns null when player isn't ranked.
+function lookupSElo(name,tour,surface){
+  if(!_seloData||!name||!tour||!surface)return null;
+  const sf=String(surface).toLowerCase();
+  const sfKey=sf.includes('clay')?'clay':sf.includes('grass')?'grass':'hard';
+  const tk=tour.toLowerCase();
+  const map=_seloData[tk]?.[sfKey];if(!map)return null;
+  const norm=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const n=norm(name);
+  if(map[n])return map[n];
+  // Try lastname-only matching as fallback
+  const ln=n.split(' ').pop();
+  if(ln.length>=4){
+    const hit=Object.entries(map).find(([k])=>k.split(' ').pop()===ln);
+    if(hit)return hit[1];
+  }
+  return null;
+}
+
+// ── Tennis match simulator ───────────────────────────────────────────────────
+// Closed-form math model for tennis match prices. Given each player's
+// per-point serve win % (spw), produces fair probabilities for ML, set
+// spread, total games, etc. This is the price-maker — replaces the LLM
+// for quantitative betting decisions.
+//
+// References:
+//  - O'Malley (2008): closed-form game/set probability formulas
+//  - Sackmann's match-prob.py (canonical pure-Python simulator)
+//
+// Inputs:
+//   spwA, spwB ∈ (0, 1): point win % when each player serves
+//   opts.bestOf: 3 (default) or 5
+//
+// Returns: { holdA, holdB, tbA, setA, mA, dist, ... }
+
+function _holdProb(p){
+  // P(server holds a service game) given P(server wins point) = p
+  // Standard closed form: enumerate 4-0, 4-1, 4-2 and reach-deuce paths
+  if(p<=0)return 0;if(p>=1)return 1;
+  const q=1-p;
+  const p40=Math.pow(p,4);
+  const p41=4*Math.pow(p,4)*q;
+  const p42=10*Math.pow(p,4)*q*q;
+  const reachDeuce=20*Math.pow(p*q,3);
+  // From deuce: P(win) = p²/(p² + q²)  (geometric series convergence)
+  const winFromDeuce=(p*p)/(p*p+q*q);
+  return p40+p41+p42+reachDeuce*winFromDeuce;
+}
+
+function _tiebreakProb(spwA,spwB,sims=2000){
+  // Standard 7-point tiebreak. A serves point 1, then alternate every 2 points.
+  // Server pattern (1-indexed): server(N) = (N>>1) & 1 — gives A,B,B,A,A,B,B,A,A,...
+  // Closed-form recursion fails on deuce extension (tied states recurse forever
+  // without a terminal); Monte Carlo handles the win-by-2 geometric series cleanly.
+  let aWins=0;
+  for(let s=0;s<sims;s++){
+    let a=0,b=0,n=1;
+    while(true){
+      const srvIsA=((n>>1)&1)===0;
+      const pAWinsPt=srvIsA?spwA:(1-spwB);
+      if(Math.random()<pAWinsPt)a++;else b++;
+      n++;
+      if(a>=7&&a-b>=2){aWins++;break;}
+      if(b>=7&&b-a>=2)break;
+      if(n>50)break; // hard safety bound; tiebreaks at this depth have probability ~1e-9
+    }
+  }
+  return aWins/sims;
+}
+
+function _setProb(holdA,holdB,tbA){
+  // P(A wins set) given hold rates and A's tiebreak prob.
+  // Markov over (a, b) game scores. A serves first by convention; alternate.
+  // P(A wins game when A serves) = holdA. P(A wins game when B serves) = 1-holdB.
+  const memo=new Map();
+  function P(a,b,srvIsA){
+    if(a>=6&&a-b>=2)return 1;
+    if(b>=6&&b-a>=2)return 0;
+    if(a===7&&b===5)return 1;
+    if(b===7&&a===5)return 0;
+    if(a===6&&b===6)return tbA;
+    const key=`${a}-${b}-${srvIsA?1:0}`;
+    if(memo.has(key))return memo.get(key);
+    const pA=srvIsA?holdA:(1-holdB);
+    const result=pA*P(a+1,b,!srvIsA)+(1-pA)*P(a,b+1,!srvIsA);
+    memo.set(key,result);
+    return result;
+  }
+  return P(0,0,true);
+}
+
+function _matchProbBO3(setA){
+  // BO3: P(2-0) + P(2-1)
+  return setA*setA + 2*setA*setA*(1-setA);
+}
+
+function _matchProbBO5(setA){
+  // BO5: P(3-0) + P(3-1) + P(3-2)
+  const p=setA,q=1-setA;
+  return p*p*p + 3*p*p*p*q + 6*p*p*p*q*q;
+}
+
+// Main simulator entry. Pure closed-form for ML. For game spread / totals,
+// runs lightweight Monte Carlo (default 2000 sims) since the full game-count
+// distribution doesn't have a clean closed form.
+function simulateTennisMatch(spwA,spwB,opts={}){
+  const bestOf=opts.bestOf||3;
+  const sims=opts.sims||2000;
+  const holdA=_holdProb(spwA),holdB=_holdProb(spwB);
+  const tbA=_tiebreakProb(spwA,spwB);
+  const setA=_setProb(holdA,holdB,tbA);
+  const mA=bestOf===5?_matchProbBO5(setA):_matchProbBO3(setA);
+  // Monte Carlo for game-count distribution (game spreads, totals)
+  const dist={gamesA:[],gamesB:[],totalGames:[],setsA:[],setsB:[],margins:[]};
+  for(let i=0;i<sims;i++){
+    const r=_simOneMatch(spwA,spwB,bestOf);
+    dist.gamesA.push(r.gA);dist.gamesB.push(r.gB);
+    dist.totalGames.push(r.gA+r.gB);
+    dist.setsA.push(r.sA);dist.setsB.push(r.sB);
+    dist.margins.push(r.gA-r.gB);
+  }
+  return{spwA,spwB,holdA,holdB,tbA,setA,mA,dist,bestOf,sims};
+}
+
+// One Monte Carlo match — flips Bernoulli for each game decision, plays out
+// sets to completion. Returns {gA, gB, sA, sB, winner}.
+function _simOneMatch(spwA,spwB,bestOf){
+  const setsToWin=bestOf===5?3:2;
+  let sA=0,sB=0,gA=0,gB=0;
+  while(sA<setsToWin&&sB<setsToWin){
+    const set=_simOneSet(spwA,spwB);
+    gA+=set.gA;gB+=set.gB;
+    if(set.winner===0)sA++;else sB++;
+  }
+  return{gA,gB,sA,sB,winner:sA>sB?0:1};
+}
+
+function _simOneSet(spwA,spwB){
+  let a=0,b=0,srvIsA=true;
+  while(true){
+    // Play a game
+    const holdProb=srvIsA?_holdProb(spwA):_holdProb(spwB);
+    const won=Math.random()<holdProb?(srvIsA?0:1):(srvIsA?1:0);
+    if(won===0)a++;else b++;
+    if(a>=6&&a-b>=2)return{gA:a,gB:b,winner:0};
+    if(b>=6&&b-a>=2)return{gA:a,gB:b,winner:1};
+    if(a===7&&b===5)return{gA:a,gB:b,winner:0};
+    if(b===7&&a===5)return{gA:a,gB:b,winner:1};
+    if(a===6&&b===6){
+      // Tiebreak — use closed form for outcome
+      const tbA=_tiebreakProb(spwA,spwB);
+      const tbWin=Math.random()<tbA?0:1;
+      // Tiebreak counts as one game
+      if(tbWin===0)return{gA:7,gB:6,winner:0};
+      return{gA:6,gB:7,winner:1};
+    }
+    srvIsA=!srvIsA;
+  }
+}
+
+// ── Bridge: sElo → per-point serve win % ─────────────────────────────────────
+// Tour+surface average serve point win %. Approximations from public studies.
+const SPW_TOUR_AVG={
+  atp:{hard:0.640,clay:0.620,grass:0.665},
+  wta:{hard:0.580,clay:0.555,grass:0.605}
+};
+function _avgSpw(tour,surface){
+  const sf=String(surface||'').toLowerCase();
+  const sfKey=sf.includes('clay')?'clay':sf.includes('grass')?'grass':'hard';
+  const m=SPW_TOUR_AVG[tour?.toLowerCase()];
+  return m?m[sfKey]:0.62;
+}
+// Convert sElo ratings to per-point spw values via binary search:
+// find offset δ such that simulator(avg+δ, avg-δ).mA matches Elo win prob.
+function eloToSpw(eloA,eloB,tour,surface,bestOf=3){
+  const avg=_avgSpw(tour,surface);
+  const pA=1/(1+Math.pow(10,(eloB-eloA)/400));
+  // Binary search for δ ∈ [-0.15, 0.15] (Elo edge maps to point-level edge)
+  let lo=-0.15,hi=0.15;
+  for(let i=0;i<24;i++){
+    const mid=(lo+hi)/2;
+    const sim=simulateTennisMatch(avg+mid,avg-mid,{bestOf,sims:1});
+    // Use closed-form mA only — sims=1 is just to skip the MC distribution
+    const trial=sim.mA;
+    if(trial<pA)lo=mid;else hi=mid;
+  }
+  const delta=(lo+hi)/2;
+  return{spwA:avg+delta,spwB:avg-delta,pA_elo:pA,avg};
+}
+
+// Top-level convenience: given a game object g, compute fair prices using
+// sElo + simulator. Returns null if either player is unranked or surface
+// unknown. Output includes ML, total games line, and simple game spreads.
+function fairPrice(g){
+  if(!g||g.cat!=='tennis'||g.isDoubles)return null;
+  if(!_seloData)return null;
+  const tour=g.sp;const surface=g.surf||'hard';
+  const eloA=lookupSElo(g.aw.nm,tour,surface);
+  const eloB=lookupSElo(g.hm.nm,tour,surface);
+  if(eloA==null||eloB==null)return{error:'unranked',eloA,eloB};
+  const bestOf=3; // ATP/WTA Tour matches are BO3 except men's slams (we can refine later)
+  const{spwA,spwB,pA_elo}=eloToSpw(eloA,eloB,tour,surface,bestOf);
+  const sim=simulateTennisMatch(spwA,spwB,{bestOf,sims:1500});
+  // Convert probs to American odds
+  const toAmerican=p=>{if(p<=0||p>=1)return null;if(p>=0.5)return Math.round(-100*p/(1-p));return Math.round(100*(1-p)/p);};
+  const meanGames=sim.dist.totalGames.reduce((a,b)=>a+b,0)/sim.dist.totalGames.length;
+  // Total games line: take rounded mean as the over/under midpoint
+  const tgLine=Math.round(meanGames*2)/2; // half-game increments
+  const overGames=sim.dist.totalGames.filter(t=>t>tgLine).length/sim.dist.totalGames.length;
+  // Game spread: P(A wins by ≥1.5 games), ≥2.5, etc.
+  const meanMargin=sim.dist.margins.reduce((a,b)=>a+b,0)/sim.dist.margins.length;
+  const spreadProbs=[1.5,2.5,3.5,4.5,5.5,6.5].map(line=>({
+    line:-line, // A is fav side
+    pA:sim.dist.margins.filter(m=>m>line).length/sim.dist.margins.length
+  }));
+  return{
+    eloA,eloB,
+    surface,tour,bestOf,
+    spwA:Math.round(spwA*1000)/1000,spwB:Math.round(spwB*1000)/1000,
+    holdA:Math.round(sim.holdA*1000)/1000,holdB:Math.round(sim.holdB*1000)/1000,
+    fair_pA:Math.round(sim.mA*1000)/1000,
+    fair_pA_elo_only:Math.round(pA_elo*1000)/1000,
+    fair_ml_a:toAmerican(sim.mA),fair_ml_b:toAmerican(1-sim.mA),
+    mean_total_games:Math.round(meanGames*10)/10,
+    total_games_line:tgLine,
+    fair_over:Math.round(overGames*1000)/1000,
+    fair_under:Math.round((1-overGames)*1000)/1000,
+    mean_margin:Math.round(meanMargin*10)/10,
+    spreads:spreadProbs.map(s=>({line:s.line,pA:Math.round(s.pA*1000)/1000,fair_odds:toAmerican(s.pA)}))
+  };
+}
+
 const E={
   atp:{s:'tennis',l:'atp',lb:'ATP',ic:'\u{1F3BE}',ha:0,cat:'tennis',isTeam:false},
   wta:{s:'tennis',l:'wta',lb:'WTA',ic:'\u{1F3BE}',ha:0,cat:'tennis',isTeam:false}
@@ -787,6 +1057,9 @@ async function init(){
   if(BANKROLL>0){const btn=$('bankrollBtn');if(btn)btn.textContent='$'+BANKROLL.toLocaleString()}
   // Pull bets + rules from KV so desktop-logged bets appear on mobile (and vice versa)
   syncFromKV();
+  // Surface-specific Elo — fire-and-forget, populates _seloData for fair-price
+  // calculations. 24h cache so subsequent loads hit localStorage.
+  loadSElo();
   await refreshAll()}
 function showSetup(){$('setupModal').style.display='flex';$('apiKeyInput').focus()}
 function connectApi(){const k=$('apiKeyInput').value.trim();if(!k)return;AK=k;localStorage.setItem('odds_api_key',k);$('setupModal').style.display='none';$('apiDot').classList.add('ok');$('apiSt').textContent='CONNECTED';refreshAll()}
@@ -1286,6 +1559,63 @@ async function selGame(idx){
   const playoffBadge=g.playoff?`<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--amb);background:rgba(251,191,36,.12);padding:2px 6px;border-radius:3px;margin-left:8px">PLAYOFFS</span>`:'';
   const serBadge=g.serSum?`<div style="font-size:10px;color:var(--amb);font-weight:600;margin-top:3px">📊 ${g.serSum}</div>`:'';
   h+=`<div class="det-header"><div class="det-teams">${g.aw.nm} ${g.isTeam?'@':'vs'} ${g.hm.nm}${playoffBadge}</div>${serBadge}<div class="det-records">${g.aw.rec?g.aw.nm+' ('+g.aw.rec+')':g.aw.nm} vs ${g.hm.rec?g.hm.nm+' ('+g.hm.rec+')':g.hm.nm}</div><div class="det-meta"><span>${g.spI} ${g.spL}</span><span>${ts}</span>${g.ven?`<span>${g.ven}</span>`:''}${g.bc?`<span>${g.bc}</span>`:''}</div><div style="margin-top:8px"><button class="analyze-btn" id="aiAnalyzeBtn" onclick="aiAnalyzeGame('${g.id}')" ${!CLAUDE_KEY?'disabled':''}>${aiAnalysisCache.has(g.id)?'⚡ RE-ANALYZE':'⚡ AI ANALYZE'}</button></div></div>`;
+  // ── FAIR PRICE PANEL (sElo + Monte Carlo simulator) ───────────────────────
+  // Pure quant model — replaces LLM-vibes with a closed-form math price.
+  // Compares fair odds against current book lines and surfaces edge.
+  if(g.cat==='tennis'&&!g.isDoubles){
+    const fp=fairPrice(g);
+    if(fp&&!fp.error){
+      const _ml=g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='h2h');
+      const _aPx=_ml?.outcomes?.find(o=>o.name===g.aw.nm||o.name?.toLowerCase().includes(g.aw.nm.toLowerCase().split(' ').pop()))?.price;
+      const _bPx=_ml?.outcomes?.find(o=>o.name===g.hm.nm||o.name?.toLowerCase().includes(g.hm.nm.toLowerCase().split(' ').pop()))?.price;
+      const _impl=p=>p>0?100/(p+100):Math.abs(p)/(Math.abs(p)+100);
+      const _aBookImpl=_aPx?_impl(_aPx):null,_bBookImpl=_bPx?_impl(_bPx):null;
+      // Edge = fair_p - book_implied_p (positive = take it)
+      const _aEdge=_aBookImpl!=null?fp.fair_pA-_aBookImpl:null;
+      const _bEdge=_bBookImpl!=null?(1-fp.fair_pA)-_bBookImpl:null;
+      const _edgeFmt=e=>e==null?'':`<span style="color:${e>0.03?'var(--grn)':e<-0.03?'var(--red)':'var(--t4)'};font-weight:700">${(e*100).toFixed(1)}%</span>`;
+      const _odd=n=>n==null?'—':(n>0?'+':'')+n;
+      h+=`<div style="padding:12px 16px;border-bottom:1px solid var(--bdr);background:linear-gradient(180deg,rgba(0,229,255,.04),transparent)">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--cyn);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+          <span>📐 FAIR PRICE — sElo + MONTE CARLO</span>
+          <span style="color:var(--t4);font-weight:500;letter-spacing:.5px">${fp.tour.toUpperCase()} ${fp.surface.toUpperCase()} · sims=${fp.sims||1500}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px">
+          <div style="padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:3px">
+            <div style="color:var(--t3);font-size:9px;margin-bottom:3px">${g.aw.nm}</div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">sElo</span><span style="font-weight:600">${fp.eloA}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">SPW%</span><span>${(fp.spwA*100).toFixed(1)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Hold%</span><span>${(fp.holdA*100).toFixed(1)}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid rgba(42,42,62,.4)">
+              <span style="color:var(--t4)">Fair ML</span><span style="font-weight:700;color:var(--cyn)">${_odd(fp.fair_ml_a)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Book ML</span><span>${_odd(_aPx)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Edge</span>${_edgeFmt(_aEdge)}</div>
+          </div>
+          <div style="padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:3px">
+            <div style="color:var(--t3);font-size:9px;margin-bottom:3px">${g.hm.nm}</div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">sElo</span><span style="font-weight:600">${fp.eloB}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">SPW%</span><span>${(fp.spwB*100).toFixed(1)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Hold%</span><span>${(fp.holdB*100).toFixed(1)}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid rgba(42,42,62,.4)">
+              <span style="color:var(--t4)">Fair ML</span><span style="font-weight:700;color:var(--cyn)">${_odd(fp.fair_ml_b)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Book ML</span><span>${_odd(_bPx)}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Edge</span>${_edgeFmt(_bEdge)}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:6px 8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:3px;font-size:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--t4)">Total games (mean)</span><span>${fp.mean_total_games} → line ${fp.total_games_line}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--t4)">Fair Over ${fp.total_games_line}</span><span>${(fp.fair_over*100).toFixed(1)}%</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--t4)">Game-spread targets</span><span style="color:var(--t3);font-size:9px">${fp.spreads.filter(s=>s.pA>=0.5).slice(0,3).map(s=>`${s.line}: ${(s.pA*100).toFixed(0)}%`).join(' · ')}</span></div>
+        </div>
+      </div>`;
+    } else if(fp?.error==='unranked'){
+      h+=`<div style="padding:8px 16px;font-size:10px;color:var(--t4);border-bottom:1px solid var(--bdr);background:var(--bg2)">📐 Fair price: one or both players not in sElo top-300 — math model can't price this match</div>`;
+    } else if(!_seloData){
+      h+=`<div style="padding:8px 16px;font-size:10px;color:var(--t4);border-bottom:1px solid var(--bdr);background:var(--bg2)">📐 Fair price: sElo data loading…</div>`;
+    }
+  }
 
   // ── AI Pick cross-reference ──
   {const _toks=nm=>(nm||'').toLowerCase().split(/\s+/).filter(w=>w.length>=3);
@@ -4163,6 +4493,14 @@ async function runMatchAgent(g){
   // H2H
   const h2h=tennisCache.get(g.id);
   if(h2h?.summary)ctx+=`H2H: ${h2h.summary}\n`;
+  // FAIR PRICE — sElo + simulator output. Closed-form math model, the
+  // canonical baseline for whether the book line has edge. If this disagrees
+  // with the agent's other signals, that's a flag worth surfacing.
+  const fp=fairPrice(g);
+  if(fp&&!fp.error){
+    const _odd=n=>n==null?'—':(n>0?'+':'')+n;
+    ctx+=`FAIR PRICE (sElo+sim): ${g.aw.nm} ${_odd(fp.fair_ml_a)} (${(fp.fair_pA*100).toFixed(1)}%) vs ${g.hm.nm} ${_odd(fp.fair_ml_b)} (${((1-fp.fair_pA)*100).toFixed(1)}%) | mean total games=${fp.mean_total_games} | sElo: A=${fp.eloA} B=${fp.eloB}\n`;
+  }
   if(g.isDoubles)ctx+=`NOTE: Doubles match — ML betting only. No individual serve/return stats available.\n`;
   const prompt=`Classify this tennis match for betting edge. Output strict JSON only — no markdown.
 

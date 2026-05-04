@@ -140,6 +140,15 @@ export default {
         if (!name) return jsonResponse({ error: 'Missing name' }, 400);
         return handleTennisAbstract(name, env);
       }
+      // Surface-specific Elo ratings (Tennis Abstract, daily-refreshed)
+      if (path === '/tennis/selo' && request.method === 'GET') {
+        return handleSEloGet(env);
+      }
+      // Manual sElo refresh — for diagnostics / cold start
+      if (path === '/admin/refresh-selo' && request.method === 'POST') {
+        const result = await refreshSEloKV(env);
+        return jsonResponse(result || { error: 'KV not configured' });
+      }
       // KV read: GET /kv/:key
       if (path.startsWith('/kv/') && request.method === 'GET') {
         return handleKvGet(path.slice(4), env);
@@ -183,7 +192,12 @@ async function handleKvPost(key, request, env) {
 async function runNightlyCron(env) {
   if (!env.ODDS_API_KEY || !env.LEARNING_STORE) return;
 
-  // 0. Snapshot closing-line odds for upcoming games (next 4 hours). The
+  // 0a. Refresh surface-specific Elo from Tennis Abstract. Updates daily
+  // post-match. This is the canonical baseline rating for sharp-court's
+  // fair-price model — far more predictive than ATP/WTA rankings.
+  await refreshSEloKV(env).catch(() => {});
+
+  // 0b. Snapshot closing-line odds for upcoming games (next 4 hours). The
   // 2 AM ET cron is too late for tonight's games which already started, but
   // captures any AM games (early MLB, European tennis). Frontend SCAN
   // additionally hits /admin/snapshot-odds so the bulk of capture happens
@@ -1041,6 +1055,134 @@ async function handleTennisAbstract(name, env) {
   } catch (e) {
     return jsonResponse({ name: slug, stats: null, reason: e.message || 'fetch failed' });
   }
+}
+
+// ── Tennis Abstract sElo (surface-specific Elo) ──────────────────────────────
+// Scrapes Jeff Sackmann's daily-updated Elo ratings. Surface-specific Elo is
+// the single most predictive baseline rating in tennis — far more accurate
+// than ATP/WTA rankings (which are 52-week rolling, weighted equally,
+// updated once per week). sElo updates after every match and weights by
+// opponent quality.
+//
+// Source URLs (Tennis Abstract reports):
+//   atp/wta_elo_ratings.html         — overall Elo
+//   atpHardEloRatings.html etc.      — surface-specific
+//
+// Stored as one big JSON blob under KV key `selo_v1`:
+//   { ts, atp: { hard: { "Carlos Alcaraz": 2150, ... }, clay: {...}, grass: {...} }, wta: {...} }
+
+const SELO_URLS = {
+  atp: {
+    hard:  'https://tennisabstract.com/reports/atp_elo_hard_ratings.html',
+    clay:  'https://tennisabstract.com/reports/atp_elo_clay_ratings.html',
+    grass: 'https://tennisabstract.com/reports/atp_elo_grass_ratings.html'
+  },
+  wta: {
+    hard:  'https://tennisabstract.com/reports/wta_elo_hard_ratings.html',
+    clay:  'https://tennisabstract.com/reports/wta_elo_clay_ratings.html',
+    grass: 'https://tennisabstract.com/reports/wta_elo_grass_ratings.html'
+  }
+};
+
+// Strip diacritics + lowercase + collapse whitespace. Keys for cross-source
+// player matching (frontend lookups against player names from Odds API/ESPN).
+function _normPlayer(s) {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Parse a Tennis Abstract Elo HTML page. Their tables look like:
+//   <tr><td>1</td><td><a>Jannik Sinner</a></td><td>2280</td>...</tr>
+// We don't trust the structure exactly — pull "name + 4-digit number" pairs.
+function parseSEloHtml(html) {
+  const out = {};
+  if (!html) return out;
+  // Match table rows; for each row, find first anchor (player name) and first
+  // 4-digit number within the row that's plausibly an Elo (1500-3000 range).
+  const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  for (const row of rows) {
+    const nameM = row.match(/<a[^>]*>([^<]+)<\/a>/i);
+    if (!nameM) continue;
+    const name = nameM[1].trim();
+    // Find Elo: first 4-digit number in row that's between 1400 and 3000
+    const nums = [...row.matchAll(/>(\d{4})(?:\.\d+)?</g)];
+    let elo = null;
+    for (const m of nums) {
+      const n = parseInt(m[1], 10);
+      if (n >= 1400 && n <= 3000) { elo = n; break; }
+    }
+    if (name && elo) {
+      out[_normPlayer(name)] = elo;
+    }
+  }
+  return out;
+}
+
+async function _fetchSEloPage(url) {
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (sharp-court v1)' },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!r.ok) return {};
+    const html = await r.text();
+    return parseSEloHtml(html);
+  } catch (_) {
+    return {};
+  }
+}
+
+async function fetchAllSElo() {
+  const result = { ts: Date.now(), atp: {}, wta: {} };
+  await Promise.all(
+    Object.entries(SELO_URLS).flatMap(([tour, surfaces]) =>
+      Object.entries(surfaces).map(async ([surface, url]) => {
+        const data = await _fetchSEloPage(url);
+        result[tour][surface] = data;
+      })
+    )
+  );
+  return result;
+}
+
+async function refreshSEloKV(env) {
+  if (!env.LEARNING_STORE) return null;
+  const data = await fetchAllSElo();
+  // Sanity gate: each surface should have at least 50 players. If a fetch
+  // failed silently we don't want to nuke the prior good data.
+  const counts = ['atp', 'wta'].flatMap(t => ['hard', 'clay', 'grass'].map(s => Object.keys(data[t][s] || {}).length));
+  const minCount = Math.min(...counts);
+  if (minCount < 50) {
+    return { ok: false, reason: `low player count (min=${minCount})`, counts };
+  }
+  await env.LEARNING_STORE.put('selo_v1', JSON.stringify(data), {
+    expirationTtl: 60 * 60 * 24 * 7  // 7-day TTL — daily cron refreshes
+  });
+  return { ok: true, counts };
+}
+
+async function handleSEloGet(env) {
+  if (!env.LEARNING_STORE) return jsonResponse({ error: 'KV not configured' }, 503);
+  let raw = await env.LEARNING_STORE.get('selo_v1');
+  if (!raw) {
+    // Cold cache: fetch on demand
+    const refresh = await refreshSEloKV(env);
+    if (!refresh?.ok) return jsonResponse({ error: 'sElo cold-fetch failed', detail: refresh }, 502);
+    raw = await env.LEARNING_STORE.get('selo_v1');
+  }
+  return new Response(raw, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+      'Cache-Control': 'public, max-age=3600'
+    }
+  });
 }
 
 // ── Backtesting report ──────────────────────────────────────────────────────
