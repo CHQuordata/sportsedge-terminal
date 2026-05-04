@@ -1071,17 +1071,12 @@ async function handleTennisAbstract(name, env) {
 // Stored as one big JSON blob under KV key `selo_v1`:
 //   { ts, atp: { hard: { "Carlos Alcaraz": 2150, ... }, clay: {...}, grass: {...} }, wta: {...} }
 
+// Tennis Abstract publishes ONE consolidated Elo page per tour containing
+// overall + hard + clay + grass Elos as separate columns. Far simpler than
+// scraping 6 separate pages.
 const SELO_URLS = {
-  atp: {
-    hard:  'https://tennisabstract.com/reports/atp_elo_hard_ratings.html',
-    clay:  'https://tennisabstract.com/reports/atp_elo_clay_ratings.html',
-    grass: 'https://tennisabstract.com/reports/atp_elo_grass_ratings.html'
-  },
-  wta: {
-    hard:  'https://tennisabstract.com/reports/wta_elo_hard_ratings.html',
-    clay:  'https://tennisabstract.com/reports/wta_elo_clay_ratings.html',
-    grass: 'https://tennisabstract.com/reports/wta_elo_grass_ratings.html'
-  }
+  atp: 'https://tennisabstract.com/reports/atp_elo_ratings.html',
+  wta: 'https://tennisabstract.com/reports/wta_elo_ratings.html'
 };
 
 // Strip diacritics + lowercase + collapse whitespace. Keys for cross-source
@@ -1091,34 +1086,37 @@ function _normPlayer(s) {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    .replace(/&nbsp;/gi, ' ')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Parse a Tennis Abstract Elo HTML page. Their tables look like:
-//   <tr><td>1</td><td><a>Jannik Sinner</a></td><td>2280</td>...</tr>
-// We don't trust the structure exactly — pull "name + 4-digit number" pairs.
+// Parse a Tennis Abstract consolidated Elo page. Each row has positional
+// right-aligned <td> cells: [eloRank, age, eloOverall, hEloRank, hElo,
+// cEloRank, cElo, gEloRank, gElo, peakElo, ...]. We extract hard/clay/grass.
+//
+// Returns { hard: {nameKey: elo}, clay: {...}, grass: {...} }.
 function parseSEloHtml(html) {
-  const out = {};
+  const out = { hard: {}, clay: {}, grass: {} };
   if (!html) return out;
-  // Match table rows; for each row, find first anchor (player name) and first
-  // 4-digit number within the row that's plausibly an Elo (1500-3000 range).
   const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
   for (const row of rows) {
     const nameM = row.match(/<a[^>]*>([^<]+)<\/a>/i);
     if (!nameM) continue;
-    const name = nameM[1].trim();
-    // Find Elo: first 4-digit number in row that's between 1400 and 3000
-    const nums = [...row.matchAll(/>(\d{4})(?:\.\d+)?</g)];
-    let elo = null;
-    for (const m of nums) {
-      const n = parseInt(m[1], 10);
-      if (n >= 1400 && n <= 3000) { elo = n; break; }
-    }
-    if (name && elo) {
-      out[_normPlayer(name)] = elo;
-    }
+    const name = nameM[1].replace(/&nbsp;/gi, ' ').trim();
+    // Pull all right-aligned numeric cells in order
+    const cells = [...row.matchAll(/<td[^>]*align="right"[^>]*>\s*([^<]+?)\s*<\/td>/gi)].map(m => m[1]);
+    if (cells.length < 9) continue; // row needs at least through gElo column
+    const parseElo = s => { const n = parseFloat(String(s).replace(/&nbsp;/gi, '')); return (n >= 1000 && n <= 3500) ? Math.round(n) : null; };
+    const hard  = parseElo(cells[4]);
+    const clay  = parseElo(cells[6]);
+    const grass = parseElo(cells[8]);
+    const key = _normPlayer(name);
+    if (!key) continue;
+    if (hard)  out.hard[key]  = hard;
+    if (clay)  out.clay[key]  = clay;
+    if (grass) out.grass[key] = grass;
   }
   return out;
 }
@@ -1129,23 +1127,22 @@ async function _fetchSEloPage(url) {
       headers: { 'User-Agent': 'Mozilla/5.0 (sharp-court v1)' },
       signal: AbortSignal.timeout(10000)
     });
-    if (!r.ok) return {};
-    const html = await r.text();
-    return parseSEloHtml(html);
+    if (!r.ok) return null;
+    return await r.text();
   } catch (_) {
-    return {};
+    return null;
   }
 }
 
 async function fetchAllSElo() {
-  const result = { ts: Date.now(), atp: {}, wta: {} };
+  const result = { ts: Date.now(), atp: { hard: {}, clay: {}, grass: {} }, wta: { hard: {}, clay: {}, grass: {} } };
   await Promise.all(
-    Object.entries(SELO_URLS).flatMap(([tour, surfaces]) =>
-      Object.entries(surfaces).map(async ([surface, url]) => {
-        const data = await _fetchSEloPage(url);
-        result[tour][surface] = data;
-      })
-    )
+    Object.entries(SELO_URLS).map(async ([tour, url]) => {
+      const html = await _fetchSEloPage(url);
+      if (!html) return;
+      const parsed = parseSEloHtml(html);
+      result[tour] = parsed;
+    })
   );
   return result;
 }
