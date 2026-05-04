@@ -1,8 +1,8 @@
-# CLAUDE.md — SPORTSEDGE TERMINAL
+# CLAUDE.md — SHARP COURT v1
 
 ## PROJECT OVERVIEW
 
-Single-file Bloomberg Terminal-style sports betting dashboard. All logic lives in `index.html` (~3,200 lines). Zero dependencies, no build step. Deployed on GitHub Pages at `https://chquordata.github.io/sportsedge-terminal/`.
+Single-file Bloomberg Terminal-style tennis betting dashboard. All logic lives in `index.html` (~3,200 lines). Zero dependencies, no build step. Deployed on GitHub Pages at `https://chquordata.github.io/sportsedge-terminal/` (URL kept for backward compatibility).
 
 - **Worker proxy:** `worker/index.js` — Cloudflare Worker for Pinnacle API (Tennis #33) to bypass CORS
 - **Dev server:** `npx serve -p 3000 .` (configured in `.claude/launch.json`)

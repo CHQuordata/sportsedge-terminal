@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%230a0a0a'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-family='monospace' font-weight='700' font-size='14' fill='%2300ff88'>SE</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPORTSEDGE TERMINAL | Live Matchup Research</title>
+<title>SHARP COURT v1 — Tennis Edge Terminal</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -473,7 +473,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 </head>
 <body>
 <div id="pinOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:#0a0a14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px">
-  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:4px;color:#00e676">SPORTSEDGE TERMINAL</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:4px;color:#00e676">SHARP COURT v1</div>
   <div style="font-size:10px;letter-spacing:2px;color:#4a4a6a">ENTER PIN TO ACCESS</div>
   <div style="display:flex;gap:10px">
     <input id="pinInput" type="password" maxlength="8" placeholder="••••" autocomplete="off"
@@ -486,7 +486,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 <div id="appRoot" style="display:none">
 <div class="topbar">
   <div class="topbar-row1">
-    <div class="logo">SPORTSEDGE<span>TERMINAL v2.9</span></div><div class="topbar-div"></div>
+    <div class="logo">SHARP<span>COURT v1</span></div><div class="topbar-div"></div>
     <div class="sport-tabs" id="sportTabs">
       <button class="sport-tab active" data-sport="atp" onclick="setSport('atp')">ATP</button>
       <button class="sport-tab" data-sport="wta" onclick="setSport('wta')">WTA</button>
@@ -522,7 +522,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
   </div>
 </div>
 <div class="bottombar"><div id="lastScan">LAST SCAN: NEVER</div><div class="bottombar-sp"></div><div id="apiCalls" style="color:var(--t3)">ODDS: --</div><div id="oddsCacheAge" style="color:var(--t4)"></div><div><span class="kbd">?</span> HELP</div></div>
-<div class="modal-ov" id="setupModal" style="display:none"><div class="modal"><div class="modal-title">SPORTSEDGE TERMINAL</div><div class="modal-sub">Enter your Odds API key for live odds, EV calculation, and edge detection across 10+ sportsbooks.<br><br>Without a key, ESPN provides schedules, injuries, form, and records for all sports including tennis &amp; UFC.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only</div></div></div>
+<div class="modal-ov" id="setupModal" style="display:none"><div class="modal"><div class="modal-title">SHARP COURT v1</div><div class="modal-sub">Enter your Odds API key for live odds, EV calculation, and edge detection across 10+ sportsbooks.<br><br>Without a key, ESPN provides schedules, injuries, form, and records for all sports including tennis &amp; UFC.</div><input class="modal-input" id="apiKeyInput" type="password" placeholder="Odds API key..." autocomplete="off"><button class="modal-btn" onclick="connectApi()">CONNECT &amp; SCAN</button><a class="modal-link" href="https://the-odds-api.com/#get-access" target="_blank">Get free key &#8594; the-odds-api.com</a><div style="text-align:center;margin-top:16px;font-size:10px;color:var(--t4);cursor:pointer" onclick="skipApi()">Skip &#8212; ESPN data only</div></div></div>
 <div class="modal-ov" id="claudeModal" style="display:none"><div class="modal"><div class="modal-title" style="color:var(--amb)">AI PICKS ENGINE</div><div class="modal-sub">Enter your Anthropic API key to enable self-learning daily picks with grading, memory, and cumulative record tracking.<br><br>Uses <strong>claude-sonnet-4-6</strong> for analysis. Picks are generated on-demand and stored locally — your key never leaves your browser.</div><input class="modal-input" id="claudeKeyInput" type="password" placeholder="sk-ant-api03-..." autocomplete="off"><button class="modal-btn" style="background:var(--amb)" onclick="connectClaude()">CONNECT AI ENGINE</button><a class="modal-link" href="https://console.anthropic.com/" target="_blank">Get API key → console.anthropic.com</a><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('claudeModal').style.display='none'">Cancel</div></div></div>
 <div class="modal-ov" id="tnModal" style="display:none"><div class="modal"><div class="modal-title" style="color:var(--cyn)">TENNIS API</div><div class="modal-sub">Enter your RapidAPI key for the <strong>Tennis API – ATP WTA ITF</strong> by matchstat.com.<br><br>Provides current-season surface records (2025), career serve stats, and player data. <strong>PRO plan $10/mo</strong> on RapidAPI — your key is stored locally.</div><input class="modal-input" id="tnKeyInput" type="password" placeholder="RapidAPI key..." autocomplete="off"><button class="modal-btn" style="background:var(--cyn);color:var(--bg0)" onclick="connectTN()">CONNECT TENNIS API</button><a class="modal-link" href="https://rapidapi.com/jjrm365-kIFr3Nx_odV/api/tennis-api-atp-wta-itf" target="_blank">Subscribe → RapidAPI ($10/mo)</a><div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t4);cursor:pointer" onclick="$('tnModal').style.display='none'">Cancel</div></div></div>
 <div class="modal-ov" id="logBetModal" style="display:none"><div class="modal" style="max-width:420px;width:100%">
@@ -3478,7 +3478,7 @@ function buildSystemPrompt(learnedRules,rec){
   const hr=total?((ov.w/total)*100).toFixed(1)+'%':'No record yet';
   const byConf=rec.by_confidence?Object.entries(rec.by_confidence).filter(([,r])=>(r.w||0)+(r.l||0)>0).map(([c,r])=>`${c}: ${r.w||0}-${r.l||0}`).join(' | '):'';
   const bySp=rec.by_sport?Object.entries(rec.by_sport).filter(([s,r])=>s==='tennis'&&(r.w||0)+(r.l||0)>0).map(([s,r])=>`${s}: ${r.w||0}-${r.l||0}`).join(' | '):'';
-  return `You are a sharp tennis betting analyst embedded in SPORTSEDGE TERMINAL. This is a tennis-only terminal covering ATP and WTA singles and doubles. Your job each day:
+  return `You are a sharp tennis betting analyst embedded in SHARP COURT v1. This is a tennis-only terminal covering ATP and WTA singles and doubles. Your job each day:
 1. Review recent graded results provided — picks are already graded W/L/P by the system. Do NOT re-grade using score data.
 2. Update learned rules ONLY if the graded results reveal a new pattern (omit learned_rules_update entirely if no new lesson)
 3. Generate today's best picks from the live tennis data provided
