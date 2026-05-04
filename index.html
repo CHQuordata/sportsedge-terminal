@@ -641,11 +641,20 @@ async function fetchTennisRankings(){
   }catch(e){}
 }
 // Defensive tour validator — runs after all ingestion. Cross-checks each
-// tennis match's player names against ATP/WTA ranking sets. If both names
-// clearly belong to the opposite tour, flip the match. Logs any flips so
-// we can see source-level misclassifications.
+// tennis match's player names against ATP/WTA ranking sets and flips
+// the match when evidence is unambiguous. Logs every flip so we can
+// see which sources are mis-classifying.
+//
+// Decision rules (per match):
+//   - both players in tour X set, neither in tour Y     → flip to X if needed
+//   - one player in tour X set, other in NEITHER set    → flip to X if needed
+//     (strong asymmetric evidence: a tour-ranked player would not be
+//      paired against a player from the opposite tour. A sub-300
+//      qualifier opponent is the common case.)
+//   - one in X, other in Y (genuine conflict)           → abstain
+//   - neither player in either set                      → abstain
 function validateTennisTours(){
-  if(!_atpPlayers.size||!_wtaPlayers.size)return; // rankings not loaded yet
+  if(!_atpPlayers.size&&!_wtaPlayers.size)return; // rankings not loaded yet
   let flipped=0;
   allG.forEach(g=>{
     if(g.cat!=='tennis'||g.isDoubles)return;
@@ -654,16 +663,23 @@ function validateTennisTours(){
       const ln=n.split(' ').pop();
       const inA=_atpPlayers.has(n)||(ln.length>=3&&_atpPlayers.has(ln));
       const inW=_wtaPlayers.has(n)||(ln.length>=3&&_wtaPlayers.has(ln));
-      if(inA&&!inW)return'atp';
-      if(inW&&!inA)return'wta';
-      return null; // unknown or in both (rare collision — leave as-is)
+      if(inA&&inW)return'both';   // collision — both tours have this surname
+      if(inA)return'atp';
+      if(inW)return'wta';
+      return null;                // unknown / unranked
     };
     const aw=_membership(g.aw.nm),hm=_membership(g.hm.nm);
-    // Only flip when BOTH players agree on the opposite tour — single-player
-    // mismatch is too risky (could be a name collision or unranked player).
-    if(aw&&hm&&aw===hm&&aw!==g.sp){
-      console.warn(`[tour-validate] FLIPPING ${g.spL}→${aw.toUpperCase()}: ${g.aw.nm} vs ${g.hm.nm}`);
-      g.sp=aw;g.spL=aw==='wta'?'WTA':'ATP';
+    // Determine evidence-backed tour, ignoring 'both' collisions
+    const _evidence=v=>(v==='atp'||v==='wta')?v:null;
+    const ae=_evidence(aw),he=_evidence(hm);
+    let target=null;
+    if(ae&&he&&ae===he)target=ae;                     // both agree
+    else if(ae&&he&&ae!==he)target=null;              // genuine conflict — abstain
+    else if(ae&&!he)target=ae;                        // away ranked, home unranked — trust away
+    else if(!ae&&he)target=he;                        // home ranked, away unranked — trust home
+    if(target&&target!==g.sp){
+      console.warn(`[tour-validate] FLIPPING ${g.spL}→${target.toUpperCase()}: ${g.aw.nm} (${aw||'unranked'}) vs ${g.hm.nm} (${hm||'unranked'})`);
+      g.sp=target;g.spL=target==='wta'?'WTA':'ATP';
       flipped++;
     }
   });
@@ -859,7 +875,10 @@ async function refreshAll(forceOdds=false){
   const _prevSnap=JSON.parse(localStorage.getItem('ln_snap')||'{}');
   const _openSnap=JSON.parse(localStorage.getItem('ln_open')||'{}');
   allG=[];allE=[];tennisForm=new Map();
-  if(!tennisRankings.size)fetchTennisRankings(); // fire once; repopulates after page reload
+  // Rankings must be loaded BEFORE validateTennisTours runs at end of fetch.
+  // Awaited (not fire-and-forget) to guarantee the player-name sets are
+  // populated when the validator walks allG.
+  if(!_atpPlayers.size&&!_wtaPlayers.size)await fetchTennisRankings();
   const now=new Date(), today=dfmt(now);
   const tmrw=new Date(now);tmrw.setDate(now.getDate()+1);const tmrwStr=dfmt(tmrw);
   const startOfToday=new Date(now);startOfToday.setHours(0,0,0,0);
