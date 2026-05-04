@@ -32,6 +32,13 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--mo
 .panel-body{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bdr) transparent}
 .panel-body::-webkit-scrollbar{width:4px}.panel-body::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
 .sport-group-hdr{padding:7px 14px;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--t4);background:var(--bg0);text-transform:uppercase;display:flex;align-items:center;gap:6px;position:sticky;top:0;z-index:5}
+.tourney-hdr{padding:6px 14px 6px 22px;font-size:10px;font-weight:600;letter-spacing:.8px;color:var(--t3);background:var(--bg1);border-top:1px solid rgba(42,42,62,.3);border-bottom:1px solid rgba(42,42,62,.4);cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;transition:background .1s}
+.tourney-hdr:hover{background:var(--bg2)}
+.tourney-hdr .caret{display:inline-block;width:8px;font-size:9px;color:var(--t4);transition:transform .15s}
+.tourney-hdr.collapsed .caret{transform:rotate(-90deg)}
+.tourney-hdr .tname{flex:1;text-transform:none;color:var(--t2);font-weight:500;letter-spacing:0;font-size:11px}
+.tourney-hdr .tcount{color:var(--t4);font-size:9px;font-weight:600}
+.tourney-body.collapsed{display:none}
 .game-row{padding:10px 14px;border-bottom:1px solid rgba(42,42,62,.4);cursor:pointer;transition:background .1s}.game-row:hover{background:var(--bg3)}.game-row.sel{background:var(--bg4);border-left:2px solid var(--grn);padding-left:12px}.game-row.final{opacity:.45}.game-row.final .game-teams{color:var(--t3)}
 .game-teams{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:4px}
 .game-meta{display:flex;gap:10px;font-size:10px;color:var(--t3);flex-wrap:wrap}.game-meta .live{color:var(--grn);font-weight:600}.game-meta .period{color:var(--t2);font-weight:500}.game-meta .final-lbl{color:var(--t4)}
@@ -1110,10 +1117,63 @@ if(cConfFilter!=='all'&&todayPicksData?.picks?.length){
 }
 fG=g;renderSlate();$('slateCount').textContent=fG.length+' GAMES'}
 
+// Canonical tournament name — normalizes names across sources so
+// ESPN "Internazionali BNL d'Italia" and Odds API "ATP Italian Open"
+// group under the same header.
+function _canonTourney(name){
+  const n=(name||'').trim();if(!n)return'Other';
+  const low=n.toLowerCase();
+  // Major tournament aliases → canonical display name
+  const aliases=[
+    [/internazionali bnl|italian open|rome masters|rome\b|italia/,'Italian Open (Rome)'],
+    [/mutua madrid|madrid open/,'Madrid Open'],
+    [/monte.?carlo/,'Monte Carlo Masters'],
+    [/roland garros|french open/,'Roland Garros'],
+    [/wimbledon/,'Wimbledon'],
+    [/us open/,'US Open'],
+    [/australian open/,'Australian Open'],
+    [/miami open/,'Miami Open'],
+    [/indian wells|bnp paribas open/,'Indian Wells'],
+    [/cincinnati|western.?southern/,'Cincinnati'],
+    [/canadian open|national bank|rogers cup|canada masters/,'Canadian Open'],
+    [/shanghai/,'Shanghai Masters'],
+    [/paris masters|rolex paris/,'Paris Masters'],
+    [/barcelona open|barcelona/,'Barcelona Open']
+  ];
+  for(const[pat,canon]of aliases)if(pat.test(low))return canon;
+  // Strip "ATP" / "WTA" tour prefix for cleaner display
+  return n.replace(/^(ATP|WTA)\s+/i,'').trim()||'Other';
+}
+// Collapsed tournament state — persisted across sessions
+function _isTourneyCollapsed(key){
+  try{const s=JSON.parse(localStorage.getItem('et_tourney_collapsed')||'{}');return!!s[key]}catch(_){return false}
+}
+function toggleTourney(key){
+  try{
+    const s=JSON.parse(localStorage.getItem('et_tourney_collapsed')||'{}');
+    s[key]=!s[key];
+    localStorage.setItem('et_tourney_collapsed',JSON.stringify(s));
+  }catch(_){}
+  // Toggle DOM directly — no full re-render needed
+  const hdr=document.querySelector(`.tourney-hdr[data-tk="${key}"]`);
+  const body=document.querySelector(`.tourney-body[data-tk="${key}"]`);
+  if(hdr&&body){hdr.classList.toggle('collapsed');body.classList.toggle('collapsed');}
+}
+
 function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div class="no-data">No games found<div style="font-size:10px;margin-top:8px">Hit SCAN to refresh or check another sport tab</div></div>';return}
+  // Two-level grouping: sport label → tournament canonical name
   const grp={};fG.forEach((g,i)=>{const lb=g.spL;if(!grp[lb])grp[lb]=[];grp[lb].push({...g,_i:i})});
   let h='';Object.entries(grp).forEach(([lb,gs])=>{h+=`<div class="sport-group-hdr">${gs[0].spI} ${lb} (${gs.length})</div>`;
-    gs.forEach(g=>{const live=g.st==='STATUS_IN_PROGRESS';const done=g.st==='STATUS_FINAL';
+    // Sub-group by canonical tournament name, preserve original order
+    const tgrp={};const torder=[];
+    gs.forEach(g=>{const tk=_canonTourney(g.tnName||g.ven);if(!tgrp[tk]){tgrp[tk]=[];torder.push(tk);}tgrp[tk].push(g);});
+    torder.forEach(tk=>{
+      const tgs=tgrp[tk];
+      const stateKey=`${lb}|${tk}`;
+      const collapsed=_isTourneyCollapsed(stateKey);
+      h+=`<div class="tourney-hdr${collapsed?' collapsed':''}" data-tk="${stateKey}" onclick="toggleTourney('${stateKey.replace(/'/g,'\\\'')}')"><span class="caret">▼</span><span class="tname">${tk}</span><span class="tcount">${tgs.length}</span></div>`;
+      h+=`<div class="tourney-body${collapsed?' collapsed':''}" data-tk="${stateKey}">`;
+      tgs.forEach(g=>{const live=g.st==='STATUS_IN_PROGRESS';const done=g.st==='STATUS_FINAL';
       const rowCls=[g._i===selIdx?'sel':'',done?'final':''].filter(Boolean).join(' ');
       let od='';if(g.eOdds){od=`<span class="fav">${g.eOdds.details||''}</span>`;if(g.eOdds.overUnder)od+=`<span>O/U ${g.eOdds.overUnder}</span>`}
       else if(g.odds){const h2=g.odds.bookmakers?.[0]?.markets?.find(m=>m.key==='h2h');if(h2)od=`<span>${h2.outcomes.map(o=>o.name.split(' ').pop()+' '+fp(o.price)).join(' / ')}</span>`}
@@ -1128,7 +1188,10 @@ function renderSlate(){const el=$('slateList');if(!fG.length){el.innerHTML='<div
       const aiConf=getGameAiConf(g);
       const confBadge=aiConf?`<span style="font-size:8px;font-weight:700;padding:1px 4px;border-radius:2px;margin-left:4px;${aiConf==='HIGH'?'color:var(--grn);background:var(--grn-bg)':aiConf==='MEDIUM'?'color:var(--amb);background:var(--amb-bg)':'color:var(--t3);background:var(--bg3)'}">⚡${aiConf[0]}</span>`:'';
       const isPinned=trackedIds.has(g.id);
-      h+=`<div class="game-row ${rowCls}" onclick="selGame(${g._i})" data-i="${g._i}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px"><div class="game-teams" style="flex:1">${g.aw.ab} ${live&&g.aw.sc!=null?g.aw.sc:''} ${g.isTeam?'@':'vs'} ${g.hm.ab} ${live&&g.hm.sc!=null?g.hm.sc:''}${g.playoff?` <span style="font-size:8px;color:var(--amb);font-weight:700">PO</span>`:''}${serTag}${confBadge}</div><button class="track-btn${isPinned?' pinned':''}" onclick="event.stopPropagation();toggleTrack('${g.id}')" title="${isPinned?'Untrack':'Track'}">📌</button></div><div class="game-meta"><span>${statusEl}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}${g.lineMove&&(Math.abs(g.lineMove.spMv||0)>=0.5||Math.abs(g.lineMove.toMv||0)>=0.5)?`<span style="color:var(--amb);font-weight:700">↕</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`})});
+      h+=`<div class="game-row ${rowCls}" onclick="selGame(${g._i})" data-i="${g._i}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px"><div class="game-teams" style="flex:1">${g.aw.ab} ${live&&g.aw.sc!=null?g.aw.sc:''} ${g.isTeam?'@':'vs'} ${g.hm.ab} ${live&&g.hm.sc!=null?g.hm.sc:''}${g.playoff?` <span style="font-size:8px;color:var(--amb);font-weight:700">PO</span>`:''}${serTag}${confBadge}</div><button class="track-btn${isPinned?' pinned':''}" onclick="event.stopPropagation();toggleTrack('${g.id}')" title="${isPinned?'Untrack':'Track'}">📌</button></div><div class="game-meta"><span>${statusEl}</span>${g.bc?`<span>${g.bc}</span>`:''}${te?`<span style="color:var(--grn);font-weight:600">${te.ep.toFixed(1)}%</span>`:''}${ic?`<span style="color:var(--red)">\u26A0${ic}</span>`:''}${g.lineMove&&(Math.abs(g.lineMove.spMv||0)>=0.5||Math.abs(g.lineMove.toMv||0)>=0.5)?`<span style="color:var(--amb);font-weight:700">↕</span>`:''}</div>${od?`<div class="game-odds">${od}</div>`:''}</div>`});
+      h+='</div>'; // close .tourney-body
+    }); // close torder.forEach
+  }); // close Object.entries(grp).forEach
   el.innerHTML=h}
 
 // ══════════════════════════════
