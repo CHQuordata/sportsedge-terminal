@@ -886,23 +886,22 @@ async function refreshAll(forceOdds=false){
         if(r.ok){const sp=await r.json();_tennisKeys=sp.filter(x=>x.key.startsWith('tennis_')&&x.active).map(x=>x.key);_tennisKeysTs=Date.now()}}
       if(_tennisKeys?.length){
         await Promise.all(_tennisKeys.map(async t=>{const od=await oddsFetch(t,forceOdds);od.forEach(o=>{
-          const existing=allG.find(x=>x.cat==='tennis'&&(
+          // Determine tour from SPORT KEY first (authoritative — the API
+          // promise) and only let sport_title override when it explicitly
+          // contradicts. Last-name-only merging across tours was flipping
+          // WTA matches to ATP on collisions like "Lombardini" appearing in
+          // both feeds — fixed by gating the merge on same-tour `sp`.
+          const _oVen=o.sport_title||'';
+          const _keyTour=t.includes('wta')?'wta':t.includes('atp')?'atp':null;
+          const _titleTour=/\batp\b/i.test(_oVen)?'atp':/\bwta\b/i.test(_oVen)?'wta':null;
+          const lg=_keyTour||_titleTour||'atp';
+          const existing=allG.find(x=>x.cat==='tennis'&&x.sp===lg&&(
             (x.aw.nm.includes(o.away_team.split(' ').pop())&&x.hm.nm.includes(o.home_team.split(' ').pop()))||
             (x.aw.nm.includes(o.home_team.split(' ').pop())&&x.hm.nm.includes(o.away_team.split(' ').pop()))));
           if(existing){
             existing.odds=o;
-            // Fix tour label if sport_title has a clearer signal than what was set first
-            const _tVen=o.sport_title||'';
-            if(/\batp\b/i.test(_tVen)&&existing.spL==='WTA'){existing.spL='ATP';existing.sp='atp'}
-            else if(/\bwta\b/i.test(_tVen)&&existing.spL==='ATP'){existing.spL='WTA';existing.sp='wta'}
             return;
           }
-          const _oVen=o.sport_title||'';
-          // sport_title ("ATP Mutua Madrid Open") is the most reliable tour signal;
-          // fall back to key name only if title is ambiguous
-          const _lgFromTitle=/\batp\b/i.test(_oVen)?'atp':/\bwta\b/i.test(_oVen)?'wta':null;
-          const lg=_lgFromTitle||(t.includes('wta')?'wta':'atp');
-          // Also fix existing game if it was mis-tagged (e.g. ATP match grabbed by WTA key first)
           const _oSurf=getSurface(`${_oVen} ${t}`);
           const _odblAw=o.away_team.includes('/')||o.away_team.includes(' / ');
           const _odblHm=o.home_team.includes('/')||o.home_team.includes(' / ');
