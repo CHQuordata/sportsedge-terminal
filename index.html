@@ -3559,8 +3559,19 @@ Games tagged [DOUBLES] in the slate have no individual player stats. For doubles
 }`;
 }
 
-function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,agentAnalysis){
+function buildUserMsg(gamesCtx,yesterdayPicks,completedGames,tennisAnalysis,agentAnalysis,priorPicks){
   let msg=gamesCtx;
+  // Prior pick anchor — when a previous pick set exists for this slate,
+  // instruct the model to KEEP those picks unless the slate has materially
+  // changed. Eliminates LLM drift where temperature-0 still produces
+  // different picks across runs from the same data.
+  if(priorPicks?.length){
+    msg+=`\n## PRIOR PICK SET (your previous output for this slate — anchor against drift)\nThe following picks were generated for the same slate previously. KEEP THESE PICKS unchanged unless one of these is true:\n  • An odds price moved ≥3% implied probability\n  • A new match has appeared on the slate\n  • A previously-picked match has dropped from the slate\n  • Subagent analysis surfaces a CONTRADICTING signal not present in the prior reasoning\n\nIf none of those apply, output the SAME picks with the SAME reasoning. Do not paraphrase, do not re-derive, do not "improve" the wording. Pick stability matters more than minor optimization.\n\n`;
+    priorPicks.forEach((p,i)=>{
+      msg+=`${i+1}. [${p.confidence||'?'}] ${p.matchup||''}: ${p.pick||''}\n   reasoning: ${(p.reasoning||'').replace(/\s+/g,' ').slice(0,240)}\n`;
+    });
+    msg+='\n';
+  }
   if(yesterdayPicks.length){
     msg+=`\nRECENT GRADED RESULTS (last 3 days — already graded, use for learned_rules_update only, do NOT re-grade):\n`;
     yesterdayPicks.forEach(p=>{msg+=`- ${(p.sport||'').toUpperCase()}: ${p.matchup||''} | ${p.pick||''} | ${p.confidence||''} | ${p.result}\n`});
@@ -4056,6 +4067,47 @@ function autoGradeFromScores(completedGames){
   if(changed){localStorage.setItem('et_picks_history',JSON.stringify(history.slice(0,30)));updateCumulativeRecord();}
 }
 
+// ── Pick consistency layer ────────────────────────────────────────────────────
+// Same slate + same odds → same picks. Three mechanisms:
+//   1. Slate fingerprint — if unchanged since last publish, skip the LLM
+//      pipeline entirely and re-render existing picks.
+//   2. Per-match agent cache — Haiku results reused when match data unchanged.
+//   3. Prior-pick anchor — when picks exist, the synthesizer is instructed to
+//      keep them unless new evidence overrides; reduces LLM drift on partial
+//      slate changes.
+
+// Per-match fingerprint: stable signature of the betting-relevant inputs.
+// Includes match ID, ML prices (rounded to nearest 5 to absorb micro-jitter),
+// surface, status, and doubles flag. Excludes timestamps and dynamic fields.
+function _matchFingerprint(g){
+  const ml=g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='h2h');
+  const prices=ml?.outcomes?.map(o=>{const p=parseInt(o.price)||0;return Math.round(p/5)*5;}).sort((a,b)=>a-b).join(',')||'';
+  const sp=g.odds?.bookmakers?.[0]?.markets?.find(m=>m.key==='spreads');
+  const spread=sp?.outcomes?.[0]?.point??'';
+  return [g.id,g.sp,g.surf||'',g.st||'',g.isDoubles?1:0,prices,spread].join('|');
+}
+
+// Slate-level fingerprint: sorted concatenation of per-match fingerprints.
+// Sorted so order doesn't matter — adding/removing any match changes the hash.
+function _slateFingerprint(matches){
+  return matches.map(_matchFingerprint).sort().join(';;');
+}
+
+// Agent result cache, keyed by match fingerprint. Map across page loads via
+// localStorage so a refresh doesn't blow away the work. TTL: 6 hours — odds
+// can shift meaningfully past that and we want to re-evaluate.
+const _AGENT_CACHE_TTL=6*60*60*1000;
+function _loadAgentCache(){
+  try{const raw=localStorage.getItem('et_agent_cache');if(!raw)return new Map();
+    const obj=JSON.parse(raw);const m=new Map();
+    Object.entries(obj).forEach(([k,v])=>{if(v?.ts&&Date.now()-v.ts<_AGENT_CACHE_TTL)m.set(k,v);});
+    return m;
+  }catch(_){return new Map();}
+}
+function _saveAgentCache(cache){
+  try{const obj={};cache.forEach((v,k)=>{obj[k]=v;});localStorage.setItem('et_agent_cache',JSON.stringify(obj));}catch(_){}
+}
+
 // ── Multi-agent architecture ──────────────────────────────────────────────────
 
 // SUPERVISOR: Pure-JS match classification — no API call.
@@ -4277,6 +4329,14 @@ function publishApproved(){
   pendingPicksData=null;_rgApprovals={};
   localStorage.setItem('et_picks_today',JSON.stringify(todayPicksData));
   localStorage.setItem('et_picks_date',new Date().toDateString());
+  // Stamp the slate fingerprint so the next generatePicks call can detect
+  // whether the slate moved. Same fingerprint + existing picks = skip LLM.
+  {
+    const _winNow=Date.now(),_winStart=_winNow-2*60*60*1000,_winEnd=_winNow+30*60*60*1000;
+    const _matches=allG.filter(g=>g.cat==='tennis'&&g.tm.getTime()>=_winStart&&g.tm.getTime()<=_winEnd)
+                       .sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+    localStorage.setItem('et_picks_fingerprint',_slateFingerprint(_matches));
+  }
   // CLV snapshot
   {const clvLines={};(todayPicksData.picks||[]).forEach(p=>{const gm=allG.find(gm=>{const mu=(p.matchup||'').toLowerCase();const an=gm.aw.nm.toLowerCase().split(' ').pop(),hn=gm.hm.nm.toLowerCase().split(' ').pop();return mu.includes(an)||mu.includes(hn)});if(!gm?.odds?.bookmakers?.length)return;const bk=gm.odds.bookmakers[0];const sp=bk.markets.find(m=>m.key==='spreads');const ml=bk.markets.find(m=>m.key==='h2h');const to=bk.markets.find(m=>m.key==='totals');clvLines[`${p.matchup}|${p.pick}`]={sp:sp?.outcomes?.find(o=>o.point<0)?.point??null,to:to?.outcomes?.find(o=>o.name==='Over')?.point??null,ml:ml?.outcomes?.map(o=>o.price)||[],ts:Date.now(),gid:gm.id}});localStorage.setItem('et_clv_lines',JSON.stringify(clvLines));}
   if(todayPicksData.learned_rules_update){
@@ -4313,17 +4373,42 @@ async function generatePicks(force=false){
     // Use a time-from-now window instead of calendar day so tournament-TZ
     // matches (e.g. Rome qualifiers at 03:00 user-local) aren't dropped.
     const _winNow=Date.now(),_winStart=_winNow-2*60*60*1000,_winEnd=_winNow+30*60*60*1000;
-    const _todayMatches=allG.filter(g=>g.cat==='tennis'&&g.tm.getTime()>=_winStart&&g.tm.getTime()<=_winEnd);
+    const _todayMatches=allG.filter(g=>g.cat==='tennis'&&g.tm.getTime()>=_winStart&&g.tm.getTime()<=_winEnd)
+                            .sort((a,b)=>(a.id||'').localeCompare(b.id||'')); // stable ordering
+    // ── Slate fingerprint check: skip pipeline entirely if nothing material changed ──
+    const _slateFP=_slateFingerprint(_todayMatches);
+    const _lastFP=localStorage.getItem('et_picks_fingerprint')||'';
+    if(!force&&_lastFP===_slateFP&&todayPicksData?.picks?.length){
+      console.log('[consistency] slate fingerprint unchanged — reusing existing picks, skipping LLM pipeline');
+      _setGenStatus('SLATE UNCHANGED — KEEPING EXISTING PICKS');
+      isGenerating=false;
+      renderPicksLeaderboard();renderPicksOverview();
+      return;
+    }
     const {deep,quick,skip:_skipped}=supervisorClassify(_todayMatches);
-    const _agentTargets=[...deep,...quick];
+    const _agentTargets=[...deep,...quick].sort((a,b)=>(a.id||'').localeCompare(b.id||'')); // deterministic order
     console.log(`[supervisor] DEEP=${deep.length} QUICK=${quick.length} SKIP=${_skipped.length}`);
-    // ── Step 4: SUBAGENTS — parallel per-match Haiku analysis ─────────────────
+    // ── Step 4: SUBAGENTS — parallel per-match Haiku analysis (with cache) ────
+    const agentCache=_loadAgentCache();
     let agentResults=[];
+    let _cacheHits=0,_cacheMisses=0;
     if(_agentTargets.length&&CLAUDE_KEY){
       _setGenStatus(`AGENTS: ANALYZING ${_agentTargets.length} MATCH${_agentTargets.length!==1?'ES':''}...`);
-      const _settled=await Promise.allSettled(_agentTargets.map(g=>runMatchAgent(g)));
+      const _matchTasks=_agentTargets.map(async g=>{
+        const fp=_matchFingerprint(g);
+        const cached=agentCache.get(fp);
+        if(cached?.result){_cacheHits++;return cached.result;}
+        _cacheMisses++;
+        const result=await runMatchAgent(g);
+        if(result)agentCache.set(fp,{result,ts:Date.now()});
+        return result;
+      });
+      const _settled=await Promise.allSettled(_matchTasks);
       agentResults=_settled.map(r=>r.status==='fulfilled'?r.value:null).filter(Boolean);
-      console.log(`[subagents] ${agentResults.length}/${_agentTargets.length} returned signals`);
+      // Sort agent results deterministically before passing to synthesizer
+      agentResults.sort((a,b)=>(a.matchup||'').localeCompare(b.matchup||''));
+      _saveAgentCache(agentCache);
+      console.log(`[subagents] ${agentResults.length}/${_agentTargets.length} signals (cache hits: ${_cacheHits}, misses: ${_cacheMisses})`);
     }
     // ── Step 5: SYNTHESIZER — Sonnet picks from structured pre-analysis ───────
     _setGenStatus('SYNTHESIZING PICKS...');
@@ -4334,12 +4419,16 @@ async function generatePicks(force=false){
     // Inject signal performance track record into rules context
     {const _perfRaw=localStorage.getItem('et_signal_performance');if(_perfRaw){try{const _perf=JSON.parse(_perfRaw);const _lines=Object.entries(_perf).filter(([,v])=>v.w+v.l>=3).sort(([,a],[,b])=>(b.w+b.l)-(a.w+a.l)).slice(0,15).map(([tag,v])=>{const tot=v.w+v.l+v.p;const wr=tot>0?Math.round(v.w/(v.w+v.l)*100):0;const flag=v.significant_edge?'[EDGE]':v.significant_fade?'[FADE]':'[NOISE]';return `  ${flag} ${tag}: ${v.w}-${v.l}${v.p?'-'+v.p:''} (${wr}% WR, ${tot} picks)`});if(_lines.length)rules+=`\n\nSIGNAL TRACK RECORD:\n${_lines.join('\n')}`}catch(_){}}}
     const rec=JSON.parse(localStorage.getItem('et_cumulative')||'{}');
+    // Prior picks from this slate (if any) — anchor the synthesizer to keep
+    // them unless new evidence justifies a change. Forces incremental
+    // updates rather than full re-derivation each run.
+    const _priorPicks=todayPicksData?.picks?.length?todayPicksData.picks:null;
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',signal:AbortSignal.timeout(120000),
       headers:{'x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',temperature:0,max_tokens:8000,
         system:buildSystemPrompt(rules,rec),
-        messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,null,agentResults)}]})
+        messages:[{role:'user',content:buildUserMsg(gamesCtx,yPicks,completed,null,agentResults,_priorPicks)}]})
     });
     if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||`API ${resp.status}`)}
     const data=await resp.json();
